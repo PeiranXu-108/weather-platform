@@ -1,45 +1,104 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Header from './components/Header';
 import CurrentWeather from './components/CurrentWeather';
 import TemperatureChart from './components/TemperatureChart';
 import HourlyChart from './components/HourlyChart';
+import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
+import { translateLocation } from './utils/locationTranslations';
 import type { WeatherResponse, Hour } from './types/weather';
 
 export default function Home() {
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentCity, setCurrentCity] = useState<string>('杭州');
+  const [currentCityQuery, setCurrentCityQuery] = useState<string>('hangzhou');
+  const [isLocating, setIsLocating] = useState(false);
 
-  useEffect(() => {
-    async function fetchWeatherData() {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/weather');
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch weather data');
-        }
-        
-        const data: WeatherResponse = await response.json();
-        setWeatherData(data);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-        console.error('Error fetching weather data:', err);
-      } finally {
-        setLoading(false);
+  const fetchWeatherData = async (city: string = 'hangzhou') => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch weather data');
       }
+      
+      const data: WeatherResponse = await response.json();
+      setWeatherData(data);
+      
+      // Update current city display name and query
+      const translated = translateLocation(data.location);
+      setCurrentCity(translated.name);
+      setCurrentCityQuery(city);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching weather data:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  const fetchWeatherByLocation = async (lat: number, lon: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setIsLocating(true);
+      const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch weather data');
+      }
+      
+      const data: WeatherResponse = await response.json();
+      setWeatherData(data);
+      
+      // Update current city display name and query
+      const translated = translateLocation(data.location);
+      setCurrentCity(translated.name);
+      setCurrentCityQuery(`${lat},${lon}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error fetching weather data:', err);
+    } finally {
+      setLoading(false);
+      setIsLocating(false);
+    }
+  };
+
+  // Initial load - only run once on mount
+  useEffect(() => {
     fetchWeatherData();
+  }, []); // Empty dependency array - only run on mount
+
+  // Auto-refresh - run every 30 minutes for current city/location
+  useEffect(() => {
+    if (!currentCityQuery) return;
     
-    // Auto-refresh every 30 minutes
-    const interval = setInterval(fetchWeatherData, 30 * 60 * 1000);
+    const interval = setInterval(() => {
+      // Check if it's coordinates (lat,lon format) or city name
+      if (currentCityQuery.includes(',')) {
+        const [lat, lon] = currentCityQuery.split(',');
+        fetchWeatherByLocation(parseFloat(lat), parseFloat(lon));
+      } else {
+        fetchWeatherData(currentCityQuery);
+      }
+    }, 30 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [currentCityQuery]);
+
+  const handleCitySelect = (cityName: string) => {
+    fetchWeatherData(cityName);
+  };
+
+  const handleLocationSelect = (lat: number, lon: number) => {
+    fetchWeatherByLocation(lat, lon);
+  };
 
   if (loading) {
     return (
@@ -85,21 +144,29 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-sky-700 mb-2">
-            天气预报
-          </h1>
-          <p className="text-sky-600">
-            实时天气预报与可视化展示
-          </p>
-        </header>
-
-        {/* Current Weather */}
-        <CurrentWeather
-          location={weatherData.location}
-          current={weatherData.current}
+        {/* Header with Search */}
+        <Header 
+          onCitySelect={handleCitySelect} 
+          onLocationSelect={handleLocationSelect}
+          currentCity={currentCity}
+          isLocating={isLocating}
         />
+
+        {/* Current Weather and 24h Forecast */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <CurrentWeather
+              location={weatherData.location}
+              current={weatherData.current}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <HourlyForecast24h 
+              hourlyData={allHourlyData} 
+              currentTime={weatherData.current.last_updated}
+            />
+          </div>
+        </div>
 
         {/* Temperature Chart and Metrics Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -1,18 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { WeatherResponse } from '@/app/types/weather';
 
 const API_KEY = '456019e436434c55808130937252807';
 const API_BASE_URL = 'https://api.weatherapi.com/v1/forecast.json';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const url = `${API_BASE_URL}?key=${API_KEY}&q=hangzhou&days=3&aqi=no&alerts=no`;
+    const searchParams = request.nextUrl.searchParams;
+    
+    // Support both city name and coordinates (lat,lon)
+    let query: string;
+    const city = searchParams.get('city');
+    const lat = searchParams.get('lat');
+    const lon = searchParams.get('lon');
+    
+    if (lat && lon) {
+      // Use coordinates if provided
+      query = `${lat},${lon}`;
+    } else {
+      // Use city name, default to hangzhou
+      query = city || 'hangzhou';
+    }
+    
+    const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=3&aqi=no&alerts=no&lang=zh`;
     
     const response = await fetch(url, {
       next: { revalidate: 1800 } // Cache for 30 minutes
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Weather API error:', response.status, errorText);
       throw new Error(`Weather API error: ${response.status}`);
     }
 
