@@ -44,8 +44,10 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
   const currentDisplayIndex = currentHourIndex - startIndex;
 
   // Format time to Chinese format (e.g., "下午4时", "上午10时")
+  // timeString is in local time format "YYYY-MM-DD HH:mm"
   const formatTime = (timeString: string) => {
-    const date = new Date(timeString);
+    // Parse local time string (already in local timezone)
+    const date = new Date(timeString.replace(' ', 'T'));
     const hour = date.getHours();
     const minute = date.getMinutes();
     
@@ -69,14 +71,16 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
   };
 
   // Get day of week in Chinese
+  // timeString is in local time format "YYYY-MM-DD HH:mm"
   const getDayOfWeek = (timeString: string) => {
-    const date = new Date(timeString);
+    // Parse local time string (already in local timezone)
+    const date = new Date(timeString.replace(' ', 'T'));
     const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     return days[date.getDay()];
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-100 h-full">
+    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-4 h-full">
       <h2 className="text-lg font-semibold text-sky-800 mb-4">未来24小时</h2>
       <div className="overflow-x-auto h-36">
         <div className="flex gap-3 min-w-max pb-2">
@@ -110,7 +114,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
               <p className={`text-sm font-semibold ${
                 isCurrentHour ? 'text-sky-700' : 'text-gray-800'
               }`}>
-                {Math.round(hour.temp_c)}°
+                {hour.temp_c.toFixed(1)}°C
               </p>
             </div>
           );

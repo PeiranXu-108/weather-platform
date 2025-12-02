@@ -148,14 +148,14 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
 
   return (
     <header className="mb-8">
-      <div className="text-center mb-6">
+      {/* <div className="text-center mb-6">
         <h1 className="text-4xl font-bold text-sky-700 mb-2">
           天气预报
         </h1>
         <p className="text-sky-600">
           实时天气预报与可视化展示
         </p>
-      </div>
+      </div> */}
 
       {/* Search Bar */}
       <div className="max-w-2xl mx-auto relative">
@@ -173,7 +173,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 }
               }}
             placeholder="搜索城市"
-            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl border-2 border-sky-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 text-gray-800 placeholder-gray-400 transition-all`}
+            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 text-gray-800 placeholder-gray-400 transition-all bg-white/60 backdrop-blur-sm`}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <svg
@@ -192,7 +192,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
               {currentCity && (
-                <span className="text-xs text-sky-600 bg-sky-50 px-2 py-1 rounded border border-sky-200">
+                <span className="text-xs text-sky-600 bg-sky-50 px-2 py-1 rounded">
                   当前: {currentCity}
                 </span>
               )}
@@ -200,10 +200,10 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 type="button"
                 onClick={handleLocationClick}
                 disabled={locating || isLocating}
-                className={`p-2 rounded-lg border-2 transition-all ${
+                className={`p-2 rounded-lg transition-all ${
                   locating || isLocating
-                    ? 'border-sky-300 bg-sky-100 cursor-not-allowed'
-                    : 'border-sky-200 bg-white hover:border-sky-400 hover:bg-sky-50 active:bg-sky-100'
+                    ? 'border-sky-300 bg-sky-100/60 backdrop-blur-sm cursor-not-allowed'
+                    : 'border-sky-200 bg-white/40 backdrop-blur-sm hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
                 }`}
                 title="获取当前位置"
               >
@@ -257,7 +257,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-sky-100 max-h-64 overflow-y-auto"
+            className="absolute z-50 w-full mt-2 bg-white/40 backdrop-blur-sm rounded-xl shadow-xl border border-sky-100 max-h-64 overflow-y-auto"
           >
             {suggestions.map((city, index) => (
               <button
