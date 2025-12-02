@@ -8,7 +8,20 @@ import HourlyChart from './components/HourlyChart';
 import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
 import { translateLocation } from './utils/locationTranslations';
+import { translateWeatherCondition } from './utils/weatherTranslations';
+import dynamic from 'next/dynamic';
 import type { WeatherResponse, Hour } from './types/weather';
+
+// 动态导入 Three.js 组件，禁用 SSR
+const CloudyWeatherBackground = dynamic(
+  () => import('./backgrounds/CloudyWeatherBackground'),
+  { ssr: false }
+);
+
+const SunnyWeatherBackground = dynamic(
+  () => import('./backgrounds/SunnyWeatherBackground'),
+  { ssr: false }
+);
 
 export default function Home() {
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
@@ -141,8 +154,24 @@ export default function Home() {
     return [...acc, ...day.hour];
   }, [] as Hour[]);
 
+  // 检查天气状况是否包含"云"或"晴"
+  const weatherCondition = translateWeatherCondition(weatherData.current.condition);
+  const isCloudy = weatherCondition.includes('云');
+  const isSunny = weatherCondition.includes('晴');
+  
+  // 获取今天的日落时间和当前时间
+  const todayForecast = weatherData.forecast.forecastday[0];
+  const sunsetTime = todayForecast?.astro?.sunset;
+  const currentTime = weatherData.location.localtime;
+
   return (
-    <main className="min-h-screen p-4 md:p-8 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
+    <main className="min-h-screen p-4 md:p-8 relative">
+      {/* 多云天气背景 */}
+      {isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {/* 晴天天气背景 */}
+      {isSunny && !isCloudy && <SunnyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {/* 非多云非晴天时的默认背景 */}
+      {!isCloudy && !isSunny && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header with Search */}
         <Header 
@@ -163,7 +192,7 @@ export default function Home() {
           <div className="lg:col-span-2">
             <HourlyForecast24h 
               hourlyData={allHourlyData} 
-              currentTime={weatherData.current.last_updated}
+              currentTime={weatherData.location.localtime}
             />
           </div>
         </div>
@@ -182,11 +211,11 @@ export default function Home() {
         <HourlyChart hourlyData={allHourlyData} />
 
         {/* Footer */}
-        <footer className="text-center pt-8 pb-4">
+        {/* <footer className="text-center pt-8 pb-4">
           <p className="text-sm text-sky-600">
             数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
           </p>
-        </footer>
+        </footer> */}
       </div>
     </main>
   );

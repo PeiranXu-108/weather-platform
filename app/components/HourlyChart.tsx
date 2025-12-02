@@ -129,7 +129,7 @@ export default function HourlyChart({ hourlyData }: HourlyChartProps) {
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-sky-100">
+    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-6">
       <ReactECharts 
         option={option} 
         style={{ height: '400px', width: '100%' }}

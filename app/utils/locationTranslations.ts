@@ -128,6 +128,17 @@ export const CITY_NAME_MAP: Record<string, string> = {
 "hong kong": "香港",  // 已有，但重复也可
 "busan": "釜山",
 "nagoya": "名古屋",
+"tokyo": "东京",
+"osaka": "大阪",
+"kyoto": "京都",
+"hiroshima": "广岛",
+"nagasaki": "长崎",
+"okinawa": "冲绳",
+"fukuoka": "福冈",
+"sapporo": "札幌",
+"sendai": "仙台",
+"chiba": "千叶",
+"kobe": "神户",
 "ho chi minh city": "胡志明市", // 已有
 "manila": "马尼拉",             // 已有
 "singapore": "新加坡",
