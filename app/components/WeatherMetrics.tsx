@@ -54,11 +54,11 @@ export default function WeatherMetrics({ current }: WeatherMetricsProps) {
         {metrics.map((metric, index) => (
           <div
             key={index}
-            className={`${metric.color} rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md`}
+            className={`${metric.color} rounded-xl p-4 transition-all bg-white/40 backdrop-blur-sm hover:scale-105 hover:shadow-md`}
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-2xl">{metric.icon}</span>
-              <p className="text-sm font-medium text-slate-600">
+              <p className="text-xl font-medium text-slate-600">
                 {metric.label}
               </p>
             </div>
