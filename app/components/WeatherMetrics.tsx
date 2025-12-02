@@ -11,42 +11,42 @@ export default function WeatherMetrics({ current }: WeatherMetricsProps) {
       label: '湿度',
       value: `${current.humidity}%`,
       icon: '💧',
-      color: 'bg-sky-50 border border-sky-200'
+      color: 'bg-sky-50'
     },
     {
       label: '风速',
       value: `${Math.round(current.wind_kph)} km/h`,
       icon: '💨',
-      color: 'bg-emerald-50 border border-emerald-200'
+      color: 'bg-emerald-50'
     },
     {
       label: '气压',
       value: `${current.pressure_mb} mb`,
       icon: '🌡️',
-      color: 'bg-violet-50 border border-violet-200'
+      color: 'bg-violet-50'
     },
     {
       label: '紫外线',
       value: current.uv.toString(),
       icon: '☀️',
-      color: 'bg-amber-50 border border-amber-200'
+      color: 'bg-amber-50'
     },
     {
       label: '能见度',
       value: `${current.vis_km} km`,
       icon: '👁️',
-      color: 'bg-indigo-50 border border-indigo-200'
+      color: 'bg-indigo-50'
     },
     {
       label: '降水量',
       value: `${current.precip_mm} mm`,
       icon: '🌧️',
-      color: 'bg-cyan-50 border border-cyan-200'
+      color: 'bg-cyan-50'
     }
   ];
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-sky-100">
+    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-6">
       <h2 className="text-xl font-bold text-sky-800 mb-4">
         天气指标
       </h2>
@@ -69,7 +69,7 @@ export default function WeatherMetrics({ current }: WeatherMetricsProps) {
         ))}
       </div>
       
-      <div className="mt-4 pt-4 border-t border-sky-100">
+      <div className="mt-4 pt-4">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-sky-600">风向</p>

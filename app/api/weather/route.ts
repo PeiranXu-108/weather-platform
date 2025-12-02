@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { WeatherResponse } from '@/app/types/weather';
 
-const API_KEY = '456019e436434c55808130937252807';
-const API_BASE_URL = 'https://api.weatherapi.com/v1/forecast.json';
+const API_KEY = process.env.API_KEY;
+const API_BASE_URL = process.env.API_BASE_URL;
 
 export async function GET(request: NextRequest) {
   try {
