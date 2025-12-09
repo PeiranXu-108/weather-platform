@@ -173,7 +173,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 }
               }}
             placeholder="搜索城市"
-            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 text-gray-800 placeholder-gray-400 transition-all bg-white/60 backdrop-blur-sm`}
+            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 text-gray-800 placeholder-gray-400 transition-all bg-white/10`}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <svg
@@ -202,8 +202,8 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 disabled={locating || isLocating}
                 className={`p-2 rounded-lg transition-all ${
                   locating || isLocating
-                    ? 'border-sky-300 bg-sky-100/60 backdrop-blur-sm cursor-not-allowed'
-                    : 'border-sky-200 bg-white/40 backdrop-blur-sm hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
+                    ? 'border-sky-300 bg-sky-100/60 cursor-not-allowed'
+                    : 'border-sky-200 bg-white/10 hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
                 }`}
                 title="获取当前位置"
               >
@@ -257,7 +257,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-2 bg-white/40 backdrop-blur-sm rounded-xl shadow-xl border border-sky-100 max-h-64 overflow-y-auto"
+            className="absolute z-50 w-full mt-2 bg-white/10 rounded-xl shadow-xl border border-sky-100 max-h-64 overflow-y-auto"
           >
             {suggestions.map((city, index) => (
               <button

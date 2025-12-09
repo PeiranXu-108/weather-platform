@@ -46,7 +46,7 @@ export default function WeatherMetrics({ current }: WeatherMetricsProps) {
   ];
 
   return (
-    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-6">
+      <div className="bg-white/10 rounded-2xl shadow-xl p-6">
       <h2 className="text-xl font-bold text-sky-800 mb-4">
         天气指标
       </h2>
@@ -54,7 +54,7 @@ export default function WeatherMetrics({ current }: WeatherMetricsProps) {
         {metrics.map((metric, index) => (
           <div
             key={index}
-            className={`${metric.color} rounded-xl p-4 transition-all bg-white/40 backdrop-blur-sm hover:scale-105 hover:shadow-md`}
+            className={`${metric.color} rounded-xl p-4 transition-all bg-white/10 hover:scale-105 hover:shadow-md`}
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-2xl">{metric.icon}</span>
