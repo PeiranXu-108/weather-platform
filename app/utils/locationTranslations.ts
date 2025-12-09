@@ -107,7 +107,41 @@ export const CITY_NAME_MAP: Record<string, string> = {
   // International cities
   // 新增城市 —— 欧美 / 美洲
 "toronto": "多伦多",
-"vancouver": "温哥华",
+"new york": "纽约",
+"los angeles": "洛杉矶",
+"chicago": "芝加哥",
+"houston": "休斯顿",
+"atlanta": "亚特兰大",
+"miami": "迈阿密",
+"seattle": "西雅图",
+"washington": "华盛顿",
+"boston": "波士顿",
+"san francisco": "旧金山",
+"san diego": "圣地亚哥",
+"san jose": "圣何塞",
+"san antonio": "圣安东尼奥",
+"austin": "奥斯汀",
+"columbus": "哥伦布",
+"denver": "丹佛",
+"detroit": "底特律",
+"el paso": "埃尔帕索",
+"fort worth": "沃思堡",
+"gainesville": "盖恩斯维尔",
+"irving": "欧文",
+"jacksonville": "杰克逊维尔",
+"kansas city": "堪萨斯城",
+"las vegas": "拉斯维加斯",
+"long beach": "长滩",
+"memphis": "孟菲斯",
+"milwaukee": "密尔沃基",
+"nashville": "纳什维尔",
+"oklahoma city": "俄克拉荷马城",
+"omaha": "奥马哈",
+"phoenix": "凤凰城",
+"portland": "波特兰",
+"sacramento": "萨克拉门托",
+"madrid": "马德里",
+"madison":"麦迪逊",
 "montreal": "蒙特利尔",
 "mexico city": "墨西哥城",
 "buenos aires": "布宜诺斯艾利斯",
@@ -120,6 +154,8 @@ export const CITY_NAME_MAP: Record<string, string> = {
 "vedenie": "???", // 注：若无标准译名，可保留原拼写  
 "dubai": "迪拜",
 "cape town": "开普敦",
+
+
 
 // 亚洲 / 亚太
 "delhi": "德里",
@@ -165,7 +201,6 @@ export const CITY_NAME_MAP: Record<string, string> = {
 "bengaluru": "班加罗尔",  // 同 “bangalore”
 "karachi": "卡拉奇",
 "tehran": "德黑兰",
-"madrid": "马德里",       // 已有
 "lisbon": "里斯本",
 "vienna": "维也纳",
 "zurich": "苏黎世",

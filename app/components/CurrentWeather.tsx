@@ -30,7 +30,7 @@ export default function CurrentWeather({ location, current }: CurrentWeatherProp
   const formattedLocalTime = formatLocalTime(location.localtime);
   
   return (
-    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-4 h-56">
+    <div className="bg-white/10 rounded-2xl shadow-xl p-4 h-56">
       <div className="flex flex-col">
         <div className="flex-1">
           <h1 className="text-5xl font-bold text-sky-800 mb-2">
