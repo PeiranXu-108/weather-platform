@@ -80,7 +80,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
   };
 
   return (
-    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-4 h-full">
+    <div className="bg-white/10 rounded-2xl shadow-xl p-4 h-full">
       <h2 className="text-lg font-semibold text-sky-800 mb-4">未来24小时</h2>
       <div className="overflow-x-auto h-36">
         <div className="flex gap-3 min-w-max pb-2">

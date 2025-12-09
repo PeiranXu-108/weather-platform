@@ -257,13 +257,13 @@ export default function TemperatureChart({ forecastDays }: TemperatureChartProps
   };
 
   return (
-    <div className="bg-white/40 backdrop-blur-sm rounded-2xl shadow-xl p-6 h-full relative">
+    <div className="bg-white/10 rounded-2xl shadow-xl p-6 h-full relative">
       {/* Chart Type Selector */}
       <div className="absolute top-6 right-6 z-10">
         <select
           value={chartType}
           onChange={(e) => setChartType(e.target.value as ChartType)}
-          className="px-3 py-1.5 text-sm rounded-lg border-2 border-sky-200 bg-white/60 backdrop-blur-sm text-sky-700 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 transition-all cursor-pointer"
+          className="px-3 py-1.5 text-sm rounded-lg border-2 border-sky-200 bg-white/10 text-sky-700 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 transition-all cursor-pointer"
         >
           <option value="bar">柱状图</option>
           <option value="line">折线图</option>

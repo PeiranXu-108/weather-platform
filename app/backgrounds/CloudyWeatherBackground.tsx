@@ -23,9 +23,9 @@ function Cloud({
     // 使用共享的几何体和材质以提高性能
     const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
     const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: 0xd4d4d4, // 灰色云朵，更符合阴天效果
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.85,
       fog: true,
     });
     
@@ -117,17 +117,17 @@ function CloudyScene({ isSunset }: { isSunset?: boolean }) {
   
   return (
     <>
-      {/* 环境光 */}
-      <ambientLight intensity={isSunset ? 0.5 : 0.7} />
-      {/* 主光源（模拟太阳光） */}
+      {/* 环境光 - 阴天时更暗 */}
+      <ambientLight intensity={isSunset ? 0.4 : 0.5} />
+      {/* 主光源（模拟太阳光）- 阴天时更暗，颜色偏灰 */}
       <directionalLight 
         position={[10, 10, 5]} 
-        intensity={isSunset ? 0.7 : 0.9} 
-        color={isSunset ? 0xffaa66 : 0xffffff}
+        intensity={isSunset ? 0.5 : 0.6} 
+        color={isSunset ? 0xffaa66 : 0xcccccc}
         castShadow 
       />
-      {/* 补充光源 */}
-      <directionalLight position={[-5, 5, -5]} intensity={isSunset ? 0.2 : 0.3} />
+      {/* 补充光源 - 阴天时更暗 */}
+      <directionalLight position={[-5, 5, -5]} intensity={isSunset ? 0.15 : 0.2} />
       
       {/* 渲染所有云朵 */}
       {clouds.map((cloud, index) => (
@@ -139,8 +139,8 @@ function CloudyScene({ isSunset }: { isSunset?: boolean }) {
         />
       ))}
       
-      {/* 雾效果，增强深度感和真实感 */}
-      <fog attach="fog" args={isSunset ? [0x4a5568, 8, 25] : [0x87ceeb, 8, 25]} />
+      {/* 雾效果，增强深度感和真实感 - 阴天使用灰色雾 */}
+      <fog attach="fog" args={isSunset ? [0x4a5568, 8, 25] : [0x9ca3af, 8, 25]} />
     </>
   );
 }
@@ -183,16 +183,21 @@ export default function CloudyWeatherBackground({
     <div className={`fixed inset-0 -z-10 ${className}`}>
       {/* 根据时间显示不同的渐变背景 */}
       {isSunset ? (
-        // 日落渐变：深蓝 -> 蓝 -> 紫 -> 橙 -> 深橙（多级渐变）
+        // 日落渐变：深灰 -> 灰蓝 -> 灰紫 -> 灰橙（多级渐变，阴天效果）
         <div 
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom,rgb(69, 89, 142) 0%,rgb(95, 114, 177) 10%,rgb(108, 160, 244) 40%,rgb(196, 174, 247) 60%,rgb(242, 194, 159) 85%,rgb(234, 163, 124) 100%)'
+            background: 'linear-gradient(to bottom,rgb(75, 85, 99) 0%,rgb(100, 116, 139) 10%,rgb(120, 140, 160) 40%,rgb(140, 150, 170) 60%,rgb(160, 150, 140) 85%,rgb(150, 130, 120) 100%)'
           }}
         />
       ) : (
-        // 正常天蓝色渐变
-        <div className="absolute inset-0 bg-gradient-to-b from-sky-200 via-sky-300 to-blue-400" />
+        // 阴天灰色渐变：浅灰 -> 中灰 -> 深灰
+        <div 
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(to bottom, rgb(200, 205, 210) 0%, rgb(160, 170, 180) 50%, rgb(120, 130, 140) 100%)'
+          }}
+        />
       )}
       
       {/* Three.js Canvas */}
