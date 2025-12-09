@@ -23,6 +23,16 @@ const SunnyWeatherBackground = dynamic(
   { ssr: false }
 );
 
+const SnowyWeatherBackground = dynamic(
+  () => import('./backgrounds/SnowyWeatherBackground'),
+  { ssr: false }
+);
+
+const RainyWeatherBackground = dynamic(
+  () => import('./backgrounds/RainyWeatherBackground'),
+  { ssr: false }
+);
+
 export default function Home() {
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,10 +164,12 @@ export default function Home() {
     return [...acc, ...day.hour];
   }, [] as Hour[]);
 
-  // 检查天气状况是否包含"云"或"晴"
+  // 检查天气状况，优先级：雪 > 雨 > 晴 > 云
   const weatherCondition = translateWeatherCondition(weatherData.current.condition);
-  const isCloudy = weatherCondition.includes('云');
-  const isSunny = weatherCondition.includes('晴');
+  const isSnowy = weatherCondition.includes('雪');
+  const isRainy = !isSnowy && (weatherCondition.includes('雨') || weatherCondition.includes('雷'));
+  const isSunny = !isSnowy && !isRainy && weatherCondition.includes('晴');
+  const isCloudy = !isSnowy && !isRainy && !isSunny && weatherCondition.includes('云');
   
   // 获取今天的日落时间和当前时间
   const todayForecast = weatherData.forecast.forecastday[0];
@@ -166,12 +178,16 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 relative">
+      {/* 雪天天气背景 - 优先级最高 */}
+      {isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {/* 雨天天气背景 */}
+      {isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {/* 晴天天气背景 */}
+      {isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {/* 多云天气背景 */}
       {isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 晴天天气背景 */}
-      {isSunny && !isCloudy && <SunnyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 非多云非晴天时的默认背景 */}
-      {!isCloudy && !isSunny && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {/* 默认背景 */}
+      {!isSnowy && !isRainy && !isSunny && !isCloudy && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header with Search */}
         <Header 
