@@ -3,12 +3,15 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
+import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
+  textColorTheme: TextColorTheme;
 }
 
-export default function HourlyChart({ hourlyData }: HourlyChartProps) {
+export default function HourlyChart({ hourlyData, textColorTheme }: HourlyChartProps) {
   // Get next 24 hours from current time
   const next24Hours = hourlyData.slice(0, 24);
 
@@ -20,6 +23,10 @@ export default function HourlyChart({ hourlyData }: HourlyChartProps) {
   const temperatures = next24Hours.map(hour => Math.round(hour.temp_c));
   const feelsLike = next24Hours.map(hour => Math.round(hour.feelslike_c));
 
+  const isDark = textColorTheme.backgroundType === 'dark';
+  const titleColor = isDark ? '#ffffff' : '#0c4a6e';
+  const axisColor = isDark ? '#e5e7eb' : '#374151';
+  
   const option = {
     title: {
       text: '24小时温度预报',
@@ -27,7 +34,7 @@ export default function HourlyChart({ hourlyData }: HourlyChartProps) {
       textStyle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#0c4a6e'
+        color: titleColor
       }
     },
     tooltip: {
@@ -72,14 +79,34 @@ export default function HourlyChart({ hourlyData }: HourlyChartProps) {
       data: hours,
       axisLabel: {
         rotate: 45,
-        interval: 2
+        interval: 2,
+        color: axisColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
       }
     },
     yAxis: {
       type: 'value',
       name: '温度 (°C)',
+      nameTextStyle: {
+        color: axisColor
+      },
       axisLabel: {
-        formatter: '{value}°C'
+        formatter: '{value}°C',
+        color: axisColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
       }
     },
     series: [
@@ -129,7 +156,7 @@ export default function HourlyChart({ hourlyData }: HourlyChartProps) {
   };
 
   return (
-    <div className="bg-white/10 rounded-2xl shadow-xl p-6">
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6`}>
       <ReactECharts 
         option={option} 
         style={{ height: '400px', width: '100%' }}

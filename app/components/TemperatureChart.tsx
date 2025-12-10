@@ -3,14 +3,17 @@
 import React, { useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { ForecastDay } from '@/app/types/weather';
+import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface TemperatureChartProps {
   forecastDays: ForecastDay[];
+  textColorTheme: TextColorTheme;
 }
 
 type ChartType = 'bar' | 'line';
 
-export default function TemperatureChart({ forecastDays }: TemperatureChartProps) {
+export default function TemperatureChart({ forecastDays, textColorTheme }: TemperatureChartProps) {
   const [chartType, setChartType] = useState<ChartType>('bar'); // Default to bar chart
 
   const dates = forecastDays.map(day => {
@@ -256,14 +259,64 @@ export default function TemperatureChart({ forecastDays }: TemperatureChartProps
     ]
   };
 
+  // 根据主题调整图表颜色
+  const isDark = textColorTheme.backgroundType === 'dark';
+  const titleColor = isDark ? '#ffffff' : '#0c4a6e';
+  const axisColor = isDark ? '#e5e7eb' : '#374151';
+  
+  // 更新 option 中的颜色
+  const themedOption: any = {
+    ...option,
+    title: {
+      ...option.title,
+      textStyle: {
+        ...option.title.textStyle,
+        color: titleColor
+      }
+    },
+    xAxis: {
+      ...option.xAxis,
+      axisLabel: {
+        color: axisColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
+      }
+    },
+    yAxis: {
+      ...option.yAxis,
+      nameTextStyle: {
+        color: axisColor
+      },
+      axisLabel: {
+        ...(option.yAxis.axisLabel || {}),
+        color: axisColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
+      },
+      splitLine: {
+        ...(option.yAxis.splitLine || {}),
+        lineStyle: {
+          ...(option.yAxis.splitLine?.lineStyle || {}),
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+        }
+      }
+    }
+  };
+  
   return (
-    <div className="bg-white/10 rounded-2xl shadow-xl p-6 h-full relative">
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative`}>
       {/* Chart Type Selector */}
       <div className="absolute top-6 right-6 z-10">
         <select
           value={chartType}
           onChange={(e) => setChartType(e.target.value as ChartType)}
-          className="px-3 py-1.5 text-sm rounded-lg border-2 border-sky-200 bg-white/10 text-sky-700 focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 transition-all cursor-pointer"
+          className={`px-3 py-1.5 text-sm rounded-lg border-2 ${isDark ? 'border-white/30 bg-white/10' : 'border-sky-200 bg-white/10'} ${textColorTheme.textColor.primary} focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 transition-all cursor-pointer`}
         >
           <option value="bar">柱状图</option>
           <option value="line">折线图</option>
@@ -271,7 +324,7 @@ export default function TemperatureChart({ forecastDays }: TemperatureChartProps
       </div>
       
       <ReactECharts 
-        option={option} 
+        option={themedOption} 
         style={{ height: '400px', width: '100%' }}
         opts={{ renderer: 'svg' }}
       />

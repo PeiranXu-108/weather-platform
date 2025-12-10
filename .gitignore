@@ -35,3 +35,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+.cursor/
+COLOR_THEME.md
+IMPLEMENTATION_SUMMARY.md
+中文化说明.md
+SETUP.md
