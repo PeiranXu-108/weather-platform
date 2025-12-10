@@ -301,7 +301,10 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <TemperatureChart 
-              forecastDays={weatherData.forecast.forecastday}
+              location={{
+                lat: Number(weatherData.location.lat.toFixed ? weatherData.location.lat.toFixed(2) : weatherData.location.lat.toFixed(2)),
+                lon: Number(weatherData.location.lon.toFixed ? weatherData.location.lon.toFixed(2) : weatherData.location.lon.toFixed(2))
+              }}
               textColorTheme={textColorTheme}
             />
           </div>
