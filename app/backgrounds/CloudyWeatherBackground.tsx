@@ -35,7 +35,7 @@ function Cloud({
       return x - Math.floor(x);
     };
     
-    // 生成云朵的球体位置（每个云朵5-8个球体）
+    // 生成云朵的球体位置
     const sphereCount = 15 + Math.floor(random(1) * 4);
     const positions: Array<[number, number, number]> = [];
     
@@ -195,7 +195,7 @@ export default function CloudyWeatherBackground({
         <div 
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, rgb(200, 205, 210) 0%, rgb(160, 170, 180) 50%, rgb(120, 130, 140) 100%)'
+            background: 'linear-gradient(to bottom, rgb(209, 211, 213) 0%, rgb(135, 144, 154) 50%, rgb(100, 106, 112) 100%)'
           }}
         />
       )}

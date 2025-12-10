@@ -2,15 +2,28 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { searchCities, getEnglishCityName, type CityOption } from '@/app/utils/citySearch';
+import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface HeaderProps {
   onCitySelect: (cityName: string) => void;
   onLocationSelect?: (lat: number, lon: number) => void;
   currentCity?: string;
   isLocating?: boolean;
+  textColorTheme?: TextColorTheme;
 }
 
-export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false }: HeaderProps) {
+export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme }: HeaderProps) {
+  // 默认主题（如果没有提供）
+  const theme = textColorTheme || {
+    backgroundType: 'light' as const,
+    textColor: {
+      primary: 'text-gray-900',
+      secondary: 'text-gray-700',
+      muted: 'text-gray-600',
+      accent: 'text-sky-700',
+    },
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<CityOption[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -173,11 +186,11 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 }
               }}
             placeholder="搜索城市"
-            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 text-gray-800 placeholder-gray-400 transition-all bg-white/10`}
+            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <svg
-                className="w-5 h-5 text-gray-400"
+                className={`w-5 h-5 ${theme.textColor.muted}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -191,11 +204,11 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               </svg>
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-              {currentCity && (
-                <span className="text-xs text-sky-600 bg-sky-50 px-2 py-1 rounded">
+              {/* {currentCity && (
+                <span className={`text-xs ${theme.textColor.secondary} ${theme.backgroundType === 'dark' ? 'bg-white/20' : 'bg-sky-50'} px-2 py-1 rounded`}>
                   当前: {currentCity}
                 </span>
-              )}
+              )} */}
               <button
                 type="button"
                 onClick={handleLocationClick}
@@ -257,15 +270,15 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
         {showSuggestions && suggestions.length > 0 && (
           <div
             ref={suggestionsRef}
-            className="absolute z-50 w-full mt-2 bg-white/10 rounded-xl shadow-xl border border-sky-100 max-h-64 overflow-y-auto"
+            className={`absolute z-50 w-full mt-2 ${getCardStyle(theme.backgroundType)} rounded-xl shadow-xl border ${theme.backgroundType === 'dark' ? 'border-white/20' : 'border-sky-100'} max-h-64 overflow-y-auto`}
           >
             {suggestions.map((city, index) => (
               <button
                 key={`${city.englishName}-${index}`}
                 type="button"
                 onClick={() => handleCitySelect(city)}
-                className={`w-full text-left px-4 py-3 hover:bg-sky-50 transition-colors ${
-                  index === selectedIndex ? 'bg-sky-100' : ''
+                className={`w-full text-left px-4 py-3 ${theme.backgroundType === 'dark' ? 'hover:bg-white/20' : 'hover:bg-sky-50'} transition-colors ${
+                  index === selectedIndex ? (theme.backgroundType === 'dark' ? 'bg-white/30' : 'bg-sky-100') : ''
                 } ${
                   index === 0 ? 'rounded-t-xl' : ''
                 } ${
@@ -274,8 +287,8 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-800">{city.chineseName}</p>
-                    <p className="text-sm text-gray-500">{city.englishName}</p>
+                    <p className={`font-medium ${theme.textColor.primary}`}>{city.chineseName}</p>
+                    <p className={`text-sm ${theme.textColor.muted}`}>{city.englishName}</p>
                   </div>
                   <svg
                     className="w-5 h-5 text-sky-400"

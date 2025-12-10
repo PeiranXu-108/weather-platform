@@ -2,36 +2,56 @@ import React from 'react';
 import type { Hour } from '@/app/types/weather';
 import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface HourlyForecast24hProps {
   hourlyData: Hour[];
   currentTime: string; // Current time in format "YYYY-MM-DD HH:mm"
+  currentTimeEpoch?: number; // Optional: current time epoch (more accurate)
+  textColorTheme: TextColorTheme;
 }
 
-export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyForecast24hProps) {
-  // Get current time epoch
-  const currentTimeEpoch = new Date(currentTime).getTime() / 1000;
+export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme }: HourlyForecast24hProps) {
+  // Parse current time correctly (format: "YYYY-MM-DD HH:mm")
+  // Use provided epoch if available (more accurate), otherwise parse from string
+  const currentTimeEpoch = providedEpoch ?? new Date(currentTime.replace(' ', 'T')).getTime() / 1000;
   
   // Find the index of the current hour in hourlyData
   // The hourly data contains hourly forecasts, we need to find the hour that contains the current time
   let currentHourIndex = -1;
+  
+  // Find the hour that contains the current time
+  // Each hour in hourlyData represents the start of that hour (e.g., 06:00 represents 06:00-06:59)
   for (let i = 0; i < hourlyData.length; i++) {
     const hourTimeEpoch = hourlyData[i].time_epoch;
-    // Check if current time falls within this hour (current time >= hour start and < next hour start)
-    if (hourTimeEpoch <= currentTimeEpoch) {
-      // Check if this is the last hour or if next hour is after current time
-      if (i === hourlyData.length - 1 || hourlyData[i + 1].time_epoch > currentTimeEpoch) {
-        currentHourIndex = i;
-        break;
-      }
+    const nextHourTimeEpoch = i < hourlyData.length - 1 ? hourlyData[i + 1].time_epoch : hourTimeEpoch + 3600;
+    
+    // Check if current time falls within this hour (hour start <= current time < next hour start)
+    if (currentTimeEpoch >= hourTimeEpoch && currentTimeEpoch < nextHourTimeEpoch) {
+      currentHourIndex = i;
+      break;
     }
   }
   
-  // If we couldn't find the current hour, use the first hour that's >= current time
+  // If we couldn't find the current hour, use the closest hour
   if (currentHourIndex === -1) {
-    currentHourIndex = hourlyData.findIndex(hour => hour.time_epoch >= currentTimeEpoch);
+    // Find the hour that's closest to current time
+    let minDiff = Infinity;
+    for (let i = 0; i < hourlyData.length; i++) {
+      const diff = Math.abs(hourlyData[i].time_epoch - currentTimeEpoch);
+      if (diff < minDiff) {
+        minDiff = diff;
+        currentHourIndex = i;
+      }
+    }
+    
+    // Fallback: if still not found, use the first hour that's >= current time
     if (currentHourIndex === -1) {
-      currentHourIndex = 0; // Fallback to first hour
+      currentHourIndex = hourlyData.findIndex(hour => hour.time_epoch >= currentTimeEpoch);
+      if (currentHourIndex === -1) {
+        currentHourIndex = 0; // Fallback to first hour
+      }
     }
   }
   
@@ -80,8 +100,8 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
   };
 
   return (
-    <div className="bg-white/10 rounded-2xl shadow-xl p-4 h-full">
-      <h2 className="text-lg font-semibold text-sky-800 mb-4">未来24小时</h2>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full`}>
+      <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`}>未来24小时</h2>
       <div className="overflow-x-auto h-36">
         <div className="flex gap-3 min-w-max pb-2">
           {displayHours.map((hour, index) => {
@@ -91,15 +111,15 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
             <div
               key={`${hour.time_epoch}-${index}`}
               className={`flex-shrink-0 w-16 text-center flex flex-col items-center ${
-                isCurrentHour ? 'ring-2 ring-sky-400 rounded-lg p-1' : ''
+                isCurrentHour ? `ring-2 ${textColorTheme.backgroundType === 'dark' ? 'ring-blue-300' : 'ring-sky-400'} rounded-lg p-1` : ''
               }`}
             >
               <p className={`text-xs mb-1 whitespace-nowrap ${
-                isCurrentHour ? 'text-sky-600 font-semibold' : 'text-gray-500'
+                isCurrentHour ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
               }`}>
                 {isCurrentHour ? '现在' : formatTime(hour.time)}
               </p>
-              <p className="text-xs font-medium text-gray-800 mb-2">
+              <p className={`text-xs font-medium ${textColorTheme.textColor.secondary} mb-2`}>
                 {getDayOfWeek(hour.time)}
               </p>
               <div className="flex justify-center mb-2">
@@ -112,7 +132,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime }: HourlyFor
                 />
               </div>
               <p className={`text-sm font-semibold ${
-                isCurrentHour ? 'text-sky-700' : 'text-gray-800'
+                isCurrentHour ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
               }`}>
                 {hour.temp_c.toFixed(1)}°C
               </p>
