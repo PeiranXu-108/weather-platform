@@ -1,54 +1,95 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
-import type { ForecastDay } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface TemperatureChartProps {
-  forecastDays: ForecastDay[];
+  location?: { lat: number; lon: number };
   textColorTheme: TextColorTheme;
+}
+
+interface DailyForecast {
+  fxDate: string;
+  tempMax: string;
+  tempMin: string;
+  textDay: string;
+  uvIndex: string;
 }
 
 type ChartType = 'bar' | 'line';
 
-export default function TemperatureChart({ forecastDays, textColorTheme }: TemperatureChartProps) {
-  const [chartType, setChartType] = useState<ChartType>('bar'); // Default to bar chart
+export default function TemperatureChart({ location, textColorTheme }: TemperatureChartProps) {
+  const [chartType, setChartType] = useState<ChartType>('bar');
+  const [forecastData, setForecastData] = useState<DailyForecast[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const dates = forecastDays.map(day => {
-    const date = new Date(day.date);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // 构建location参数
+        const locationParam = location 
+          ? `${location.lon},${location.lat}` 
+          : '116.41,39.92'; // 默认北京
+        
+        const response = await fetch(`/api/weather/30d?location=${locationParam}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch 30-day forecast');
+        }
+        
+        const data = await response.json();
+        
+        if (data.code !== '200') {
+          throw new Error('API returned error code: ' + data.code);
+        }
+        
+        setForecastData(data.daily || []);
+      } catch (err) {
+        console.error('Error fetching 30-day forecast:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [location]);
+
+  const dates = forecastData.map(day => {
+    const date = new Date(day.fxDate);
     return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   });
 
-  const maxTemps = forecastDays.map(day => Math.round(day.day.maxtemp_c));
-  const minTemps = forecastDays.map(day => Math.round(day.day.mintemp_c));
-  const avgTemps = forecastDays.map(day => Math.round(day.day.avgtemp_c));
+  const maxTemps = forecastData.map(day => parseInt(day.tempMax));
+  const minTemps = forecastData.map(day => parseInt(day.tempMin));
+  const avgTemps = forecastData.map(day => Math.round((parseInt(day.tempMax) + parseInt(day.tempMin)) / 2));
 
   const isBarChart = chartType === 'bar';
 
   // Baseline: first day's average temperature
-  const baseline = avgTemps[0];
+  const baseline = avgTemps[0] || 0;
 
-  // Generate gradient color based on temperature (cold to warm)
-  // Color mapping: Blue (cold) -> Cyan -> Green -> Yellow -> Orange -> Red (hot)
+  // Generate gradient color based on temperature
   const getTemperatureColor = (temp: number): string => {
-    // Temperature range: -10°C to 40°C
     const minTemp = -10;
     const maxTemp = 40;
     const normalized = Math.max(0, Math.min(1, (temp - minTemp) / (maxTemp - minTemp)));
     
-    // Interpolate between color stops
     const colorStops = [
-      { t: 0.0, r: 59, g: 130, b: 246 },   // Blue (#3b82f6) - very cold
-      { t: 0.2, r: 6, g: 182, b: 212 },    // Cyan (#06b6d4) - cold
-      { t: 0.4, r: 16, g: 185, b: 129 },  // Green (#10b981) - moderate
-      { t: 0.6, r: 234, g: 179, b: 8 },   // Yellow (#eab308) - warm
-      { t: 0.8, r: 249, g: 115, b: 22 },  // Orange (#f97316) - hot
-      { t: 1.0, r: 239, g: 68, b: 68 }    // Red (#ef4444) - very hot
+      { t: 0.0, r: 59, g: 130, b: 246 },
+      { t: 0.2, r: 6, g: 182, b: 212 },
+      { t: 0.4, r: 16, g: 185, b: 129 },
+      { t: 0.6, r: 234, g: 179, b: 8 },
+      { t: 0.8, r: 249, g: 115, b: 22 },
+      { t: 1.0, r: 239, g: 68, b: 68 }
     ];
     
-    // Find the two color stops to interpolate between
     for (let i = 0; i < colorStops.length - 1; i++) {
       if (normalized >= colorStops[i].t && normalized <= colorStops[i + 1].t) {
         const t = (normalized - colorStops[i].t) / (colorStops[i + 1].t - colorStops[i].t);
@@ -59,11 +100,9 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
       }
     }
     
-    // Fallback
     return `rgb(59, 130, 246)`;
   };
 
-  // Build a smooth gradient from max (top) to min (bottom) using a single bar segment
   const createBarGradient = (minTemp: number, maxTemp: number, avgTemp: number) => {
     const range = Math.max(1, maxTemp - minTemp);
     const avgOffset = Math.min(1, Math.max(0, (maxTemp - avgTemp) / range));
@@ -82,19 +121,22 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
     };
   };
 
-  // Data for custom bars: [xIndex, min, max, avg]
   const barData = isBarChart
-    ? forecastDays.map((_, index) => [index, minTemps[index], maxTemps[index], avgTemps[index]])
+    ? forecastData.map((_, index) => [index, minTemps[index], maxTemps[index], avgTemps[index]])
     : [];
+
+  const isDark = textColorTheme.backgroundType === 'dark';
+  const titleColor = isDark ? '#ffffff' : '#0c4a6e';
+  const axisColor = isDark ? '#e5e7eb' : '#374151';
 
   const option = {
     title: {
-      text: '三日温度预报',
+      text: '30日天气预报',
       left: 'center',
       textStyle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#0c4a6e'
+        color: titleColor
       }
     },
     tooltip: {
@@ -120,7 +162,10 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
     legend: {
       data: isBarChart ? [] : ['最高温度', '最低温度', '平均温度'],
       bottom: 10,
-      show: !isBarChart
+      show: !isBarChart,
+      textStyle: {
+        color: axisColor
+      }
     },
     grid: {
       left: '3%',
@@ -128,46 +173,66 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
       bottom: '15%',
       containLabel: true
     },
+    dataZoom: [
+      {
+        type: 'inside',
+        start: 0,
+        end: 30,
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: true
+      },
+      {
+        type: 'slider',
+        start: 0,
+        end: 30,
+        height: 20,
+        bottom: 40,
+        handleSize: '80%',
+        textStyle: {
+          color: axisColor
+        },
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+        fillerColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+      }
+    ],
     xAxis: {
       type: 'category',
       boundaryGap: isBarChart ? true : false,
-      data: dates
+      data: dates,
+      axisLabel: {
+        color: axisColor,
+        rotate: 45
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
+      }
     },
     yAxis: {
       type: 'value',
       name: '温度 (°C)',
-      axisLabel: {
-        formatter: (value: number) => `${value.toFixed(0)}°C`
+      nameTextStyle: {
+        color: axisColor
       },
-      // Mark the baseline (0 point) with a line
+      axisLabel: {
+        formatter: (value: number) => `${value.toFixed(0)}°C`,
+        color: axisColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisColor
+        }
+      },
       splitLine: {
         show: true,
         lineStyle: {
           type: 'dashed',
-          color: '#94a3b8',
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
           width: 2
         }
-      },
-      // Add markLine to highlight baseline (thinner line)
-      markLine: isBarChart ? {
-        silent: true,
-        lineStyle: {
-          color: '#94a3b8',
-          width: 1,
-          type: 'dashed'
-        },
-        label: {
-          formatter: `基线: ${baseline}°C`,
-          position: 'end',
-          fontSize: 11
-        },
-        data: [
-          {
-            yAxis: baseline,
-            name: '基线'
-          }
-        ]
-      } : undefined
+      }
     },
     series: isBarChart ? [
       {
@@ -207,7 +272,7 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
             const avg = params.value[3];
             return `${avg}°C`;
           },
-          color: '#0c4a6e',
+          color: titleColor,
           fontSize: 12,
           fontWeight: 'bold'
         }
@@ -259,56 +324,22 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
     ]
   };
 
-  // 根据主题调整图表颜色
-  const isDark = textColorTheme.backgroundType === 'dark';
-  const titleColor = isDark ? '#ffffff' : '#0c4a6e';
-  const axisColor = isDark ? '#e5e7eb' : '#374151';
-  
-  // 更新 option 中的颜色
-  const themedOption: any = {
-    ...option,
-    title: {
-      ...option.title,
-      textStyle: {
-        ...option.title.textStyle,
-        color: titleColor
-      }
-    },
-    xAxis: {
-      ...option.xAxis,
-      axisLabel: {
-        color: axisColor
-      },
-      axisLine: {
-        lineStyle: {
-          color: axisColor
-        }
-      }
-    },
-    yAxis: {
-      ...option.yAxis,
-      nameTextStyle: {
-        color: axisColor
-      },
-      axisLabel: {
-        ...(option.yAxis.axisLabel || {}),
-        color: axisColor
-      },
-      axisLine: {
-        lineStyle: {
-          color: axisColor
-        }
-      },
-      splitLine: {
-        ...(option.yAxis.splitLine || {}),
-        lineStyle: {
-          ...(option.yAxis.splitLine?.lineStyle || {}),
-          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-        }
-      }
-    }
-  };
-  
+  if (loading) {
+    return (
+      <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex items-center justify-center`}>
+        <div className={`${textColorTheme.textColor.secondary}`}>加载中...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex items-center justify-center`}>
+        <div className={`${textColorTheme.textColor.secondary}`}>加载失败: {error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative`}>
       {/* Chart Type Selector */}
@@ -324,10 +355,14 @@ export default function TemperatureChart({ forecastDays, textColorTheme }: Tempe
       </div>
       
       <ReactECharts 
-        option={themedOption} 
+        option={option} 
         style={{ height: '400px', width: '100%' }}
         opts={{ renderer: 'svg' }}
       />
+      
+      <div className={`text-center mt-2 text-xs ${textColorTheme.textColor.secondary}`}>
+        滑动或拖动下方滑块查看更多天数
+      </div>
     </div>
   );
 }
