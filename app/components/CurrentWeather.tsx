@@ -3,13 +3,16 @@ import type { Location, Current } from '@/app/types/weather';
 import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
+import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle } from '@/app/utils/textColorTheme';
 
 interface CurrentWeatherProps {
   location: Location;
   current: Current;
+  textColorTheme: TextColorTheme;
 }
 
-export default function CurrentWeather({ location, current }: CurrentWeatherProps) {
+export default function CurrentWeather({ location, current, textColorTheme }: CurrentWeatherProps) {
   const translatedLocation = translateLocation(location);
 
   // Format local time from location.localtime
@@ -30,13 +33,13 @@ export default function CurrentWeather({ location, current }: CurrentWeatherProp
   const formattedLocalTime = formatLocalTime(location.localtime);
   
   return (
-    <div className="bg-white/10 rounded-2xl shadow-xl p-4 h-56">
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-56`}>
       <div className="flex flex-col">
         <div className="flex-1">
-          <h1 className="text-5xl font-bold text-sky-800 mb-2">
+          <h1 className={`text-5xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
             {translatedLocation.name}
           </h1>
-          <p className="text-x text-sky-600 mb-4">
+          <p className={`text-x ${textColorTheme.textColor.secondary} mb-4`}>
             {translatedLocation.country} • {formattedLocalTime}
           </p>
           <div className="flex items-center gap-3">
@@ -49,10 +52,10 @@ export default function CurrentWeather({ location, current }: CurrentWeatherProp
                 className="w-12 h-12"
               />
               <div className="ml-2">
-                <p className="text-4xl font-bold text-sky-700">
+                <p className={`text-4xl font-bold ${textColorTheme.textColor.primary}`}>
                   {current.temp_c.toFixed(1)}°C
                 </p>
-                <p className="text-x text-sky-600">
+                <p className={`text-x ${textColorTheme.textColor.secondary}`}>
                   {translateWeatherCondition(current.condition)}
                 </p>
               </div>
@@ -62,7 +65,7 @@ export default function CurrentWeather({ location, current }: CurrentWeatherProp
       </div>
       
       <div className="mt-3 pt-3">
-        <p className="text-xs text-sky-500">
+        <p className={`text-xs ${textColorTheme.textColor.muted}`}>
           最后更新：{current.last_updated}
         </p>
       </div>
