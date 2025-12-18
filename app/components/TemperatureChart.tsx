@@ -177,7 +177,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       {
         type: 'inside',
         start: 0,
-        end: 30,
+        end: 100,
         zoomOnMouseWheel: true,
         moveOnMouseMove: true,
         moveOnMouseWheel: true
@@ -185,7 +185,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       {
         type: 'slider',
         start: 0,
-        end: 30,
+        end: 100,
         height: 20,
         bottom: 40,
         handleSize: '80%',
@@ -305,32 +305,11 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
         },
         symbol: 'circle',
         symbolSize: 8
-      },
-      {
-        name: '平均温度',
-        type: 'line',
-        data: avgTemps,
-        smooth: true,
-        itemStyle: {
-          color: '#14b8a6'
-        },
-        lineStyle: {
-          width: 2,
-          type: 'dashed'
-        },
-        symbol: 'diamond',
-        symbolSize: 8
       }
     ]
   };
 
-  if (loading) {
-    return (
-      <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex items-center justify-center`}>
-        <div className={`${textColorTheme.textColor.secondary}`}>加载中...</div>
-      </div>
-    );
-  }
+
 
   if (error) {
     return (

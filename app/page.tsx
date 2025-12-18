@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Header from './components/Header';
 import CurrentWeather from './components/CurrentWeather';
 import TemperatureChart from './components/TemperatureChart';
 import HourlyChart from './components/HourlyChart';
 import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
+import Modal from './components/Modal';
+import WeatherSkeleton from './components/WeatherSkeleton';
 import { translateLocation } from './utils/locationTranslations';
 import { translateWeatherCondition } from './utils/weatherTranslations';
 import { getTextColorTheme } from './utils/textColorTheme';
@@ -46,6 +48,10 @@ export default function Home() {
   const [currentCity, setCurrentCity] = useState<string>('杭州');
   const [currentCityQuery, setCurrentCityQuery] = useState<string>('hangzhou');
   const [isLocating, setIsLocating] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
+    isOpen: false,
+    message: '',
+  });
 
   const fetchWeatherData = async (city: string = 'hangzhou') => {
     try {
@@ -130,68 +136,49 @@ export default function Home() {
     fetchWeatherByLocation(lat, lon);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-2 border-sky-400"></div>
-          <p className="mt-4 text-xl text-sky-700">正在加载天气数据...</p>
-        </div>
-      </div>
-    );
-  }
+  // Show error modal if there's an error
+  useEffect(() => {
+    if (error) {
+      setModalConfig({
+        isOpen: true,
+        message: `加载天气数据失败：${error}\n\n请稍后重试。`,
+      });
+      setError(null); // Clear error after showing modal
+    }
+  }, [error]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg max-w-lg shadow-lg">
-          <h2 className="text-xl font-bold mb-2">加载天气数据失败</h2>
-          <p>{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 bg-red-400 hover:bg-red-500 text-white font-semibold py-2 px-4 rounded transition-colors"
-          >
-            重试
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleCloseModal = () => {
+    setModalConfig(prev => ({ ...prev, isOpen: false }));
+  };
 
-  if (!weatherData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50">
-        <p className="text-xl text-sky-700">暂无天气数据</p>
-      </div>
-    );
-  }
+  // 默认字体颜色主题（用于初始加载或无数据时）
+  const defaultTheme = {
+    backgroundType: 'dark' as const,
+    textColor: {
+      primary: 'text-white',
+      secondary: 'text-gray-200',
+      muted: 'text-gray-300',
+      accent: 'text-blue-200',
+    },
+  };
 
-  // Collect all hourly data from all forecast days
-  const allHourlyData: Hour[] = weatherData.forecast.forecastday.reduce((acc, day) => {
-    return [...acc, ...day.hour];
-  }, [] as Hour[]);
-
-  // 检查天气状况，优先级：雪 > 雨 > 晴 > 雾 > 云
-  const weatherCondition = translateWeatherCondition(weatherData.current.condition);
+  // 计算当前天气状况和主题
+  const weatherCondition = weatherData ? translateWeatherCondition(weatherData.current.condition) : '';
   const isSnowy = weatherCondition.includes('雪');
   const isRainy = (weatherCondition.includes('雨') || weatherCondition.includes('雷'));
   const isSunny = weatherCondition.includes('晴');
   const isFoggy = weatherCondition.includes('雾');
   const isCloudy = !isFoggy && (weatherCondition.includes('云') || weatherCondition.includes('阴'));
   
-  // 获取今天的日出、日落时间和当前时间
-  const todayForecast = weatherData.forecast.forecastday[0];
+  const todayForecast = weatherData?.forecast.forecastday[0];
   const sunsetTime = todayForecast?.astro?.sunset;
   const sunriseTime = todayForecast?.astro?.sunrise;
-  const currentTime = weatherData.location.localtime;
-  const isDay = weatherData.current.is_day === 1; // API 提供的白天/黑夜标识
-  
-  // 判断是否是日落或夜晚
-  // 优先使用 API 的 is_day 字段，然后结合日出/日落时间判断日落时段
+  const currentTime = weatherData?.location.localtime;
+  const isDay = weatherData?.current.is_day === 1;
+
   const { isSunset, isNight } = (() => {
-    // 如果 API 明确标识是黑夜，直接返回黑夜（除非在日出时段）
+    if (!weatherData) return { isSunset: false, isNight: false };
     if (!isDay) {
-      // 检查是否在日出时段（日出前后1小时）
       if (sunriseTime && currentTime) {
         try {
           const currentDate = new Date(currentTime.replace(' ', 'T'));
@@ -207,27 +194,16 @@ export default function Home() {
           sunriseDate.setHours(sunriseHours24, sunriseMinutes, 0, 0);
           const oneHourBeforeSunrise = new Date(sunriseDate.getTime() - 60 * 60 * 1000);
           const oneHourAfterSunrise = new Date(sunriseDate.getTime() + 60 * 60 * 1000);
-          
-          // 如果在日出时段，不算黑夜
           if (currentDate >= oneHourBeforeSunrise && currentDate <= oneHourAfterSunrise) {
             return { isSunset: false, isNight: false };
           }
-        } catch {
-          // 解析失败，使用 API 的 is_day
-        }
+        } catch { }
       }
       return { isSunset: false, isNight: true };
     }
-    
-    // 如果是白天，检查是否在日落时段
-    if (!sunsetTime || !currentTime) {
-      return { isSunset: false, isNight: false };
-    }
-    
+    if (!sunsetTime || !currentTime) return { isSunset: false, isNight: false };
     try {
       const currentDate = new Date(currentTime.replace(' ', 'T'));
-      
-      // 解析日落时间
       const [sunsetTimePart, sunsetPeriod] = sunsetTime.split(' ');
       const [sunsetHours, sunsetMinutes] = sunsetTimePart.split(':').map(Number);
       let sunsetHours24 = sunsetHours;
@@ -238,38 +214,36 @@ export default function Home() {
       }
       const sunsetDate = new Date(currentDate);
       sunsetDate.setHours(sunsetHours24, sunsetMinutes, 0, 0);
-      
       const oneHourBeforeSunset = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
       const oneHourAfterSunset = new Date(sunsetDate.getTime() + 60 * 60 * 1000);
-      
-      // 判断是否在日落前后一小时（日落时段）
-      const isSunsetTime = currentDate >= oneHourBeforeSunset && currentDate <= oneHourAfterSunset;
-      
-      return { isSunset: isSunsetTime, isNight: false };
+      return { isSunset: currentDate >= oneHourBeforeSunset && currentDate <= oneHourAfterSunset, isNight: false };
     } catch {
       return { isSunset: false, isNight: false };
     }
   })();
   
-  // 获取字体颜色主题（传递 isDay 以确保判断准确）
-  const textColorTheme = getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day);
+  const textColorTheme = weatherData 
+    ? getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day)
+    : defaultTheme;
+
+  // Collect all hourly data
+  const allHourlyData: Hour[] = weatherData?.forecast.forecastday.reduce((acc, day) => {
+    return [...acc, ...day.hour];
+  }, [] as Hour[]) || [];
 
   return (
     <main className="min-h-screen p-4 md:p-8 relative">
-      {/* 雪天天气背景 - 优先级最高 */}
+      {/* Backgrounds */}
       {isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 雨天天气背景 */}
       {isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 晴天天气背景 */}
-      {isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData.current.is_day} />}
-      {/* 雾天天气背景 */}
+      {isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
       {isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 多云天气背景 */}
       {isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {/* 默认背景 */}
-      {!isSnowy && !isRainy && !isSunny && !isFoggy && !isCloudy && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {!weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {!isSnowy && !isRainy && !isSunny && !isFoggy && !isCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+
       <div className={`max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
-        {/* Header with Search */}
+        {/* Header with Search - Always visible */}
         <Header 
           onCitySelect={handleCitySelect} 
           onLocationSelect={handleLocationSelect}
@@ -278,57 +252,73 @@ export default function Home() {
           textColorTheme={textColorTheme}
         />
 
-        {/* Current Weather and 24h Forecast */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <CurrentWeather
-              location={weatherData.location}
-              current={weatherData.current}
-              textColorTheme={textColorTheme}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <HourlyForecast24h 
-              hourlyData={allHourlyData} 
-              currentTime={weatherData.location.localtime}
-              currentTimeEpoch={weatherData.location.localtime_epoch}
-              textColorTheme={textColorTheme}
-            />
-          </div>
-        </div>
+        <Suspense fallback={<WeatherSkeleton />}>
+          {loading || !weatherData ? (
+            <WeatherSkeleton />
+          ) : (
+            <div className="space-y-6 animate-in fade-in duration-500">
+              {/* Current Weather and 24h Forecast */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1">
+                  <CurrentWeather
+                    location={weatherData.location}
+                    current={weatherData.current}
+                    textColorTheme={textColorTheme}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <HourlyForecast24h 
+                    hourlyData={allHourlyData} 
+                    currentTime={weatherData.location.localtime}
+                    currentTimeEpoch={weatherData.location.localtime_epoch}
+                    textColorTheme={textColorTheme}
+                  />
+                </div>
+              </div>
 
-        {/* Temperature Chart and Metrics Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <TemperatureChart 
-              location={{
-                lat: Number(weatherData.location.lat.toFixed ? weatherData.location.lat.toFixed(2) : weatherData.location.lat.toFixed(2)),
-                lon: Number(weatherData.location.lon.toFixed ? weatherData.location.lon.toFixed(2) : weatherData.location.lon.toFixed(2))
-              }}
-              textColorTheme={textColorTheme}
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <WeatherMetrics 
-              current={weatherData.current}
-              textColorTheme={textColorTheme}
-            />
-          </div>
-        </div>
+              {/* Temperature Chart and Metrics Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <TemperatureChart 
+                    location={{
+                      lat: Number(weatherData.location.lat.toFixed(2)),
+                      lon: Number(weatherData.location.lon.toFixed(2))
+                    }}
+                    textColorTheme={textColorTheme}
+                  />
+                </div>
+                <div className="lg:col-span-1">
+                  <WeatherMetrics 
+                    current={weatherData.current}
+                    textColorTheme={textColorTheme}
+                  />
+                </div>
+              </div>
 
-        {/* Hourly Forecast */}
-        <HourlyChart 
-          hourlyData={allHourlyData}
-          textColorTheme={textColorTheme}
-        />
+              {/* Hourly Forecast */}
+              <HourlyChart 
+                hourlyData={allHourlyData}
+                textColorTheme={textColorTheme}
+              />
 
-        {/* Footer */}
-        {/* <footer className="text-center pt-8 pb-4">
-          <p className="text-sm text-sky-600">
-            数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
-          </p>
-        </footer> */}
+              {/* Footer */}
+              <footer className="text-center pt-8 pb-4">
+                <p className="text-sm text-white-100 opacity-80">
+                  数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
+                </p>
+              </footer>
+            </div>
+          )}
+        </Suspense>
       </div>
+
+      {/* Custom Modal */}
+      <Modal
+        isOpen={modalConfig.isOpen}
+        onClose={handleCloseModal}
+        message={modalConfig.message}
+        textColorTheme={textColorTheme}
+      />
     </main>
   );
 }
