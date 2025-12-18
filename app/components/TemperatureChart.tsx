@@ -335,6 +335,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       
       <ReactECharts 
         option={option} 
+        notMerge={true}
         style={{ height: '400px', width: '100%' }}
         opts={{ renderer: 'svg' }}
       />
