@@ -161,14 +161,6 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
 
   return (
     <header className="mb-8">
-      {/* <div className="text-center mb-6">
-        <h1 className="text-4xl font-bold text-sky-700 mb-2">
-          天气预报
-        </h1>
-        <p className="text-sky-600">
-          实时天气预报与可视化展示
-        </p>
-      </div> */}
 
       {/* Search Bar */}
       <div className="max-w-2xl mx-auto relative">
@@ -204,11 +196,6 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               </svg>
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-              {/* {currentCity && (
-                <span className={`text-xs ${theme.textColor.secondary} ${theme.backgroundType === 'dark' ? 'bg-white/20' : 'bg-sky-50'} px-2 py-1 rounded`}>
-                  当前: {currentCity}
-                </span>
-              )} */}
               <button
                 type="button"
                 onClick={handleLocationClick}
