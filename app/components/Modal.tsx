@@ -3,6 +3,8 @@
 import React, { useEffect } from 'react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
+import Icon from '@/app/components/Icon';
+import { ICONS } from '@/app/utils/icons';
 
 interface ModalProps {
   isOpen: boolean;
@@ -47,9 +49,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
         
         <div className="flex flex-col items-center text-center py-4">
           <div className={`mb-6 p-4 rounded-full ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-500'}`}>
-            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Icon src={ICONS.alert} className="w-12 h-12" title="提示" />
           </div>
           
           <div className={`text-lg font-medium mb-8 ${textColorTheme.textColor.primary} whitespace-pre-wrap`}>
