@@ -5,14 +5,19 @@ import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
+import Icon from '@/app/components/Icon';
+import { ICONS } from '@/app/utils/icons';
 
 interface CurrentWeatherProps {
   location: Location;
   current: Current;
   textColorTheme: TextColorTheme;
+  cityQuery?: string;
+  isFavorite?: boolean;
+  onToggleFavorite?: (cityQuery: string, displayName: string) => void;
 }
 
-export default function CurrentWeather({ location, current, textColorTheme }: CurrentWeatherProps) {
+export default function CurrentWeather({ location, current, textColorTheme, cityQuery, isFavorite, onToggleFavorite }: CurrentWeatherProps) {
   const translatedLocation = translateLocation(location);
 
   // Format local time from location.localtime
@@ -33,7 +38,27 @@ export default function CurrentWeather({ location, current, textColorTheme }: Cu
   const formattedLocalTime = formatLocalTime(location.localtime);
   
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-56`}>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-56 relative overflow-hidden`}>
+      {/* Favorite button */}
+      {cityQuery && onToggleFavorite && (
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(cityQuery, translatedLocation.name)}
+          className={`absolute top-2 right-2 z-10 rounded-full p-2 transition-all active:scale-95 ${
+            textColorTheme.backgroundType === 'dark'
+              ? 'hover:bg-white/10'
+              : 'hover:bg-black/5'
+          }`}
+          aria-label={isFavorite ? '取消收藏城市' : '收藏该城市'}
+          title={isFavorite ? '已收藏，点击取消' : '点击收藏'}
+        >
+          <Icon
+            src={isFavorite ? ICONS.bookmarkFilled : ICONS.bookmark}
+            className={`w-5 h-5 ${isFavorite ? 'text-amber-400' : textColorTheme.textColor.secondary}`}
+            title={isFavorite ? '已收藏' : '收藏'}
+          />
+        </button>
+      )}
       <div className="flex flex-col">
         <div className="flex-1">
           <h1 className={`text-5xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
