@@ -9,6 +9,7 @@ import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
 import Modal from './components/Modal';
 import WeatherSkeleton from './components/WeatherSkeleton';
+import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
 import { translateLocation } from './utils/locationTranslations';
 import { translateWeatherCondition } from './utils/weatherTranslations';
 import { getTextColorTheme } from './utils/textColorTheme';
@@ -47,6 +48,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [currentCity, setCurrentCity] = useState<string>('杭州');
   const [currentCityQuery, setCurrentCityQuery] = useState<string>('hangzhou');
+  const [favorites, setFavorites] = useState<FavoriteCity[]>([]);
   const [isLocating, setIsLocating] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
     isOpen: false,
@@ -111,6 +113,11 @@ export default function Home() {
     fetchWeatherData();
   }, []); // Empty dependency array - only run on mount
 
+  // Load favorites from localStorage once
+  useEffect(() => {
+    setFavorites(loadFavoritesFromStorage());
+  }, []);
+
   // Auto-refresh - run every 30 minutes for current city/location
   useEffect(() => {
     if (!currentCityQuery) return;
@@ -134,6 +141,26 @@ export default function Home() {
 
   const handleLocationSelect = (lat: number, lon: number) => {
     fetchWeatherByLocation(lat, lon);
+  };
+
+  const handleSelectFavorite = (query: string) => {
+    if (query.includes(',')) {
+      const [lat, lon] = query.split(',');
+      fetchWeatherByLocation(parseFloat(lat), parseFloat(lon));
+    } else {
+      fetchWeatherData(query);
+    }
+  };
+
+  const handleToggleFavorite = (cityQuery: string, displayName: string) => {
+    setFavorites((prev) => {
+      const exists = prev.some((f) => f.query === cityQuery);
+      const next = exists
+        ? prev.filter((f) => f.query !== cityQuery)
+        : [{ query: cityQuery, label: displayName }, ...prev.filter((f) => f.query !== cityQuery)];
+      saveFavoritesToStorage(next);
+      return next;
+    });
   };
 
   // Show error modal if there's an error
@@ -233,6 +260,14 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 relative">
+      {/* Favorites Drawer */}
+      <FavoritesDrawer
+        textColorTheme={textColorTheme}
+        currentCityQuery={currentCityQuery}
+        favorites={favorites}
+        onChangeFavorites={setFavorites}
+        onSelectCity={handleSelectFavorite}
+      />
       {/* Backgrounds */}
       {isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
@@ -264,6 +299,9 @@ export default function Home() {
                     location={weatherData.location}
                     current={weatherData.current}
                     textColorTheme={textColorTheme}
+                    cityQuery={currentCityQuery}
+                    isFavorite={favorites.some((f) => f.query === currentCityQuery)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 </div>
                 <div className="lg:col-span-2">
