@@ -8,6 +8,9 @@ export const ICONS = {
   // Common
   close: '/icons/close.svg',
   alert: '/icons/alert.svg',
+  bookmark: '/icons/bookmark.svg',
+  bookmarkFilled: '/icons/bookmark-filled.svg',
+  sidebar: '/icons/sidebar.svg',
 
   // Metrics / details
   humidity: '/icons/humidity.svg',
