@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
@@ -21,7 +21,7 @@ type CachedWeather = {
 
 const FAVORITES_KEY = 'wp:favorites:v1';
 const WEATHER_CACHE_KEY = 'wp:favorites:weather:v1';
-const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const WEATHER_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function safeParseJson<T>(value: string | null): T | null {
   if (!value) return null;
@@ -80,40 +80,68 @@ export default function FavoritesDrawer({
   const [open, setOpen] = useState(false);
   const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedWeather>>({});
   const [loadingQueries, setLoadingQueries] = useState<Record<string, boolean>>({});
+  const cacheRef = useRef<Record<string, CachedWeather>>({});
+  const inFlightRef = useRef<Set<string>>(new Set());
+  const openRef = useRef(false);
 
   const isDark = textColorTheme.backgroundType === 'dark';
 
   // preload cache on mount
   useEffect(() => {
-    setWeatherByQuery(loadWeatherCache());
+    const cached = loadWeatherCache();
+    cacheRef.current = cached;
+    setWeatherByQuery(cached);
   }, []);
+
+  // Lock body scroll when drawer is open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [open]);
 
   // fetch when opened
   useEffect(() => {
-    if (!open) return;
+    // only trigger on closed -> open transition
+    if (!open) {
+      openRef.current = false;
+      return;
+    }
+    if (openRef.current) return;
+    openRef.current = true;
+
     if (favorites.length === 0) return;
 
     let cancelled = false;
-    const cache = { ...weatherByQuery, ...loadWeatherCache() };
+    // merge latest storage cache into ref (source of truth)
+    cacheRef.current = { ...cacheRef.current, ...loadWeatherCache() };
 
     async function fetchOne(query: string) {
-      const cached = cache[query];
+      if (inFlightRef.current.has(query)) return;
+      const cached = cacheRef.current[query];
       const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
       if (isFresh) return;
 
+      inFlightRef.current.add(query);
       setLoadingQueries((prev) => ({ ...prev, [query]: true }));
       try {
         const res = await fetch(buildWeatherUrl(query));
         if (!res.ok) throw new Error('Failed to fetch weather');
         const data: WeatherResponse = await res.json();
         const next: CachedWeather = { fetchedAt: Date.now(), data };
-        cache[query] = next;
+        cacheRef.current[query] = next;
         if (!cancelled) {
           setWeatherByQuery((prev) => ({ ...prev, [query]: next }));
         }
       } catch {
         // ignore; keep card in "failed" state
       } finally {
+        inFlightRef.current.delete(query);
         if (!cancelled) {
           setLoadingQueries((prev) => ({ ...prev, [query]: false }));
         }
@@ -123,14 +151,14 @@ export default function FavoritesDrawer({
     (async () => {
       await Promise.allSettled(favorites.map((f) => fetchOne(f.query)));
       if (!cancelled) {
-        saveWeatherCache(cache);
+        saveWeatherCache(cacheRef.current);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [open, favorites, weatherByQuery]);
+  }, [open, favorites]);
 
   const isCurrentFavorite = useMemo(() => {
     if (!currentCityQuery) return false;
@@ -158,24 +186,24 @@ export default function FavoritesDrawer({
 
   return (
     <>
-      {/* Top-right entry button (doesn't take layout space) */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`fixed top-4 right-4 z-[85] rounded-2xl p-2.5 shadow-xl border backdrop-blur-xl transition-all active:scale-95 ${
-          isDark
-            ? 'bg-gray-900/40 border-white/10 hover:bg-gray-900/60'
-            : 'bg-white/60 border-white/60 hover:bg-white/85'
-        }`}
-        aria-label="打开收藏城市抽屉"
-        title="收藏城市"
-      >
-        <Icon
-          src={ICONS.sidebar}
-          className={`w-6 h-6 ${textColorTheme.textColor.secondary}`}
-          title="收藏抽屉"
-        />
-      </button>
+      {/* Entry button: shown on page left when drawer is closed */}
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`fixed top-4 left-4 z-[85] rounded-xl p-2 transition-all active:scale-95 ${
+            isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
+          }`}
+          aria-label="打开收藏城市抽屉"
+          title="收藏城市"
+        >
+          <Icon
+            src={ICONS.sidebar}
+            className={`w-6 h-6 ${textColorTheme.textColor.secondary}`}
+            title="收藏抽屉"
+          />
+        </button>
+      )}
 
       {/* Drawer */}
       <div className={`fixed inset-0 z-[80] ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -186,7 +214,7 @@ export default function FavoritesDrawer({
         />
 
         <aside
-          className={`absolute left-0 top-0 h-full w-[88vw] max-w-sm md:max-w-md transition-transform duration-300 ease-out ${
+          className={`absolute left-0 top-0 h-full w-[40vw] max-w-xs md:max-w-sm transition-transform duration-300 ease-out ${
             open ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -194,40 +222,24 @@ export default function FavoritesDrawer({
             <div className="p-5 flex items-center justify-between">
               <div>
                 <h3 className={`text-lg font-bold ${textColorTheme.textColor.primary}`}>收藏城市</h3>
-                <p className={`text-xs ${textColorTheme.textColor.muted}`}>打开时自动更新并缓存 30 分钟</p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className={`rounded-xl p-2 transition ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
-                aria-label="关闭收藏抽屉"
+                aria-label="收起收藏抽屉"
               >
-                <Icon src={ICONS.close} className={`w-6 h-6 ${textColorTheme.textColor.secondary}`} title="关闭" />
+                <Icon src={ICONS.sidebar} className={`w-6 h-6 ${textColorTheme.textColor.secondary}`} title="收起" />
               </button>
             </div>
 
-            <div className="px-5 pb-4">
-              <button
-                type="button"
-                onClick={toggleCurrentFavorite}
-                disabled={!currentCityQuery}
-                className={`w-full rounded-2xl px-4 py-3 font-semibold text-sm transition active:scale-[0.99] border ${
-                  isDark
-                    ? 'bg-white/10 hover:bg-white/15 border-white/10'
-                    : 'bg-white/70 hover:bg-white/90 border-white/60'
-                } ${!currentCityQuery ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isCurrentFavorite ? '取消收藏当前城市' : '收藏当前城市'}
-              </button>
-            </div>
-
-            <div className="px-5 pb-6 overflow-y-auto h-[calc(100%-152px)]">
+            <div className="px-5 pb-2 overflow-y-auto h-[calc(100%-102px)]">
               {favorites.length === 0 ? (
                 <div className={`mt-10 text-center ${textColorTheme.textColor.muted}`}>
                   暂无收藏城市
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {favorites.map((fav) => {
                     const cached = weatherByQuery[fav.query];
                     const isLoading = !!loadingQueries[fav.query];
@@ -236,13 +248,13 @@ export default function FavoritesDrawer({
                     const displayName = cached
                       ? translateLocation(cached.data.location).name
                       : (fav.label || fav.query);
-                    const temp = cached ? `${cached.data.current.temp_c.toFixed(1)}°C` : '--';
+                    const temp = cached ? `${cached.data.current.temp_c.toFixed(0)}°C` : '--';
                     const cond = cached ? translateWeatherCondition(cached.data.current.condition) : (isLoading ? '加载中…' : '未加载');
 
                     return (
                       <div
                         key={fav.query}
-                        className={`group rounded-3xl border shadow-lg overflow-hidden transition-all ${
+                        className={`group relative h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
                           isDark ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-white/60 bg-white/70 hover:bg-white/90'
                         }`}
                       >
@@ -257,32 +269,17 @@ export default function FavoritesDrawer({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className={`text-lg font-bold ${textColorTheme.textColor.primary}`}>{displayName}</p>
+                              <p className={`text-3xl font-bold ${textColorTheme.textColor.primary}`}>{displayName}</p>
                               <p className={`text-xs ${textColorTheme.textColor.muted}`}>
-                                {isLoading ? '正在更新…' : isFresh ? '已缓存' : '待更新'}
+                                {isLoading ? '正在更新…' : isFresh ? '' : '待更新'}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className={`text-2xl font-extrabold ${textColorTheme.textColor.primary}`}>{temp}</p>
-                              <p className={`text-xs ${textColorTheme.textColor.secondary}`}>{cond}</p>
+                              <p className={`text-3xl font-extrabold ${textColorTheme.textColor.primary}`}>{temp}</p>
+                              <p className={`text-sm mt-12 ${textColorTheme.textColor.secondary}`}>{cond}</p>
                             </div>
                           </div>
                         </button>
-                        <div className="px-4 pb-4 flex items-center justify-between">
-                          <div className={`text-xs ${textColorTheme.textColor.muted}`}>
-                            {fav.query.includes(',') ? '坐标收藏' : '城市收藏'}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeFavorite(fav.query)}
-                            className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                              isDark ? 'hover:bg-white/10 text-gray-200' : 'hover:bg-gray-100 text-gray-700'
-                            }`}
-                            aria-label={`移除${displayName}收藏`}
-                          >
-                            移除
-                          </button>
-                        </div>
                       </div>
                     );
                   })}
