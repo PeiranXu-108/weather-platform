@@ -187,7 +187,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 src={ICONS.search}
                 className={`w-5 h-5 ${theme.textColor.muted}`}
                 title="搜索"
-              />
+                />
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
               <button
@@ -206,13 +206,13 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                     src={ICONS.spinner}
                     className="w-5 h-5 text-sky-500 animate-spin"
                     title="定位中"
-                  />
+                    />
                 ) : (
                   <Icon
                     src={ICONS.location}
                     className="w-5 h-5 text-sky-600"
                     title="获取当前位置"
-                  />
+                    />
                 )}
               </button>
             </div>
@@ -247,7 +247,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                     src={ICONS.chevronRight}
                     className="w-5 h-5 text-sky-400"
                     title="选择"
-                  />
+                    />
                 </div>
               </button>
             ))}
