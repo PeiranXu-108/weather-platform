@@ -21,6 +21,7 @@ export const ICONS = {
   visibility: '/icons/visibility.svg',
   precipitation: '/icons/precipitation.svg',
   cloudRain: '/icons/cloud-rain.svg',
+  cloudAmount: '/icons/cloud-amount.svg',
 } as const;
 
 

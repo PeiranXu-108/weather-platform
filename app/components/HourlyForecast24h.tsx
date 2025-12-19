@@ -245,7 +245,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   {
                     label: '降水/降雪',
@@ -254,10 +254,16 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                     icon: <Icon src={ICONS.precipitation} className="w-6 h-6 text-sky-400" title="降水" />
                   },
                   {
-                    label: '湿度 / 云量',
+                    label: '湿度',
                     value: `${selectedHour.humidity}%`,
-                    sub: `云量 ${selectedHour.cloud}%`,
-                    icon: <Icon src={ICONS.cloudRain} className="w-6 h-6 text-blue-300" title="湿度/云量" />
+                    sub: '空气相对湿度',
+                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-blue-300" title="湿度" />
+                  },
+                  {
+                    label: '云量',
+                    value: `${selectedHour.cloud}%`,
+                    sub: '天空云覆盖率',
+                    icon: <Icon src={ICONS.cloudAmount} className="w-6 h-6 text-indigo-300" title="云量" />
                   },
                   {
                     label: '风速 / 阵风',
@@ -272,17 +278,29 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                     icon: <Icon src={ICONS.windDirection} className="w-6 h-6 text-indigo-400" title="风向" />
                   },
                   {
-                    label: '气压 / 露点',
+                    label: '气压',
                     value: `${selectedHour.pressure_mb} mb`,
-                    sub: `露点 ${selectedHour.dewpoint_c.toFixed(1)}°C`,
+                    sub: '海平面气压',
                     icon: <Icon src={ICONS.pressure} className="w-6 h-6 text-violet-400" title="气压" />
                   },
                   {
-                    label: '能见度 / 紫外线',
+                    label: '露点',
+                    value: `${selectedHour.dewpoint_c.toFixed(1)}°C`,
+                    sub: '空气水汽饱和温度',
+                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-cyan-400" title="露点" />
+                  },
+                  {
+                    label: '能见度',
                     value: `${selectedHour.vis_km} km`,
-                    sub: `UV 指数 ${selectedHour.uv}`,
-                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-400" title="紫外线" />
-                  }
+                    sub: '水平能见距离',
+                    icon: <Icon src={ICONS.visibility} className="w-6 h-6 text-amber-400" title="能见度" />
+                  },
+                  {
+                    label: '紫外线',
+                    value: `${selectedHour.uv}`,
+                    sub: 'UV 指数',
+                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-500" title="紫外线" />
+                  },
                 ].map(stat => (
                   <div
                     key={stat.label}

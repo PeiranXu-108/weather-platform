@@ -149,7 +149,6 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
               return `${dates[index]}<br/>
                       最高: ${maxTemps[index]}°C<br/>
                       最低: ${minTemps[index]}°C<br/>
-                      平均: ${avgTemps[index]}°C<br/>
                       `;
             }
             return '';
