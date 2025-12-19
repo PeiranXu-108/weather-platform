@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import Header from './components/Header';
 import CurrentWeather from './components/CurrentWeather';
-import TemperatureChart from './components/TemperatureChart';
+import TemperatureChart from './components/Forcast30days';
 import HourlyChart from './components/HourlyChart';
 import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
