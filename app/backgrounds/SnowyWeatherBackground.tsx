@@ -3,6 +3,7 @@
 import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // 单个雪花组件 - 使用六角星形状
 function Snowflake({ 
@@ -28,56 +29,80 @@ function Snowflake({
       return x - Math.floor(x);
     };
     
+    const branchMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.3,
+    });
+    
+    const geometries: THREE.BufferGeometry[] = [];
+    
+    const addPlane = (
+      width: number,
+      height: number,
+      position: THREE.Vector3,
+      localRotationZ: number,
+      groupRotationZ: number
+    ) => {
+      const geometry = new THREE.PlaneGeometry(width, height);
+      const localRotation = new THREE.Matrix4().makeRotationZ(localRotationZ);
+      const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
+      const groupRotation = new THREE.Matrix4().makeRotationZ(groupRotationZ);
+      geometry.applyMatrix4(localRotation);
+      geometry.applyMatrix4(translation);
+      geometry.applyMatrix4(groupRotation);
+      geometries.push(geometry);
+    };
+    
     // 创建六角星雪花 - 使用多个交叉的平面
     const createStarBranch = (angle: number, length: number) => {
-      const branchGroup = new THREE.Group();
+      const branchHeight = length * size;
+      const branchWidth = 0.02 * size;
       
       // 主分支 - 细长的矩形
-      const branchGeometry = new THREE.PlaneGeometry(0.02 * size, length * size);
-      const branchMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.9,
-        side: THREE.DoubleSide,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.3,
-      });
-      const branch = new THREE.Mesh(branchGeometry, branchMaterial);
-      branch.position.y = length * size * 0.5;
-      branchGroup.add(branch);
+      addPlane(
+        branchWidth,
+        branchHeight,
+        new THREE.Vector3(0, branchHeight * 0.5, 0),
+        0,
+        angle
+      );
       
       // 侧分支 - 左右各3个
       for (let i = 0; i < 3; i++) {
         const sideLength = (0.3 + random(i) * 0.2) * length * size;
-        const sideGeometry = new THREE.PlaneGeometry(0.015 * size, sideLength);
-        const sideMaterial = branchMaterial.clone();
-        const sideBranch = new THREE.Mesh(sideGeometry, sideMaterial);
-        
+        const sideWidth = 0.015 * size;
         const sideAngle = (i + 1) * 0.3;
         const sideDistance = (0.2 + random(i + 10) * 0.3) * length * size;
-        sideBranch.position.x = Math.sin(sideAngle) * sideDistance;
-        sideBranch.position.y = (0.3 + random(i + 20) * 0.4) * length * size;
-        sideBranch.rotation.z = sideAngle;
-        branchGroup.add(sideBranch);
+        const sideY = (0.3 + random(i + 20) * 0.4) * length * size;
+        
+        addPlane(
+          sideWidth,
+          sideLength,
+          new THREE.Vector3(Math.sin(sideAngle) * sideDistance, sideY, 0),
+          sideAngle,
+          angle
+        );
         
         // 另一侧的对称分支
-        const sideBranch2 = new THREE.Mesh(sideGeometry, sideMaterial.clone());
-        sideBranch2.position.x = -Math.sin(sideAngle) * sideDistance;
-        sideBranch2.position.y = (0.3 + random(i + 30) * 0.4) * length * size;
-        sideBranch2.rotation.z = -sideAngle;
-        branchGroup.add(sideBranch2);
+        addPlane(
+          sideWidth,
+          sideLength,
+          new THREE.Vector3(-Math.sin(sideAngle) * sideDistance, sideY, 0),
+          -sideAngle,
+          angle
+        );
       }
-      
-      branchGroup.rotation.z = angle;
-      return branchGroup;
     };
     
     // 创建6个主分支，形成完整的六角星
     for (let i = 0; i < 6; i++) {
       const angle = (i * Math.PI) / 3;
       const branchLength = 0.4 + random(i * 5) * 0.2;
-      const branch = createStarBranch(angle, branchLength);
-      group.add(branch);
+      createStarBranch(angle, branchLength);
     }
     
     // 中心小圆点
@@ -89,6 +114,12 @@ function Snowflake({
       emissive: 0xffffff,
       emissiveIntensity: 0.4,
     });
+    
+    const mergedGeometry = mergeGeometries(geometries, false);
+    mergedGeometry?.computeBoundingSphere();
+    const snowflakeMesh = new THREE.Mesh(mergedGeometry ?? new THREE.BufferGeometry(), branchMaterial);
+    group.add(snowflakeMesh);
+    
     const center = new THREE.Mesh(centerGeometry, centerMaterial);
     group.add(center);
     
@@ -249,6 +280,7 @@ function InstancedSnowflakes({
   // 初始化实例矩阵 - 使用 useEffect 确保在组件挂载后执行
   useEffect(() => {
     if (!meshRef.current) return;
+    meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     
     simpleFlakes.forEach((flake, i) => {
       tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);

@@ -22,7 +22,7 @@ function FogLayer({
   
   // 创建薄雾几何体和材质
   const { geometry, material } = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(scale[0], scale[1], 32, 32);
+    const geo = new THREE.PlaneGeometry(scale[0], scale[1], 1, 1);
     
     // 创建柔和噪声纹理用于更自然的雾效果（低频+平滑）
     const random = (x: number, y: number) => {

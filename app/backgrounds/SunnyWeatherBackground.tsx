@@ -70,7 +70,6 @@ function SunnyWeatherScene({ isSunset }: { isSunset?: boolean }) {
         position={sunPosition} 
         intensity={isSunset ? 1.2 : 1.5} 
         color={isSunset ? 0xffaa66 : 0xffffff}
-        castShadow 
       />
       {/* 补充光源 */}
       <directionalLight position={[-5, 5, -5]} intensity={isSunset ? 0.3 : 0.4} />
@@ -284,6 +283,7 @@ function InstancedStars({ count }: { count: number }) {
   
   useEffect(() => {
     if (!meshRef.current) return;
+    meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     
     stars.forEach((star, i) => {
       tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
@@ -569,4 +569,3 @@ export default function SunnyWeatherBackground({
     </div>
   );
 }
-
