@@ -38,7 +38,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
   const formattedLocalTime = formatLocalTime(location.localtime);
   
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-56 relative overflow-hidden`}>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full relative overflow-hidden flex flex-col`}>
       {/* Favorite button */}
       {cityQuery && onToggleFavorite && (
         <button
@@ -59,8 +59,8 @@ export default function CurrentWeather({ location, current, textColorTheme, city
           />
         </button>
       )}
-      <div className="flex flex-col">
-        <div className="flex-1">
+      <div className="flex flex-col flex-1 justify-between">
+        <div>
           <h1 className={`text-5xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
             {translatedLocation.name}
           </h1>
@@ -87,12 +87,12 @@ export default function CurrentWeather({ location, current, textColorTheme, city
             </div>
           </div>
         </div>
-      </div>
       
-      <div className="mt-3 pt-3">
-        <p className={`text-xs ${textColorTheme.textColor.muted}`}>
-          最后更新：{current.last_updated}
-        </p>
+        <div className="mt-3 pt-3">
+          <p className={`text-xs ${textColorTheme.textColor.muted}`}>
+            最后更新：{current.last_updated}
+          </p>
+        </div>
       </div>
     </div>
   );
