@@ -42,6 +42,35 @@ const FoggyWeatherBackground = dynamic(
   { ssr: false }
 );
 
+const CURRENT_CITY_KEY = 'wp:currentCity:v1';
+
+// 从 localStorage 读取当前城市
+function loadCurrentCityFromStorage(): { city: string; query: string } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(CURRENT_CITY_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === 'object' && parsed.query) {
+        return { city: parsed.city || '杭州', query: parsed.query };
+      }
+    }
+  } catch {
+    // 忽略解析错误
+  }
+  return null;
+}
+
+// 保存当前城市到 localStorage
+function saveCurrentCityToStorage(city: string, query: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CURRENT_CITY_KEY, JSON.stringify({ city, query }));
+  } catch {
+    // 忽略存储错误
+  }
+}
+
 export default function Home() {
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +102,8 @@ export default function Home() {
       const translated = translateLocation(data.location);
       setCurrentCity(translated.name);
       setCurrentCityQuery(city);
+      // Save to localStorage
+      saveCurrentCityToStorage(translated.name, city);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching weather data:', err);
@@ -81,11 +112,13 @@ export default function Home() {
     }
   };
 
-  const fetchWeatherByLocation = async (lat: number, lon: number) => {
+  const fetchWeatherByLocation = async (lat: number, lon: number, skipLocating: boolean = false) => {
     try {
       setLoading(true);
       setError(null);
-      setIsLocating(true);
+      if (!skipLocating) {
+        setIsLocating(true);
+      }
       const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
       
       if (!response.ok) {
@@ -98,19 +131,41 @@ export default function Home() {
       // Update current city display name and query
       const translated = translateLocation(data.location);
       setCurrentCity(translated.name);
-      setCurrentCityQuery(`${lat},${lon}`);
+      const query = `${lat},${lon}`;
+      setCurrentCityQuery(query);
+      // Save to localStorage
+      saveCurrentCityToStorage(translated.name, query);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching weather data:', err);
     } finally {
       setLoading(false);
-      setIsLocating(false);
+      if (!skipLocating) {
+        setIsLocating(false);
+      }
     }
   };
 
   // Initial load - only run once on mount
   useEffect(() => {
-    fetchWeatherData();
+    // Try to load saved city from localStorage
+    const savedCity = loadCurrentCityFromStorage();
+    if (savedCity) {
+      // If saved city exists, use it
+      setCurrentCity(savedCity.city);
+      setCurrentCityQuery(savedCity.query);
+      // Check if it's coordinates (lat,lon format) or city name
+      if (savedCity.query.includes(',')) {
+        const [lat, lon] = savedCity.query.split(',');
+        // Skip locating state for initial load
+        fetchWeatherByLocation(parseFloat(lat), parseFloat(lon), true);
+      } else {
+        fetchWeatherData(savedCity.query);
+      }
+    } else {
+      // Otherwise, use default city
+      fetchWeatherData();
+    }
   }, []); // Empty dependency array - only run on mount
 
   // Load favorites from localStorage once

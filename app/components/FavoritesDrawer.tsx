@@ -218,7 +218,7 @@ export default function FavoritesDrawer({
             open ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className={`h-full ${getCardStyle(textColorTheme.backgroundType)} ${isDark ? 'bg-gray-900/70' : 'bg-white/70'} backdrop-blur-2xl border-r ${isDark ? 'border-white/10' : 'border-white/50'} shadow-2xl`}>
+          <div className={`h-full ${getCardStyle(textColorTheme.backgroundType)} ${isDark ? 'bg-gray-900/70' : 'bg-white/30'} backdrop-blur-2xl border-r ${isDark ? 'border-white/10' : 'border-white/50'} shadow-2xl`}>
             <div className="p-5 flex items-center justify-between">
               <div>
                 <h3 className={`text-lg font-bold ${textColorTheme.textColor.primary}`}>收藏城市</h3>
@@ -255,7 +255,7 @@ export default function FavoritesDrawer({
                       <div
                         key={fav.query}
                         className={`group relative h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
-                          isDark ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-white/60 bg-white/70 hover:bg-white/90'
+                          isDark ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-white/60 bg-white/30 hover:bg-white/50'
                         }`}
                       >
                         <button
