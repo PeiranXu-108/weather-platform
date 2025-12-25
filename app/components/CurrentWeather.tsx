@@ -21,7 +21,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
   const translatedLocation = translateLocation(location);
 
   // Format local time from location.localtime
-  const formatLocalTime = (timeString: string) => {
+  const formatTime = (timeString: string) => {
     try {
       const date = new Date(timeString);
       const year = date.getFullYear();
@@ -29,13 +29,14 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       const day = String(date.getDate()).padStart(2, '0');
       const hours = String(date.getHours()).padStart(2, '0');
       const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${year}/${month}/${day} ${hours}:${minutes}`;
+      return `${year} 年 ${month} 月 ${day} 日 ${hours}:${minutes}`;
     } catch (e) {
       return timeString;
     }
   };
 
-  const formattedLocalTime = formatLocalTime(location.localtime);
+
+  const formattedLocalTime = formatTime(location.localtime);
   
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full relative overflow-hidden flex flex-col`}>
@@ -61,12 +62,14 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       )}
       <div className="flex flex-col flex-1 justify-between">
         <div>
-          <h1 className={`text-5xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
+          <h1 className={`text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
             {translatedLocation.name}
           </h1>
-          <p className={`text-x ${textColorTheme.textColor.secondary} mb-4`}>
-            {translatedLocation.country} • {formattedLocalTime}
+          <p className={`text-xl ${textColorTheme.textColor.secondary} mb-4`}>
+            {translatedLocation.country} {translateLocation({ name: translatedLocation.region, region: translatedLocation.region, country: translatedLocation.country }).name??translatedLocation.region}
           </p>
+
+
           <div className="flex items-center gap-3">
             <div className="flex items-center">
               <Image
@@ -90,7 +93,10 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       
         <div className="mt-3 pt-3">
           <p className={`text-xs ${textColorTheme.textColor.muted}`}>
-            最后更新：{current.last_updated}
+            最后更新：北京时间 {formatTime(current.last_updated)}
+          </p>
+          <p className={`text-xs ${textColorTheme.textColor.secondary}`}>
+            当地时间 {formattedLocalTime}
           </p>
         </div>
       </div>
