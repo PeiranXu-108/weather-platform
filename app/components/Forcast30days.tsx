@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
@@ -43,13 +43,17 @@ interface DailyForecast {
 }
 
 type ChartType = 'bar' | 'line';
+type ViewType = 'chart' | 'table';
 
 export default function TemperatureChart({ location, textColorTheme }: TemperatureChartProps) {
   const [chartType, setChartType] = useState<ChartType>('bar');
+  const [viewType, setViewType] = useState<ViewType>('chart');
   const [forecastData, setForecastData] = useState<DailyForecast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DailyForecast | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -165,6 +169,58 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     return `${month}月${day}日 ${days[date.getDay()]}`;
   };
 
+  // Get current date for highlighting today
+  const getTodayDateString = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+
+  // Generate calendar grid data
+  const generateCalendarData = () => {
+    if (forecastData.length === 0) return [];
+    
+    const firstDate = new Date(forecastData[0].fxDate);
+    const lastDate = new Date(forecastData[forecastData.length - 1].fxDate);
+    
+    // Get first day of week for the first date (0 = Sunday, 1 = Monday, etc.)
+    const firstDayOfWeek = firstDate.getDay();
+    const adjustedFirstDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // Convert to Monday = 0
+    
+    // Create a map for quick lookup
+    const forecastMap = new Map<string, DailyForecast>();
+    forecastData.forEach(day => {
+      forecastMap.set(day.fxDate, day);
+    });
+    
+    const calendar: Array<{ date: Date; forecast: DailyForecast | null; isCurrentMonth: boolean }> = [];
+    
+    // Add empty cells for days before the first date
+    for (let i = 0; i < adjustedFirstDay; i++) {
+      const date = new Date(firstDate);
+      date.setDate(date.getDate() - adjustedFirstDay + i);
+      calendar.push({ date, forecast: null, isCurrentMonth: false });
+    }
+    
+    // Add all forecast dates
+    forecastData.forEach(day => {
+      calendar.push({ 
+        date: new Date(day.fxDate), 
+        forecast: day, 
+        isCurrentMonth: true 
+      });
+    });
+    
+    // Fill remaining cells to complete the grid (6 rows x 7 columns = 42 cells)
+    const remainingCells = 42 - calendar.length;
+    for (let i = 1; i <= remainingCells; i++) {
+      const date = new Date(lastDate);
+      date.setDate(date.getDate() + i);
+      calendar.push({ date, forecast: null, isCurrentMonth: false });
+    }
+    
+    return calendar;
+  };
+
   // Disable background scroll when modal is open
   useEffect(() => {
     if (selectedDay) {
@@ -188,6 +244,20 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedDay]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen && viewType === 'chart') {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isDropdownOpen, viewType]);
 
   const option = {
     title: {
@@ -378,45 +448,261 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     );
   }
 
+  const calendarData = generateCalendarData();
+  const todayDateString = getTodayDateString();
+  const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative`}>
-      {/* Chart Type Selector */}
-      <div className="absolute top-6 right-6 z-10">
-        <select
-          value={chartType}
-          onChange={(e) => setChartType(e.target.value as ChartType)}
-          className={`px-3 py-1.5 text-sm rounded-lg border-2 ${isDark ? 'border-white/30 bg-white/10' : 'border-sky-200 bg-white/10'} ${textColorTheme.textColor.primary} focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 transition-all cursor-pointer`}
-        >
-          <option value="bar">柱状图</option>
-          <option value="line">折线图</option>
-        </select>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex flex-col`}>
+      {/* View Type Selector */}
+      <div className="absolute top-6 right-6 z-10" ref={dropdownRef}>
+        <div className="relative">
+          <div className={`flex items-center gap-1 rounded-lg border-2 p-1 ${
+            isDark 
+              ? 'border-white/30 bg-white/10' 
+              : 'border-sky-200 bg-white/80'
+          }`}>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  if (viewType === 'chart') {
+                    setIsDropdownOpen(!isDropdownOpen);
+                  } else {
+                    setViewType('chart');
+                    setIsDropdownOpen(true);
+                  }
+                }}
+                className={`flex items-center gap-1 px-3 py-1 text-xs rounded transition-all ${
+                  viewType === 'chart'
+                    ? isDark
+                      ? 'bg-white/20 text-white'
+                      : 'bg-sky-100 text-sky-700'
+                    : isDark
+                      ? 'text-gray-400 hover:text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <span>图表</span>
+                {viewType === 'chart' && (
+                  <Icon 
+                    src={ICONS.chevronRight} 
+                    className={`w-3 h-3 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`}
+                    title="展开"
+                  />
+                )}
+              </button>
+              
+              {viewType === 'chart' && isDropdownOpen && (
+                <div className={`absolute left-0 mt-1 min-w-[100px] rounded-lg border shadow-lg overflow-hidden ${
+                  isDark 
+                    ? 'bg-gray-800/95 border-white/20 backdrop-blur-xl' 
+                    : 'bg-white/95 border-white/50 backdrop-blur-xl'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChartType('bar');
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                      chartType === 'bar'
+                        ? isDark
+                          ? 'bg-white/10 text-white'
+                          : 'bg-sky-50 text-sky-700'
+                        : isDark
+                          ? 'text-gray-300 hover:bg-white/10'
+                          : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    柱状图
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChartType('line');
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                      chartType === 'line'
+                        ? isDark
+                          ? 'bg-white/10 text-white'
+                          : 'bg-sky-50 text-sky-700'
+                        : isDark
+                          ? 'text-gray-300 hover:bg-white/10'
+                          : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    折线图
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => {
+                setViewType('table');
+                setIsDropdownOpen(false);
+              }}
+              className={`px-3 py-1 text-xs rounded transition-all ${
+                viewType === 'table'
+                  ? isDark
+                    ? 'bg-white/20 text-white'
+                    : 'bg-sky-100 text-sky-700'
+                  : isDark
+                    ? 'text-gray-400 hover:text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              表格
+            </button>
+          </div>
+        </div>
       </div>
       
-      <ReactECharts 
-        option={option} 
-        notMerge={true}
-        style={{ height: '400px', width: '100%' }}
-        opts={{ renderer: 'svg' }}
-        onEvents={{
-          click: (params: any) => {
-            if (params.componentType === 'series') {
-              const index = params.dataIndex ?? params.value[0];
-              if (forecastData[index]) {
-                setSelectedDay(forecastData[index]);
-              }
-            } else if (params.componentType === 'xAxis') {
-              const index = params.dataIndex;
-              if (forecastData[index]) {
-                setSelectedDay(forecastData[index]);
-              }
-            }
-          }
-        }}
-      />
-      
-      <div className={`text-center mt-2 text-xs ${textColorTheme.textColor.secondary}`}>
-        点击图表中的日期查看详细信息
-      </div>
+      {viewType === 'chart' ? (
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1" style={{ minHeight: 0 }}>
+            <ReactECharts 
+              option={option} 
+              notMerge={true}
+              style={{ height: '100%', width: '100%' }}
+              opts={{ renderer: 'svg' }}
+              onEvents={{
+                click: (params: any) => {
+                  if (params.componentType === 'series') {
+                    const index = params.dataIndex ?? params.value[0];
+                    if (forecastData[index]) {
+                      setSelectedDay(forecastData[index]);
+                    }
+                  } else if (params.componentType === 'xAxis') {
+                    const index = params.dataIndex;
+                    if (forecastData[index]) {
+                      setSelectedDay(forecastData[index]);
+                    }
+                  }
+                }
+              }}
+            />
+          </div>
+{/*           
+          <div className={`text-center mt-2 text-xs ${textColorTheme.textColor.secondary}`}>
+            点击图表中的日期查看详细信息
+          </div> */}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Calendar Table View Title */}
+          <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}>
+            30日天气预报
+          </h2>
+          
+          {/* Calendar Table View */}
+          <div 
+            className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: isDark ? 'rgba(255, 255, 255, 0.3) transparent' : 'rgba(0, 0, 0, 0.3) transparent'
+            }}
+          >
+            <table className="w-full border-collapse">
+              {/* Weekday Headers */}
+              <thead>
+                <tr>
+                  {weekDays.map((day, index) => (
+                    <th
+                      key={index}
+                      className={`p-2 text-center text-xs font-medium ${
+                        isDark ? 'text-gray-400' : 'text-gray-600'
+                      }`}
+                    >
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 6 }).map((_, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {Array.from({ length: 7 }).map((_, colIndex) => {
+                      const cellIndex = rowIndex * 7 + colIndex;
+                      const cell = calendarData[cellIndex];
+                      if (!cell) return <td key={colIndex} className="p-1" />;
+                      
+                      const { date, forecast, isCurrentMonth } = cell;
+                      const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                      const isToday = dateString === todayDateString;
+                      const dayNumber = date.getDate();
+                      
+                      return (
+                        <td
+                          key={colIndex}
+                          className={`p-1 ${
+                            !isCurrentMonth ? 'opacity-30' : ''
+                          }`}
+                        >
+                          {forecast ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDay(forecast)}
+                              className={`w-full p-2 rounded-lg border transition-all text-left ${
+                                isToday
+                                  ? isDark
+                                    ? 'border-blue-400 bg-blue-500/20'
+                                    : 'border-blue-400 bg-blue-50'
+                                  : isDark
+                                    ? 'border-white/10 bg-white/5 hover:bg-white/10'
+                                    : 'border-gray-200 bg-white/20 hover:bg-white/30'
+                              }`}
+                            >
+                              <div className={`text-xs font-semibold mb-1 ${
+                                isToday
+                                  ? 'text-blue-600'
+                                  : isDark
+                                    ? 'text-white'
+                                    : 'text-gray-900'
+                              }`}>
+                                {date.getMonth() + 1}月{date.getDate()}日
+                              </div>
+                              <div className={`text-xs mb-1 truncate ${
+                                isDark ? 'text-gray-300' : 'text-gray-700'
+                              }`}>
+                                {forecast.textDay}
+                              </div>
+                              <div className={`text-xs font-medium ${
+                                isDark ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                <span className={isDark ? 'text-white' : 'text-gray-900'}>
+                                  {forecast.tempMax}°
+                                </span>
+                                {' / '}
+                                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                                  {forecast.tempMin}°
+                                </span>
+                              </div>
+                            </button>
+                          ) : (
+                            <div className={`w-full p-2 rounded-lg text-center ${
+                              isDark ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
+                              {dayNumber}日
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+{/*           
+          <div className={`text-center mt-3 text-xs ${textColorTheme.textColor.secondary} flex-shrink-0`}>
+            点击日期查看详细信息
+          </div> */}
+        </div>
+      )}
 
       {/* Detail Modal */}
       {selectedDay && (

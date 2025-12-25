@@ -138,9 +138,9 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   }, [selectedHour]);
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full`}>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col`}>
       <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`}>未来24小时</h2>
-      <div className="overflow-x-auto h-40">
+      <div className="overflow-x-auto flex-1">
         <div className="flex gap-3 min-w-max pb-2 pr-1">
           {displayHours.map((hour, index) => {
             const isCurrentHour = index === currentDisplayIndex;
