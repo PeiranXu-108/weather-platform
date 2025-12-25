@@ -45,44 +45,46 @@ export default function WeatherMetrics({ current, textColorTheme }: WeatherMetri
   ];
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6`}>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full flex flex-col`}>
       <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
         天气指标
       </h2>
-      <div className="grid grid-cols-2 gap-4">
-        {metrics.map((metric, index) => (
-          <div
-            key={index}
-            className={`${getCardStyle(textColorTheme.backgroundType)} rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="flex items-center justify-center p-2 rounded-full">
-                {metric.icon}
-              </span>
-              <p className={`text-xl font-medium ${textColorTheme.textColor.secondary}`}>
-                {metric.label}
+      <div className="flex-1 flex flex-col justify-between">
+        <div className="grid grid-cols-2 gap-4">
+          {metrics.map((metric, index) => (
+            <div
+              key={index}
+              className={`${getCardStyle(textColorTheme.backgroundType)} rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="flex items-center justify-center p-2 rounded-full">
+                  {metric.icon}
+                </span>
+                <p className={`text-xl font-medium ${textColorTheme.textColor.secondary}`}>
+                  {metric.label}
+                </p>
+              </div>
+              <p className={`text-2xl font-bold ${textColorTheme.textColor.primary} text-right`}>
+                {metric.value}
               </p>
             </div>
-            <p className={`text-2xl font-bold ${textColorTheme.textColor.primary} text-right`}>
-              {metric.value}
-            </p>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className="mt-4 pt-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className={textColorTheme.textColor.secondary}>风向</p>
-            <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
-              {current.wind_dir} ({current.wind_degree}°)
-            </p>
-          </div>
-          <div>
-            <p className={textColorTheme.textColor.secondary}>云量</p>
-            <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
-              {current.cloud}%
-            </p>
+        <div className="mt-4 pt-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className={textColorTheme.textColor.secondary}>风向</p>
+              <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
+                {current.wind_dir} ({current.wind_degree}°)
+              </p>
+            </div>
+            <div>
+              <p className={textColorTheme.textColor.secondary}>云量</p>
+              <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
+                {current.cloud}%
+              </p>
+            </div>
           </div>
         </div>
       </div>
