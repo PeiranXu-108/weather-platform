@@ -130,6 +130,7 @@ function InstancedRaindrops({
   // 初始化实例矩阵
   useEffect(() => {
     if (!meshRef.current) return;
+    meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     
     raindrops.forEach((drop, i) => {
       tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
