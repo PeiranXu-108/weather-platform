@@ -3,6 +3,7 @@
 import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // 云朵组件
 function Cloud({ 
@@ -47,13 +48,25 @@ function Cloud({
       ]);
     }
     
+    const geometries: THREE.BufferGeometry[] = [];
+    
     positions.forEach((pos, i) => {
-      const sphere = new THREE.Mesh(sphereGeometry, material.clone());
-      sphere.position.set(pos[0], pos[1], pos[2]);
       const sphereScale = 0.5 + random(i * 10) * 0.5;
-      sphere.scale.setScalar(sphereScale);
-      group.add(sphere);
+      const sphere = sphereGeometry.clone();
+      const matrix = new THREE.Matrix4();
+      matrix.compose(
+        new THREE.Vector3(pos[0], pos[1], pos[2]),
+        new THREE.Quaternion(),
+        new THREE.Vector3(sphereScale, sphereScale, sphereScale)
+      );
+      sphere.applyMatrix4(matrix);
+      geometries.push(sphere);
     });
+    
+    const mergedGeometry = mergeGeometries(geometries, false);
+    mergedGeometry?.computeBoundingSphere();
+    const cloudMesh = new THREE.Mesh(mergedGeometry ?? new THREE.BufferGeometry(), material);
+    group.add(cloudMesh);
     
     return group;
   }, [seed]);
@@ -124,7 +137,6 @@ function CloudyScene({ isSunset }: { isSunset?: boolean }) {
         position={[10, 10, 5]} 
         intensity={isSunset ? 0.5 : 0.6} 
         color={isSunset ? 0xffaa66 : 0xcccccc}
-        castShadow 
       />
       {/* 补充光源 - 阴天时更暗 */}
       <directionalLight position={[-5, 5, -5]} intensity={isSunset ? 0.15 : 0.2} />
@@ -211,4 +223,3 @@ export default function CloudyWeatherBackground({
     </div>
   );
 }
-
