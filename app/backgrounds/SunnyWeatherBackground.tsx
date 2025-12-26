@@ -549,7 +549,7 @@ export default function SunnyWeatherBackground({
         // 正常天蓝色渐变
         <div className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom,rgb(188, 220, 235) 0%, rgb(135, 206, 235) 20%, rgb(35, 177, 233) 100%)'
+            background: 'linear-gradient(to bottom,rgb(120, 193, 226) 0%, rgb(63, 180, 227) 40%, rgb(3, 140, 194) 100%)'
           }}
         />
       )}
