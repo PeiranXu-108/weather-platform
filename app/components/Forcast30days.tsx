@@ -586,10 +586,6 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
               }}
             />
           </div>
-{/*           
-          <div className={`text-center mt-2 text-xs ${textColorTheme.textColor.secondary}`}>
-            点击图表中的日期查看详细信息
-          </div> */}
         </div>
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -649,8 +645,8 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                               className={`w-full p-2 rounded-lg border transition-all text-left ${
                                 isToday
                                   ? isDark
-                                    ? 'border-blue-400 bg-blue-500/20'
-                                    : 'border-blue-400 bg-blue-50'
+                                    ? 'border-blue-400 bg-white/10'
+                                    : 'border-blue-400 bg-white/20'
                                   : isDark
                                     ? 'border-white/10 bg-white/5 hover:bg-white/10'
                                     : 'border-gray-200 bg-white/20 hover:bg-white/30'
@@ -697,10 +693,6 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
               </tbody>
             </table>
           </div>
-{/*           
-          <div className={`text-center mt-3 text-xs ${textColorTheme.textColor.secondary} flex-shrink-0`}>
-            点击日期查看详细信息
-          </div> */}
         </div>
       )}
 
