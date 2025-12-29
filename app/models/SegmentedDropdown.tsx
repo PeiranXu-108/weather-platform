@@ -117,7 +117,7 @@ export default function SegmentedDropdown({
             {shouldShowDropdown && (
               <div className={`absolute left-0 mt-1 min-w-[100px] rounded-lg border shadow-xl overflow-hidden max-h-[300px] overflow-y-auto ${
                 isDark 
-                  ? 'bg-gray-900/70 border-white/20 backdrop-blur-2xl' 
+                  ? 'bg-gray-400/20 border-white/20 backdrop-blur-2xl' 
                   : 'bg-white/20 border-white/40 backdrop-blur-2xl'
               }`}>
                 {dropdownOptions.map((option) => (
