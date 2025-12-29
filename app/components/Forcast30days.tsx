@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
@@ -43,7 +43,7 @@ interface DailyForecast {
   uvIndex: string;
 }
 
-type ChartType = 'bar' | 'line' | 'scatter';
+type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
 type ViewType = 'chart' | 'table';
 
 export default function TemperatureChart({ location, textColorTheme }: TemperatureChartProps) {
@@ -59,25 +59,25 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       try {
         setLoading(true);
         setError(null);
-        
+
         // 构建location参数
-        const locationParam = location 
-          ? `${location.lon},${location.lat}` 
+        const locationParam = location
+          ? `${location.lon},${location.lat}`
           : '116.41,39.92'; // 默认北京
-        
+
         const response = await fetch(`/api/weather/30d?location=${locationParam}`);
         console.log(response)
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch 30-day forecast');
         }
-        
+
         const data = await response.json();
-        
+
         if (data.code !== '200') {
           throw new Error('API returned error code: ' + data.code);
         }
-        
+
         setForecastData(data.daily || []);
       } catch (err) {
         console.error('Error fetching 30-day forecast:', err);
@@ -86,7 +86,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, [location]);
 
@@ -103,6 +103,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
 
   const isBarChart = chartType === 'bar';
   const isScatterChart = chartType === 'scatter';
+  const isPieChart = chartType === 'pie';
 
   // Baseline: first day's average temperature
   const baseline = avgTemps[0] || 0;
@@ -112,7 +113,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     const minTemp = -10;
     const maxTemp = 40;
     const normalized = Math.max(0, Math.min(1, (temp - minTemp) / (maxTemp - minTemp)));
-    
+
     const colorStops = [
       { t: 0.0, r: 59, g: 130, b: 246 },
       { t: 0.2, r: 6, g: 182, b: 212 },
@@ -121,7 +122,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       { t: 0.8, r: 249, g: 115, b: 22 },
       { t: 1.0, r: 239, g: 68, b: 68 }
     ];
-    
+
     for (let i = 0; i < colorStops.length - 1; i++) {
       if (normalized >= colorStops[i].t && normalized <= colorStops[i + 1].t) {
         const t = (normalized - colorStops[i].t) / (colorStops[i + 1].t - colorStops[i].t);
@@ -131,7 +132,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
         return `rgb(${r}, ${g}, ${b})`;
       }
     }
-    
+
     return `rgb(59, 130, 246)`;
   };
 
@@ -167,6 +168,58 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const maxRange = Math.max(...tempRanges);
   const rangeSpan = maxRange - minRange || 1; // 避免除以0
 
+  // 统计天气分布、降温和降水
+  const weatherStats = useMemo(() => {
+    if (forecastData.length === 0) {
+      return {
+        weatherDistribution: [],
+        coolingDays: 0,
+        precipitationDays: 0,
+      };
+    }
+
+    // 统计天气类型分布
+    const weatherCount: Record<string, number> = {};
+    forecastData.forEach(day => {
+      const weather = day.textDay.trim();
+      weatherCount[weather] = (weatherCount[weather] || 0) + 1;
+    });
+
+    // 转换为数组并按数量排序
+    const weatherDistribution = Object.entries(weatherCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    // 统计降温次数（与前一天相比，最高温度下降）
+    let coolingDays = 0;
+    for (let i = 1; i < forecastData.length; i++) {
+      const prevMax = parseInt(forecastData[i - 1].tempMax);
+      const currMax = parseInt(forecastData[i].tempMax);
+      if (currMax + 3 < prevMax) {
+        coolingDays++;
+      }
+    }
+
+    // 统计降水天数（precip > 0）
+    const precipitationDays = forecastData.filter(day => {
+      const precip = parseFloat(day.precip);
+      return precip > 0;
+    }).length;
+
+    return {
+      weatherDistribution,
+      coolingDays,
+      precipitationDays,
+    };
+  }, [forecastData]);
+
+  // 饼状图颜色配置
+  const pieColors = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#ec4899',
+    '#14b8a6', '#a855f7', '#22c55e', '#eab308', '#f43f5e'
+  ];
+
   const isDark = textColorTheme.backgroundType === 'dark';
   const isDarkTheme = textColorTheme.backgroundType === 'dark';
   const titleColor = isDark ? '#ffffff' : '#0c4a6e';
@@ -190,38 +243,38 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   // Generate calendar grid data
   const generateCalendarData = () => {
     if (forecastData.length === 0) return [];
-    
+
     const firstDate = new Date(forecastData[0].fxDate);
     const lastDate = new Date(forecastData[forecastData.length - 1].fxDate);
-    
+
     // Get first day of week for the first date (0 = Sunday, 1 = Monday, etc.)
     const firstDayOfWeek = firstDate.getDay();
     const adjustedFirstDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // Convert to Monday = 0
-    
+
     // Create a map for quick lookup
     const forecastMap = new Map<string, DailyForecast>();
     forecastData.forEach(day => {
       forecastMap.set(day.fxDate, day);
     });
-    
+
     const calendar: Array<{ date: Date; forecast: DailyForecast | null; isCurrentMonth: boolean }> = [];
-    
+
     // Add empty cells for days before the first date
     for (let i = 0; i < adjustedFirstDay; i++) {
       const date = new Date(firstDate);
       date.setDate(date.getDate() - adjustedFirstDay + i);
       calendar.push({ date, forecast: null, isCurrentMonth: false });
     }
-    
+
     // Add all forecast dates
     forecastData.forEach(day => {
-      calendar.push({ 
-        date: new Date(day.fxDate), 
-        forecast: day, 
-        isCurrentMonth: true 
+      calendar.push({
+        date: new Date(day.fxDate),
+        forecast: day,
+        isCurrentMonth: true
       });
     });
-    
+
     // Fill remaining cells to complete the grid (6 rows x 7 columns = 42 cells)
     const remainingCells = 42 - calendar.length;
     for (let i = 1; i <= remainingCells; i++) {
@@ -229,7 +282,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       date.setDate(date.getDate() + i);
       calendar.push({ date, forecast: null, isCurrentMonth: false });
     }
-    
+
     return calendar;
   };
 
@@ -257,21 +310,93 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedDay]);
 
+  const option = useMemo(() => {
+    if (isPieChart) {
+      return {
+        title: {
+          text: '30日天气分布',
+          left: 'center',
+          top: 10,
+          textStyle: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: titleColor
+          }
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: (params: any) => {
+            return `${params.name}<br/>${params.value}天 (${params.percent}%)`;
+          }
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          top: 'middle',
+          textStyle: {
+            color: axisColor
+          },
+          formatter: (name: string) => {
+            const item = weatherStats.weatherDistribution.find(w => w.name === name);
+            return item ? `${name} (${item.value}天)` : name;
+          }
+        },
+        series: [
+          {
+            name: '天气分布',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['60%', '55%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 8,
+              opacity: 0.3
+            },
+            label: {
+              show: true,
+              formatter: '{b}: {c}天',
+              color: axisColor,
+              fontSize: 12
+            },
+            emphasis: {
+              label: {
+                show: true,
+                fontSize: 14,
+                fontWeight: 'bold'
+              },
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            },
+            data: weatherStats.weatherDistribution.map((item, index) => ({
+              value: item.value,
+              name: item.name,
+              itemStyle: {
+                color: pieColors[index % pieColors.length],
+                opacity: 0.6
+              }
+            }))
+          }
+        ]
+      };
+    }
 
-  const option = {
-    title: {
-      text: '30日天气预报',
-      left: 'center',
-      textStyle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: titleColor
-      }
-    },
-    tooltip: {
-      trigger: isBarChart ? 'axis' : isScatterChart ? 'item' : 'axis',
-      formatter: isBarChart 
-        ? (params: any) => {
+    return {
+      title: {
+        text: '30日天气预报',
+        left: 'center',
+        textStyle: {
+          fontSize: 18,
+          fontWeight: 'bold',
+          color: titleColor
+        }
+      },
+      tooltip: {
+        trigger: isBarChart ? 'axis' : isScatterChart ? 'item' : 'axis',
+        formatter: isBarChart
+          ? (params: any) => {
             if (Array.isArray(params)) {
               const barItem = params.find((item) => item.seriesName === '温度范围') ?? params[0];
               const index = barItem?.dataIndex ?? 0;
@@ -282,199 +407,198 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
             }
             return '';
           }
-        : isScatterChart
-        ? (params: any) => {
-            const index = params.dataIndex;
-            return `${dates[index]}<br/>
+          : isScatterChart
+            ? (params: any) => {
+              const index = params.dataIndex;
+              return `${dates[index]}<br/>
                     平均温度: ${avgTemps[index]}°C<br/>
                     最高: ${maxTemps[index]}°C<br/>
                     最低: ${minTemps[index]}°C<br/>
                     温差: ${tempRanges[index]}°C<br/>
                     `;
-          }
-        : undefined,
-      axisPointer: {
-        type: isBarChart ? 'shadow' : 'cross'
-      }
-    },
-    legend: {
-      data: isBarChart ? [] : isScatterChart ? ['平均温度'] : ['最高温度', '最低温度', '平均温度'],
-      bottom: 10,
-      show: !isBarChart,
-      textStyle: {
-        color: axisColor
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      containLabel: true
-    },
-    dataZoom: [
-      {
-        type: 'inside',
-        start: 0,
-        end: 100,
-        zoomOnMouseWheel: true,
-        moveOnMouseMove: true,
-        moveOnMouseWheel: true
+            }
+            : undefined,
+        axisPointer: {
+          type: isBarChart ? 'shadow' : 'cross'
+        }
       },
-      {
-        type: 'slider',
-        start: 0,
-        end: 100,
-        height: 20,
-        bottom: 40,
-        handleSize: '80%',
+      legend: {
+        data: isBarChart ? [] : isScatterChart ? ['平均温度'] : ['最高温度', '最低温度', '平均温度'],
+        bottom: 10,
+        show: !isBarChart,
         textStyle: {
           color: axisColor
-        },
-        borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-        fillerColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-      }
-    ],
-    xAxis: {
-      type: 'category',
-      boundaryGap: isBarChart ? true : isScatterChart ? true : false,
-      data: dates,
-      axisLabel: {
-        color: axisColor,
-        rotate: 45
-      },
-      axisLine: {
-        lineStyle: {
-          color: axisColor
-        }
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: '温度 (°C)',
-      nameTextStyle: {
-        color: axisColor
-      },
-      axisLabel: {
-        formatter: (value: number) => `${value.toFixed(0)}°C`,
-        color: axisColor
-      },
-      axisLine: {
-        lineStyle: {
-          color: axisColor
         }
       },
-      splitLine: {
-        show: true,
-        lineStyle: {
-          type: 'dashed',
-          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-          width: 2
-        }
-      }
-    },
-    series: isBarChart ? [
-      {
-        name: '温度范围',
-        type: 'custom',
-        renderItem: (params: any, api: any) => {
-          const categoryIndex = api.value(0);
-          const min = api.value(1);
-          const max = api.value(2);
-          const avg = api.value(3);
-
-          const start = api.coord([categoryIndex, max]);
-          const end = api.coord([categoryIndex, min]);
-          const barWidth = api.size([1, 0])[0] * 0.4;
-          const x = start[0] - barWidth / 2;
-          const y = start[1];
-          const height = end[1] - start[1];
-
-          return {
-            type: 'rect',
-            shape: { x, y, width: barWidth, height },
-            style: {
-              fill: createBarGradient(min, max, avg),
-              stroke: 'transparent'
-            }
-          };
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        containLabel: true
+      },
+      dataZoom: [
+        {
+          type: 'inside',
+          start: 0,
+          end: 100,
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: true
         },
-        encode: { x: 0, y: [1, 2] },
-        data: barData,
-        tooltip: {
-          valueFormatter: (value: number) => `${value}°C`
-        },
-        label: {
-          show: true,
-          position: 'top',
-          formatter: (params: any) => {
-            const avg = params.value[3];
-            return `${avg}°C`;
+        {
+          type: 'slider',
+          start: 0,
+          end: 100,
+          height: 20,
+          bottom: 40,
+          handleSize: '80%',
+          textStyle: {
+            color: axisColor
           },
-          color: titleColor,
-          fontSize: 12,
-          fontWeight: 'bold'
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+          fillerColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
         }
-      }
-    ] : isScatterChart ? [
-      {
-        name: '平均温度',
-        type: 'scatter',
-        data: scatterData.map((item, index) => ({
-          value: [item[0], item[1]], // [日期索引, 平均温度]
-          symbolSize: ((item[2] as number - minRange) / rangeSpan * 50 + 10), // 根据温差计算大小，最小10，最大40
-          itemStyle: {
-            color: getTemperatureColor(avgTemps[index]),
-            opacity: 0.7,
-            borderColor: getTemperatureColor(avgTemps[index]),
-            borderWidth: 2
+      ],
+      xAxis: {
+        type: 'category',
+        boundaryGap: isBarChart ? true : isScatterChart ? true : false,
+        data: dates,
+        axisLabel: {
+          color: axisColor,
+          rotate: 45
+        },
+        axisLine: {
+          lineStyle: {
+            color: axisColor
           }
-        })),
-        symbol: 'circle',
-        label: {
-          show: true,
-          formatter: (params: any) => {
-            const index = params.value[0];
-            return `${avgTemps[index]}°C`;
-          },
-          color: titleColor,
-          fontSize: 10,
-          fontWeight: 'bold',
-          position: 'top'
         }
-      }
-    ] : [
-      {
-        name: '最高温度',
-        type: 'line',
-        data: maxTemps,
-        smooth: true,
-        itemStyle: {
-          color: '#f97316'
-        },
-        lineStyle: {
-          width: 3
-        },
-        symbol: 'circle',
-        symbolSize: 8
       },
-      {
-        name: '最低温度',
-        type: 'line',
-        data: minTemps,
-        smooth: true,
-        itemStyle: {
-          color: '#0ea5e9'
+      yAxis: {
+        type: 'value',
+        name: '温度 (°C)',
+        nameTextStyle: {
+          color: axisColor
         },
-        lineStyle: {
-          width: 3
+        axisLabel: {
+          formatter: (value: number) => `${value.toFixed(0)}°C`,
+          color: axisColor
         },
-        symbol: 'circle',
-        symbolSize: 8
-      }
-    ]
-  };
+        axisLine: {
+          lineStyle: {
+            color: axisColor
+          }
+        },
+        splitLine: {
+          show: true,
+          lineStyle: {
+            type: 'dashed',
+            color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+            width: 2
+          }
+        }
+      },
+      series: isBarChart ? [
+        {
+          name: '温度范围',
+          type: 'custom',
+          renderItem: (params: any, api: any) => {
+            const categoryIndex = api.value(0);
+            const min = api.value(1);
+            const max = api.value(2);
+            const avg = api.value(3);
 
+            const start = api.coord([categoryIndex, max]);
+            const end = api.coord([categoryIndex, min]);
+            const barWidth = api.size([1, 0])[0] * 0.4;
+            const x = start[0] - barWidth / 2;
+            const y = start[1];
+            const height = end[1] - start[1];
 
+            return {
+              type: 'rect',
+              shape: { x, y, width: barWidth, height },
+              style: {
+                fill: createBarGradient(min, max, avg),
+                stroke: 'transparent'
+              }
+            };
+          },
+          encode: { x: 0, y: [1, 2] },
+          data: barData,
+          tooltip: {
+            valueFormatter: (value: number) => `${value}°C`
+          },
+          label: {
+            show: true,
+            position: 'top',
+            formatter: (params: any) => {
+              const avg = params.value[3];
+              return `${avg}°C`;
+            },
+            color: titleColor,
+            fontSize: 12,
+            fontWeight: 'bold'
+          }
+        }
+      ] : isScatterChart ? [
+        {
+          name: '平均温度',
+          type: 'scatter',
+          data: scatterData.map((item, index) => ({
+            value: [item[0], item[1]], // [日期索引, 平均温度]
+            symbolSize: ((item[2] as number - minRange) / rangeSpan * 50 + 10), // 根据温差计算大小，最小10，最大40
+            itemStyle: {
+              color: getTemperatureColor(avgTemps[index]),
+              opacity: 0.7,
+              borderColor: getTemperatureColor(avgTemps[index]),
+              borderWidth: 2
+            }
+          })),
+          symbol: 'circle',
+          label: {
+            show: true,
+            formatter: (params: any) => {
+              const index = params.value[0];
+              return `${avgTemps[index]}°C`;
+            },
+            color: titleColor,
+            fontSize: 10,
+            fontWeight: 'bold',
+            position: 'top'
+          }
+        }
+      ] : [
+        {
+          name: '最高温度',
+          type: 'line',
+          data: maxTemps,
+          smooth: true,
+          itemStyle: {
+            color: '#f97316'
+          },
+          lineStyle: {
+            width: 3
+          },
+          symbol: 'circle',
+          symbolSize: 8
+        },
+        {
+          name: '最低温度',
+          type: 'line',
+          data: minTemps,
+          smooth: true,
+          itemStyle: {
+            color: '#0ea5e9'
+          },
+          lineStyle: {
+            width: 3
+          },
+          symbol: 'circle',
+          symbolSize: 8
+        }
+      ]
+    };
+  }, [isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan]);
 
   if (error) {
     return (
@@ -495,8 +619,8 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
         textColorTheme={textColorTheme}
         mainButton={{
           value: viewType === 'chart' ? chartType : 'chart',
-          label: viewType === 'chart' 
-            ? (chartType === 'bar' ? '柱状图' : chartType === 'line' ? '折线图' : '散点图') 
+          label: viewType === 'chart'
+            ? (chartType === 'bar' ? '柱状图' : chartType === 'line' ? '折线图' : chartType === 'scatter' ? '散点图' : '饼状图')
             : '图表',
           showChevron: viewType === 'chart',
           onClick: () => {
@@ -509,6 +633,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           { value: 'bar', label: '柱状图' },
           { value: 'line', label: '折线图' },
           { value: 'scatter', label: '散点图' },
+          { value: 'pie', label: '饼状图' },
         ]}
         otherButtons={[
           {
@@ -520,23 +645,23 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           },
         ]}
         onSelect={(value) => {
-          if (value === 'bar' || value === 'line' || value === 'scatter') {
+          if (value === 'bar' || value === 'line' || value === 'scatter' || value === 'pie') {
             setChartType(value as ChartType);
             setViewType('chart');
           }
         }}
         showDropdown={viewType === 'chart'}
       />
-      
+
       {viewType === 'chart' ? (
         <div className="flex-1 flex flex-col">
           <div className="flex-1" style={{ minHeight: 0 }}>
-            <ReactECharts 
-              option={option} 
+            <ReactECharts
+              option={option}
               notMerge={true}
               style={{ height: '100%', width: '100%' }}
               opts={{ renderer: 'svg' }}
-              onEvents={{
+              onEvents={isPieChart ? undefined : {
                 click: (params: any) => {
                   if (params.componentType === 'series') {
                     const index = params.dataIndex ?? params.value[0];
@@ -553,6 +678,19 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
               }}
             />
           </div>
+          {/* 饼状图统计信息 - 显示在图表下方 */}
+          {isPieChart && (
+            <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm">
+              <div className={`${textColorTheme.textColor.primary} font-semibold`}>
+                <span className={textColorTheme.textColor.secondary}>降温</span>
+                {weatherStats.coolingDays}次，
+              </div>
+              <div className={`${textColorTheme.textColor.primary} font-semibold`}>
+                <span className={textColorTheme.textColor.secondary}>降水</span>
+                {weatherStats.precipitationDays}天
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -560,9 +698,9 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}>
             30日天气预报
           </h2>
-          
+
           {/* Calendar Table View */}
-          <div 
+          <div
             className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
             style={{
               scrollbarWidth: 'thin',
@@ -576,9 +714,8 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                   {weekDays.map((day, index) => (
                     <th
                       key={index}
-                      className={`p-2 text-center text-xs font-medium ${
-                        isDark ? 'text-gray-400' : 'text-gray-600'
-                      }`}
+                      className={`p-2 text-center text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
+                        }`}
                     >
                       {day}
                     </th>
@@ -592,50 +729,45 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                       const cellIndex = rowIndex * 7 + colIndex;
                       const cell = calendarData[cellIndex];
                       if (!cell) return <td key={colIndex} className="p-1" />;
-                      
+
                       const { date, forecast, isCurrentMonth } = cell;
                       const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                       const isToday = dateString === todayDateString;
                       const dayNumber = date.getDate();
-                      
+
                       return (
                         <td
                           key={colIndex}
-                          className={`p-1 ${
-                            !isCurrentMonth ? 'opacity-30' : ''
-                          }`}
+                          className={`p-1 ${!isCurrentMonth ? 'opacity-30' : ''
+                            }`}
                         >
                           {forecast ? (
                             <button
                               type="button"
                               onClick={() => setSelectedDay(forecast)}
-                              className={`w-full p-2 rounded-lg border transition-all text-left ${
-                                isToday
+                              className={`w-full p-2 rounded-lg border transition-all text-left ${isToday
                                   ? isDark
                                     ? 'border-blue-400 bg-white/10'
                                     : 'border-blue-400 bg-white/20'
                                   : isDark
                                     ? 'border-white/10 bg-white/5 hover:bg-white/10'
                                     : 'border-gray-200 bg-white/20 hover:bg-white/30'
-                              }`}
+                                }`}
                             >
-                              <div className={`text-xs font-semibold mb-1 ${
-                                isToday
+                              <div className={`text-xs font-semibold mb-1 ${isToday
                                   ? 'text-blue-600'
                                   : isDark
                                     ? 'text-white'
                                     : 'text-gray-900'
-                              }`}>
+                                }`}>
                                 {date.getMonth() + 1}月{date.getDate()}日
                               </div>
-                              <div className={`text-xs mb-1 truncate ${
-                                isDark ? 'text-gray-300' : 'text-gray-700'
-                              }`}>
+                              <div className={`text-xs mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
+                                }`}>
                                 {forecast.textDay}
                               </div>
-                              <div className={`text-xs font-medium ${
-                                isDark ? 'text-gray-400' : 'text-gray-600'
-                              }`}>
+                              <div className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
+                                }`}>
                                 <span className={isDark ? 'text-white' : 'text-gray-900'}>
                                   {forecast.tempMax}°
                                 </span>
@@ -646,9 +778,8 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                               </div>
                             </button>
                           ) : (
-                            <div className={`w-full p-2 rounded-lg text-center ${
-                              isDark ? 'text-gray-600' : 'text-gray-400'
-                            }`}>
+                            <div className={`w-full p-2 rounded-lg text-center ${isDark ? 'text-gray-600' : 'text-gray-400'
+                              }`}>
                               {dayNumber}日
                             </div>
                           )}
