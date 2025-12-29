@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
-import Icon from '@/app/components/Icon';
+import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
 interface ModalProps {

@@ -6,7 +6,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
-import Icon from '@/app/components/Icon';
+import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
 export type FavoriteCity = {

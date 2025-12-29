@@ -5,7 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
-import SegmentedDropdown from '@/app/components/SegmentedDropdown';
+import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
