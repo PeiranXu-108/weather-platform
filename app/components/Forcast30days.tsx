@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
-import Icon from '@/app/components/Icon';
+import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
-import SegmentedDropdown from '@/app/components/SegmentedDropdown';
+import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
