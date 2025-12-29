@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/components/Icon';
 import { ICONS } from '@/app/utils/icons';
+import SegmentedDropdown from '@/app/components/SegmentedDropdown';
 
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
@@ -42,7 +43,7 @@ interface DailyForecast {
   uvIndex: string;
 }
 
-type ChartType = 'bar' | 'line';
+type ChartType = 'bar' | 'line' | 'scatter';
 type ViewType = 'chart' | 'table';
 
 export default function TemperatureChart({ location, textColorTheme }: TemperatureChartProps) {
@@ -52,8 +53,6 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DailyForecast | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,8 +98,11 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const maxTemps = forecastData.map(day => parseInt(day.tempMax));
   const minTemps = forecastData.map(day => parseInt(day.tempMin));
   const avgTemps = forecastData.map(day => Math.round((parseInt(day.tempMax) + parseInt(day.tempMin)) / 2));
+  // 计算温差（最高温度 - 最低温度）
+  const tempRanges = forecastData.map(day => parseInt(day.tempMax) - parseInt(day.tempMin));
 
   const isBarChart = chartType === 'bar';
+  const isScatterChart = chartType === 'scatter';
 
   // Baseline: first day's average temperature
   const baseline = avgTemps[0] || 0;
@@ -154,6 +156,16 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const barData = isBarChart
     ? forecastData.map((_, index) => [index, minTemps[index], maxTemps[index], avgTemps[index]])
     : [];
+
+  // 散点图数据：每个点包含 [日期索引, 平均温度, 温差]
+  const scatterData = isScatterChart
+    ? forecastData.map((_, index) => [index, avgTemps[index], tempRanges[index]])
+    : [];
+
+  // 计算散点大小的范围（基于温差）
+  const minRange = Math.min(...tempRanges);
+  const maxRange = Math.max(...tempRanges);
+  const rangeSpan = maxRange - minRange || 1; // 避免除以0
 
   const isDark = textColorTheme.backgroundType === 'dark';
   const isDarkTheme = textColorTheme.backgroundType === 'dark';
@@ -245,19 +257,6 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedDay]);
 
-  // Handle click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    };
-
-    if (isDropdownOpen && viewType === 'chart') {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isDropdownOpen, viewType]);
 
   const option = {
     title: {
@@ -270,7 +269,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       }
     },
     tooltip: {
-      trigger: isBarChart ? 'axis' : 'axis',
+      trigger: isBarChart ? 'axis' : isScatterChart ? 'item' : 'axis',
       formatter: isBarChart 
         ? (params: any) => {
             if (Array.isArray(params)) {
@@ -283,13 +282,23 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
             }
             return '';
           }
+        : isScatterChart
+        ? (params: any) => {
+            const index = params.dataIndex;
+            return `${dates[index]}<br/>
+                    平均温度: ${avgTemps[index]}°C<br/>
+                    最高: ${maxTemps[index]}°C<br/>
+                    最低: ${minTemps[index]}°C<br/>
+                    温差: ${tempRanges[index]}°C<br/>
+                    `;
+          }
         : undefined,
       axisPointer: {
         type: isBarChart ? 'shadow' : 'cross'
       }
     },
     legend: {
-      data: isBarChart ? [] : ['最高温度', '最低温度', '平均温度'],
+      data: isBarChart ? [] : isScatterChart ? ['平均温度'] : ['最高温度', '最低温度', '平均温度'],
       bottom: 10,
       show: !isBarChart,
       textStyle: {
@@ -327,7 +336,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
     ],
     xAxis: {
       type: 'category',
-      boundaryGap: isBarChart ? true : false,
+      boundaryGap: isBarChart ? true : isScatterChart ? true : false,
       data: dates,
       axisLabel: {
         color: axisColor,
@@ -406,6 +415,33 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           fontWeight: 'bold'
         }
       }
+    ] : isScatterChart ? [
+      {
+        name: '平均温度',
+        type: 'scatter',
+        data: scatterData.map((item, index) => ({
+          value: [item[0], item[1]], // [日期索引, 平均温度]
+          symbolSize: ((item[2] as number - minRange) / rangeSpan * 50 + 10), // 根据温差计算大小，最小10，最大40
+          itemStyle: {
+            color: getTemperatureColor(avgTemps[index]),
+            opacity: 0.7,
+            borderColor: getTemperatureColor(avgTemps[index]),
+            borderWidth: 2
+          }
+        })),
+        symbol: 'circle',
+        label: {
+          show: true,
+          formatter: (params: any) => {
+            const index = params.value[0];
+            return `${avgTemps[index]}°C`;
+          },
+          color: titleColor,
+          fontSize: 10,
+          fontWeight: 'bold',
+          position: 'top'
+        }
+      }
     ] : [
       {
         name: '最高温度',
@@ -455,111 +491,42 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex flex-col`}>
       {/* View Type Selector */}
-      <div className="absolute top-6 right-6 z-10" ref={dropdownRef}>
-        <div className="relative">
-          <div className={`flex items-center gap-1 rounded-lg border-2 p-1 ${
-            isDark 
-              ? 'border-white/30 bg-white/10' 
-              : 'border-sky-200 bg-white/80'
-          }`}>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  if (viewType === 'chart') {
-                    setIsDropdownOpen(!isDropdownOpen);
-                  } else {
-                    setViewType('chart');
-                    setIsDropdownOpen(true);
-                  }
-                }}
-                className={`flex items-center gap-1 px-3 py-1 text-xs rounded transition-all ${
-                  viewType === 'chart'
-                    ? isDark
-                      ? 'bg-white/20 text-white'
-                      : 'bg-sky-100 text-sky-700'
-                    : isDark
-                      ? 'text-gray-400 hover:text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span>图表</span>
-                {viewType === 'chart' && (
-                  <Icon 
-                    src={ICONS.chevronRight} 
-                    className={`w-3 h-3 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`}
-                    title="展开"
-                  />
-                )}
-              </button>
-              
-              {viewType === 'chart' && isDropdownOpen && (
-                <div className={`absolute left-0 mt-1 min-w-[100px] rounded-lg border shadow-lg overflow-hidden ${
-                  isDark 
-                    ? 'bg-gray-800/95 border-white/20 backdrop-blur-xl' 
-                    : 'bg-white/95 border-white/50 backdrop-blur-xl'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChartType('bar');
-                      setIsDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                      chartType === 'bar'
-                        ? isDark
-                          ? 'bg-white/10 text-white'
-                          : 'bg-sky-50 text-sky-700'
-                        : isDark
-                          ? 'text-gray-300 hover:bg-white/10'
-                          : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    柱状图
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setChartType('line');
-                      setIsDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                      chartType === 'line'
-                        ? isDark
-                          ? 'bg-white/10 text-white'
-                          : 'bg-sky-50 text-sky-700'
-                        : isDark
-                          ? 'text-gray-300 hover:bg-white/10'
-                          : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    折线图
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            <button
-              type="button"
-              onClick={() => {
-                setViewType('table');
-                setIsDropdownOpen(false);
-              }}
-              className={`px-3 py-1 text-xs rounded transition-all ${
-                viewType === 'table'
-                  ? isDark
-                    ? 'bg-white/20 text-white'
-                    : 'bg-sky-100 text-sky-700'
-                  : isDark
-                    ? 'text-gray-400 hover:text-white'
-                    : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              表格
-            </button>
-          </div>
-        </div>
-      </div>
+      <SegmentedDropdown
+        textColorTheme={textColorTheme}
+        mainButton={{
+          value: viewType === 'chart' ? chartType : 'chart',
+          label: viewType === 'chart' 
+            ? (chartType === 'bar' ? '柱状图' : chartType === 'line' ? '折线图' : '散点图') 
+            : '图表',
+          showChevron: viewType === 'chart',
+          onClick: () => {
+            if (viewType !== 'chart') {
+              setViewType('chart');
+            }
+          },
+        }}
+        dropdownOptions={[
+          { value: 'bar', label: '柱状图' },
+          { value: 'line', label: '折线图' },
+          { value: 'scatter', label: '散点图' },
+        ]}
+        otherButtons={[
+          {
+            value: 'table',
+            label: '日历',
+            onClick: () => {
+              setViewType('table');
+            },
+          },
+        ]}
+        onSelect={(value) => {
+          if (value === 'bar' || value === 'line' || value === 'scatter') {
+            setChartType(value as ChartType);
+            setViewType('chart');
+          }
+        }}
+        showDropdown={viewType === 'chart'}
+      />
       
       {viewType === 'chart' ? (
         <div className="flex-1 flex flex-col">

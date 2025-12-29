@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
+import SegmentedDropdown from '@/app/components/SegmentedDropdown';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
@@ -146,6 +147,12 @@ export default function HourlyChart({ hourlyData, textColorTheme }: HourlyChartP
   const chartData = useMemo(() => {
     return next24Hours.map(dataTypeConfigs[selectedDataType].extractor);
   }, [next24Hours, selectedDataType]);
+
+  // Prepare dropdown options
+  const dropdownOptions = Object.entries(dataTypeConfigs).map(([key, config]) => ({
+    value: key,
+    label: config.label,
+  }));
   
   const option = useMemo(() => {
     const config = dataTypeConfigs[selectedDataType];
@@ -269,23 +276,15 @@ export default function HourlyChart({ hourlyData, textColorTheme }: HourlyChartP
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 relative`}>
       {/* Dropdown selector in top right */}
-      <div className="absolute top-4 right-4 z-10">
-        <select
-          value={selectedDataType}
-          onChange={(e) => setSelectedDataType(e.target.value as DataType)}
-          className={`px-4 py-2 rounded-lg border transition-all ${
-            isDark
-              ? 'bg-gray-800/80 border-white/20 text-white hover:bg-gray-700/80'
-              : 'bg-white/80 border-gray-300 text-gray-900 hover:bg-white'
-          } ${textColorTheme.textColor.primary} backdrop-blur-sm shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
-        >
-          {Object.entries(dataTypeConfigs).map(([key, config]) => (
-            <option key={key} value={key}>
-              {config.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SegmentedDropdown
+        textColorTheme={textColorTheme}
+        mainButton={{
+          value: selectedDataType,
+          label: currentConfig.label,
+        }}
+        dropdownOptions={dropdownOptions}
+        onSelect={(value) => setSelectedDataType(value as DataType)}
+      />
 
       <ReactECharts 
         option={option} 
