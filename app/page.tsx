@@ -7,7 +7,7 @@ import TemperatureChart from './components/Forcast30days';
 import HourlyChart from './components/HourlyChart';
 import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
-import Modal from './components/Modal';
+import Modal from './models/Modal';
 import WeatherSkeleton from './components/WeatherSkeleton';
 import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
 import { translateLocation } from './utils/locationTranslations';
