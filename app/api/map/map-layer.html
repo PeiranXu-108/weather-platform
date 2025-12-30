@@ -1,0 +1,30 @@
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>标准图层</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<script src="https://webapi.amap.com/maps?v=2.0&key=710954aaa29d1e6051b1e2fdc2dee035"></script>
+<script>
+    var map = new AMap.Map('container', {
+        center: [116.397428, 39.90923],
+        layers: [//只显示默认图层的时候，layers可以缺省
+            AMap.createDefaultLayer()//高德默认标准图层
+        ],
+        zoom: 13
+    });
+</script>
+</body>
+</html>
