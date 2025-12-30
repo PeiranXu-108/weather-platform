@@ -42,7 +42,39 @@ const FoggyWeatherBackground = dynamic(
   { ssr: false }
 );
 
+// 动态导入地图组件，禁用 SSR
+const WeatherMap = dynamic(
+  () => import('./components/Map/WeatherMap'),
+  { ssr: false }
+);
+
 const CURRENT_CITY_KEY = 'wp:currentCity:v1';
+
+// 判断是否为国内城市（包括港澳台）
+function isDomesticCity(location: { country?: string; region?: string; name?: string }): boolean {
+  const country = location.country?.toLowerCase() || '';
+  const region = location.region?.toLowerCase() || '';
+  const name = location.name?.toLowerCase() || '';
+
+  // 检查国家字段
+  if (country === '中国') {
+    return true;
+  }
+  if (country === 'china' || country === 'hongkong' || country === 'macau' || country === 'macao' || country === 'taiwan') {
+    return true;
+  }
+  
+  // 检查地区和城市名称（包含港澳台相关关键词）
+  const searchText = `${region} ${name}`.toLowerCase();
+  return (
+    searchText.includes('hong kong') ||
+    searchText.includes('macau') ||
+    searchText.includes('macao') ||
+    searchText.includes('taiwan') ||
+    searchText.includes('taipei') ||
+    searchText.includes('kaohsiung')
+  );
+}
 
 // 从 localStorage 读取当前城市
 function loadCurrentCityFromStorage(): { city: string; query: string } | null {
@@ -393,6 +425,14 @@ export default function Home() {
                 hourlyData={allHourlyData}
                 textColorTheme={textColorTheme}
               />
+
+              {/* Weather Map - 仅显示国内城市（包括港澳台） */}
+              {isDomesticCity(weatherData.location) && (
+                <WeatherMap 
+                  location={weatherData.location}
+                  textColorTheme={textColorTheme}
+                />
+              )}
 
               {/* Footer */}
               <footer className="text-center pt-8 pb-4">
