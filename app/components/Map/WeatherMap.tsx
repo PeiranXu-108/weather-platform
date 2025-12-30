@@ -145,30 +145,59 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         debouncedFetchWeather(location.lat, location.lon);
       }, 300);
 
-      // 调整高德地图水印的 z-index，防止悬浮在其他内容上方
-      setTimeout(() => {
-        if (mapContainerRef.current) {
-          // 查找高德地图的水印元素
-          const watermarkElements = mapContainerRef.current.querySelectorAll('[class*="amap-copyright"], [class*="amap-logo"]');
-          watermarkElements.forEach((el: Element) => {
+      // 删除高德地图水印
+      const removeWatermark = () => {
+        if (!mapContainerRef.current) return;
+        
+        // 方法1: 通过类名查找并删除
+        const selectors = [
+          '[class*="amap-copyright"]',
+          '[class*="amap-logo"]',
+          '[class*="amap-maps"]',
+          '.amap-copyright',
+          '.amap-logo'
+        ];
+        
+        selectors.forEach(selector => {
+          const elements = mapContainerRef.current!.querySelectorAll(selector);
+          elements.forEach((el: Element) => {
             const htmlEl = el as HTMLElement;
-            if (htmlEl.style) {
-              htmlEl.style.zIndex = '1';
+            if (htmlEl.textContent && (
+              htmlEl.textContent.includes('高德地图') || 
+              htmlEl.textContent.includes('Amap') || 
+              htmlEl.textContent.includes('©') ||
+              htmlEl.textContent.includes('GS(')
+            )) {
+              htmlEl.style.display = 'none';
+              htmlEl.remove();
             }
           });
-          
-          // 也可以通过查找包含"高德地图"或"Amap"文本的元素
-          const allElements = mapContainerRef.current.querySelectorAll('*');
-          allElements.forEach((el: Element) => {
-            const htmlEl = el as HTMLElement;
-            if (htmlEl.textContent && (htmlEl.textContent.includes('高德地图') || htmlEl.textContent.includes('Amap'))) {
-              if (htmlEl.style) {
-                htmlEl.style.zIndex = '1';
-              }
+        });
+        
+        // 方法2: 查找所有包含水印文本的元素
+        const allElements = mapContainerRef.current.querySelectorAll('*');
+        allElements.forEach((el: Element) => {
+          const htmlEl = el as HTMLElement;
+          const text = htmlEl.textContent || '';
+          if (text.includes('高德地图') || text.includes('Amap')) {
+            // 检查是否是水印元素（包含版权信息）
+            if (text.includes('©') || text.includes('GS(') || text.includes('Amap')) {
+              htmlEl.style.display = 'none';
+              htmlEl.remove();
             }
-          });
-        }
-      }, 500);
+          }
+        });
+      };
+
+      // 延迟删除水印，确保地图已完全加载（多次尝试确保删除成功）
+      setTimeout(removeWatermark, 300);
+      setTimeout(removeWatermark, 800);
+      setTimeout(removeWatermark, 1500);
+      
+      // 监听地图加载完成事件
+      mapInstanceRef.current.on('complete', () => {
+        setTimeout(removeWatermark, 100);
+      });
     };
 
     // 检查是否已经加载了高德地图脚本
