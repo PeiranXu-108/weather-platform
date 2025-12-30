@@ -48,13 +48,13 @@ body {
     background: rgba(255, 255, 255, 0.5);
   }
   
-  /* 限制高德地图水印的 z-index，防止悬浮在其他内容上方 */
+  /* 隐藏高德地图水印 */
   .amap-copyright,
   .amap-logo,
   [class*="amap-copyright"],
   [class*="amap-logo"] {
-    z-index: 1 !important;
-    position: relative !important;
+    display: none !important;
+    visibility: hidden !important;
   }
 }
 
