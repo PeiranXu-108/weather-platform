@@ -1,5 +1,6 @@
 import { Current, Location } from "@/app/types/weather";
 import { getCardStyle, TextColorTheme } from "@/app/utils/textColorTheme";
+import { translateLocationName } from "@/app/utils/locationTranslations";
 
 // 悬浮天气信息组件
 export default function FloatingWeatherInfo({ 
@@ -14,6 +15,8 @@ export default function FloatingWeatherInfo({
   }) {
     if (!current && !loading) return null;
   
+    const displayLocationName = translateLocationName(location?.name ?? "", "city");
+
     return (
       loading ? null : <div className="absolute bottom-4 right-4 z-10">
         <div className="bg-white rounded-xl shadow-2xl p-2 min-w-[120px] border border-gray-200">
@@ -22,7 +25,7 @@ export default function FloatingWeatherInfo({
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="text-xs text-gray-600 mb-1">
-                    {location.name}
+                    {displayLocationName}
                   </p>
                   <div className="flex items-center gap-2">
                     <img 
