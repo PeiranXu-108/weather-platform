@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Location, Current } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
+import { translateLocation } from '@/app/utils/locationTranslations';
 import FloatingWeatherInfo from './InfoCard';
 
 interface WeatherMapProps {
@@ -26,6 +27,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const [centerWeather, setCenterWeather] = useState<{ location: Location; current: Current } | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const displayLocation = { ...location, ...translateLocation(location) };
+  const displayCenterLocation = centerWeather?.location
+    ? { ...centerWeather.location, ...translateLocation(centerWeather.location) }
+    : null;
 
   // 获取地图中心点的天气数据
   const fetchCenterWeather = useCallback(async (lat: number, lon: number) => {
@@ -95,7 +101,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 添加标记点
       const marker = new window.AMap.Marker({
         position: center,
-        title: location.name || '当前位置',
+        title: displayLocation.name || '当前位置',
         icon: new window.AMap.Icon({
           size: new window.AMap.Size(40, 50),
           image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
@@ -109,8 +115,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 添加信息窗体（可选）
       const infoWindow = new window.AMap.InfoWindow({
         content: `<div style="padding: 10px;">
-          <div style="font-weight: bold; margin-bottom: 5px;">${location.name || '当前位置'}</div>
-          <div style="font-size: 12px; color: #666;">${location.region || ''} ${location.country || ''}</div>
+          <div style="font-weight: bold; margin-bottom: 5px;">${displayLocation.name || '当前位置'}</div>
+          <div style="font-size: 12px; color: #666;">${displayLocation.region || ''} ${displayLocation.country || ''}</div>
         </div>`,
         offset: new window.AMap.Pixel(0, -30),
       });
@@ -245,7 +251,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         />
         {/* 悬浮天气信息组件 */}
         <FloatingWeatherInfo 
-          location={centerWeather?.location || location}
+          location={displayCenterLocation || displayLocation}
           current={centerWeather?.current}
           loading={loadingWeather}
           textColorTheme={textColorTheme}
