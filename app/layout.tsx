@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "天气预报",
   description: "天气预报与可视化展示",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
