@@ -613,7 +613,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex flex-col`}>
+    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 md:p-6 h-full relative flex flex-col min-h-[500px] md:min-h-[600px]`}>
       {/* View Type Selector */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
@@ -654,12 +654,12 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
       />
 
       {viewType === 'chart' ? (
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 min-h-[400px] md:min-h-[450px]" style={{ minHeight: 0 }}>
             <ReactECharts
               option={option}
               notMerge={true}
-              style={{ height: '100%', width: '100%' }}
+              style={{ height: '100%', width: '100%', minHeight: '400px' }}
               opts={{ renderer: 'svg' }}
               onEvents={isPieChart ? undefined : {
                 click: (params: any) => {
@@ -680,7 +680,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           </div>
           {/* 饼状图统计信息 - 显示在图表下方 */}
           {isPieChart && (
-            <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm">
+            <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm flex-shrink-0">
               <div className={`${textColorTheme.textColor.primary} font-semibold`}>
                 <span className={textColorTheme.textColor.secondary}>降温</span>
                 {weatherStats.coolingDays}次，
@@ -693,7 +693,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
           )}
         </div>
       ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Calendar Table View Title */}
           <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}>
             30日天气预报
@@ -701,20 +701,20 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
 
           {/* Calendar Table View */}
           <div
-            className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar"
+            className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar min-h-0"
             style={{
               scrollbarWidth: 'thin',
               scrollbarColor: isDark ? 'rgba(255, 255, 255, 0.3) transparent' : 'rgba(0, 0, 0, 0.3) transparent'
             }}
           >
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse min-w-[600px]">
               {/* Weekday Headers */}
               <thead>
                 <tr>
                   {weekDays.map((day, index) => (
                     <th
                       key={index}
-                      className={`p-2 text-center text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
+                      className={`p-1 md:p-2 text-center text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
                         }`}
                     >
                       {day}
@@ -728,7 +728,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                     {Array.from({ length: 7 }).map((_, colIndex) => {
                       const cellIndex = rowIndex * 7 + colIndex;
                       const cell = calendarData[cellIndex];
-                      if (!cell) return <td key={colIndex} className="p-1" />;
+                      if (!cell) return <td key={colIndex} className="p-0.5 md:p-1" />;
 
                       const { date, forecast, isCurrentMonth } = cell;
                       const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -738,14 +738,14 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                       return (
                         <td
                           key={colIndex}
-                          className={`p-1 ${!isCurrentMonth ? 'opacity-30' : ''
+                          className={`p-0.5 md:p-1 ${!isCurrentMonth ? 'opacity-30' : ''
                             }`}
                         >
                           {forecast ? (
                             <button
                               type="button"
                               onClick={() => setSelectedDay(forecast)}
-                              className={`w-full p-2 rounded-lg border transition-all text-left ${isToday
+                              className={`w-full p-1 md:p-2 rounded-lg border transition-all text-left ${isToday
                                   ? isDark
                                     ? 'border-blue-400 bg-white/10'
                                     : 'border-blue-400 bg-white/20'
@@ -754,7 +754,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                                     : 'border-gray-200 bg-white/20 hover:bg-white/30'
                                 }`}
                             >
-                              <div className={`text-xs font-semibold mb-1 ${isToday
+                              <div className={`text-[10px] md:text-xs font-semibold mb-0.5 md:mb-1 ${isToday
                                   ? 'text-blue-600'
                                   : isDark
                                     ? 'text-white'
@@ -762,11 +762,11 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                                 }`}>
                                 {date.getMonth() + 1}月{date.getDate()}日
                               </div>
-                              <div className={`text-xs mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
+                              <div className={`text-[10px] md:text-xs mb-0.5 md:mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
                                 }`}>
                                 {forecast.textDay}
                               </div>
-                              <div className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
+                              <div className={`text-[10px] md:text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
                                 }`}>
                                 <span className={isDark ? 'text-white' : 'text-gray-900'}>
                                   {forecast.tempMax}°
@@ -778,7 +778,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
                               </div>
                             </button>
                           ) : (
-                            <div className={`w-full p-2 rounded-lg text-center ${isDark ? 'text-gray-600' : 'text-gray-400'
+                            <div className={`w-full p-1 md:p-2 rounded-lg text-center text-[10px] md:text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'
                               }`}>
                               {dayNumber}日
                             </div>
