@@ -18,6 +18,7 @@ declare global {
 }
 
 const Key = process.env.NEXT_PUBLIC_AMAP_KEY 
+const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 
 export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -209,6 +210,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
     // 如果脚本正在加载，不重复加载
     if (scriptLoadedRef.current) return;
+
+    // 设置安全密钥（JS API 2.0 必须在加载脚本前设置）
+    if (SecurityJsCode) {
+      (window as any)._AMapSecurityConfig = {
+        securityJsCode: SecurityJsCode,
+      };
+    }
 
     // 加载高德地图脚本
     const script = document.createElement('script');
