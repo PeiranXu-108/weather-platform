@@ -15,6 +15,8 @@ import { translateWeatherCondition } from './utils/weatherTranslations';
 import { getTextColorTheme } from './utils/textColorTheme';
 import dynamic from 'next/dynamic';
 import type { WeatherResponse, Hour } from './types/weather';
+import { useSyncFavorites } from './hooks/useSyncFavorites';
+import { useSession } from 'next-auth/react';
 
 // 动态导入 Three.js 组件，禁用 SSR
 const CloudyWeatherBackground = dynamic(
@@ -104,6 +106,8 @@ function saveCurrentCityToStorage(city: string, query: string) {
 }
 
 export default function Home() {
+  useSyncFavorites();
+  const { status } = useSession();
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -200,10 +204,33 @@ export default function Home() {
     }
   }, []); // Empty dependency array - only run on mount
 
-  // Load favorites from localStorage once
+  // Load favorites: authed from DB, guest from localStorage
   useEffect(() => {
-    setFavorites(loadFavoritesFromStorage());
-  }, []);
+    if (status === 'authenticated') {
+      fetch('/api/favorites')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => setFavorites(Array.isArray(data) ? data : []))
+        .catch(() => {});
+      return;
+    }
+    if (status === 'unauthenticated') {
+      setFavorites(loadFavoritesFromStorage());
+    }
+  }, [status]);
+
+  // After local->db sync completes, refresh favorites from DB
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onSynced = () => {
+      if (status !== 'authenticated') return;
+      fetch('/api/favorites')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => setFavorites(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    };
+    window.addEventListener('favorites:synced', onSynced);
+    return () => window.removeEventListener('favorites:synced', onSynced);
+  }, [status]);
 
   // Auto-refresh - run every 30 minutes for current city/location
   useEffect(() => {
@@ -239,10 +266,35 @@ export default function Home() {
     }
   };
 
-  const handleToggleFavorite = (cityQuery: string, displayName: string) => {
+  const handleToggleFavorite = async (cityQuery: string, displayName: string) => {
+    const exists = favorites.some((f) => f.query === cityQuery);
+
+    if (status === 'authenticated') {
+      if (exists) {
+        const res = await fetch(`/api/favorites?query=${encodeURIComponent(cityQuery)}`, { method: 'DELETE' });
+        if (res.ok) {
+          const next = await res.json();
+          if (Array.isArray(next)) setFavorites(next);
+        }
+        return;
+      }
+
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: cityQuery, label: displayName }),
+      });
+      if (res.ok) {
+        const next = await res.json();
+        if (Array.isArray(next)) setFavorites(next);
+      }
+      return;
+    }
+
+    // guest: localStorage
     setFavorites((prev) => {
-      const exists = prev.some((f) => f.query === cityQuery);
-      const next = exists
+      const has = prev.some((f) => f.query === cityQuery);
+      const next = has
         ? prev.filter((f) => f.query !== cityQuery)
         : [{ query: cityQuery, label: displayName }, ...prev.filter((f) => f.query !== cityQuery)];
       saveFavoritesToStorage(next);

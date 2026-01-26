@@ -6,6 +6,8 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { signOut, useSession } from 'next-auth/react';
+import AuthModal from '@/app/components/Auth/AuthModal';
 
 interface HeaderProps {
   onCitySelect: (cityName: string) => void;
@@ -16,6 +18,9 @@ interface HeaderProps {
 }
 
 export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme }: HeaderProps) {
+  const { data: session } = useSession();
+  const [authOpen, setAuthOpen] = useState(false);
+
   // 默认主题（如果没有提供）
   const theme = textColorTheme || {
     backgroundType: 'light' as const,
@@ -162,7 +167,41 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
   };
 
   return (
-    <header className="mb-8">
+    <header className="mb-8 relative">
+      <div className="absolute top-0 right-0 flex items-center gap-3">
+        {session?.user ? (
+          <>
+            <span className={`hidden sm:inline text-sm font-medium ${theme.textColor.primary}`}>
+              {session.user.name || session.user.email}
+            </span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${
+                theme.backgroundType === 'dark'
+                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              退出
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAuthOpen(true)}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${
+              theme.backgroundType === 'dark'
+                ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-lg'
+                : 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-100'
+            }`}
+          >
+            登录
+          </button>
+        )}
+      </div>
+
+      <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} textColorTheme={theme} />
 
       {/* Search Bar */}
       <div className="max-w-2xl mx-auto relative">
