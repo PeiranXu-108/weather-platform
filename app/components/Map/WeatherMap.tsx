@@ -5,6 +5,7 @@ import type { Location, Current } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
+import { getTemperatureColor } from '@/app/utils/utils';
 
 interface WeatherMapProps {
   location: Location;
@@ -20,9 +21,45 @@ declare global {
 const Key = process.env.NEXT_PUBLIC_AMAP_KEY 
 const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 
+const centerMarkerSize = 42;
+const defaultCenterMarkerBorder = '#9be16a';
+
+const formatCenterTemp = (current?: Current | null) => {
+  if (!current || typeof current.temp_c !== 'number' || Number.isNaN(current.temp_c)) {
+    return '--';
+  }
+  return `${Math.round(current.temp_c)}`;
+};
+
+const getCenterMarkerBorderColor = (current?: Current | null) => {
+  if (!current || typeof current.temp_c !== 'number' || Number.isNaN(current.temp_c)) {
+    return defaultCenterMarkerBorder;
+  }
+  return getTemperatureColor(current.temp_c);
+};
+
+const buildCenterMarkerContent = (tempText: string, borderColor: string) => `
+  <div style="
+    width: ${centerMarkerSize}px;
+    height: ${centerMarkerSize}px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 4px solid ${borderColor};
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1;
+  ">${tempText}°</div>
+`;
+
 export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const centerMarkerRef = useRef<any>(null);
   const scriptLoadedRef = useRef(false);
   const [centerWeather, setCenterWeather] = useState<{ location: Location; current: Current } | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
@@ -62,6 +99,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     // 如果地图已经初始化，更新中心点
     if (mapInstanceRef.current && location.lat && location.lon) {
       mapInstanceRef.current.setCenter([location.lon, location.lat]);
+      if (centerMarkerRef.current) {
+        centerMarkerRef.current.setPosition([location.lon, location.lat]);
+      }
       // 更新中心点后获取天气数据
       fetchCenterWeather(location.lat, location.lon);
     }
@@ -97,15 +137,15 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       const marker = new window.AMap.Marker({
         position: center,
         title: location.name || '当前位置',
-        icon: new window.AMap.Icon({
-          size: new window.AMap.Size(40, 50),
-          image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
-          imageOffset: new window.AMap.Pixel(0, 0),
-          imageSize: new window.AMap.Size(40, 50),
-        }),
+        content: buildCenterMarkerContent(
+          formatCenterTemp(centerWeather?.current),
+          getCenterMarkerBorderColor(centerWeather?.current)
+        ),
+        offset: new window.AMap.Pixel(-centerMarkerSize / 2, -centerMarkerSize / 2),
       });
 
       mapInstanceRef.current.add(marker);
+      centerMarkerRef.current = marker;
 
       // 添加信息窗体（可选）
       const infoWindow = new window.AMap.InfoWindow({
@@ -127,6 +167,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         const center = mapInstanceRef.current.getCenter();
         const lat = center.getLat();
         const lon = center.getLng();
+        if (centerMarkerRef.current) {
+          centerMarkerRef.current.setPosition([lon, lat]);
+        }
         debouncedFetchWeather(lat, lon);
       };
 
@@ -135,6 +178,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         const center = mapInstanceRef.current.getCenter();
         const lat = center.getLat();
         const lon = center.getLng();
+        if (centerMarkerRef.current) {
+          centerMarkerRef.current.setPosition([lon, lat]);
+        }
         debouncedFetchWeather(lat, lon);
       };
 
@@ -237,8 +283,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
+      centerMarkerRef.current = null;
     };
   }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather]);
+
+  useEffect(() => {
+    if (!centerMarkerRef.current) return;
+    centerMarkerRef.current.setContent(buildCenterMarkerContent(
+      formatCenterTemp(centerWeather?.current),
+      getCenterMarkerBorderColor(centerWeather?.current)
+    ));
+  }, [centerWeather]);
 
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col relative`}>
@@ -265,4 +320,3 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     </div>
   );
 }
-
