@@ -1,16 +1,17 @@
 import React from 'react';
 import type { Current } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
 interface WeatherMetricsProps {
   current: Current;
   textColorTheme: TextColorTheme;
+  opacity?: number;
 }
 
-export default function WeatherMetrics({ current, textColorTheme }: WeatherMetricsProps) {
+export default function WeatherMetrics({ current, textColorTheme, opacity = 100 }: WeatherMetricsProps) {
   const metrics = [
     {
       label: '湿度',
@@ -45,7 +46,7 @@ export default function WeatherMetrics({ current, textColorTheme }: WeatherMetri
   ];
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full flex flex-col`}>
+    <div className={`rounded-2xl shadow-xl p-6 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
         天气指标
       </h2>

@@ -4,6 +4,8 @@ export const ICONS = {
   spinner: '/icons/spinner.svg',
   location: '/icons/location.svg',
   chevronRight: '/icons/chevron-right.svg',
+  settings: '/icons/settings.svg',
+  profile: '/icons/profile.svg',
 
   // Common
   close: '/icons/close.svg',

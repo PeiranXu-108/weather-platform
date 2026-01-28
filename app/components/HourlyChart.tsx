@@ -4,12 +4,13 @@ import React, { useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
   textColorTheme: TextColorTheme;
+  opacity?: number;
 }
 
 type DataType = 
@@ -34,7 +35,7 @@ interface DataTypeConfig {
   areaColor: string;
 }
 
-export default function HourlyChart({ hourlyData, textColorTheme }: HourlyChartProps) {
+export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 }: HourlyChartProps) {
   const [selectedDataType, setSelectedDataType] = useState<DataType>('temperature');
 
   // Get next 24 hours from current time
@@ -274,7 +275,7 @@ export default function HourlyChart({ hourlyData, textColorTheme }: HourlyChartP
   }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark]);
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 relative`}>
+    <div className={`rounded-2xl shadow-xl p-6 relative`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* Dropdown selector in top right */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}

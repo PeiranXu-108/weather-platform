@@ -8,6 +8,7 @@ import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { signOut, useSession } from 'next-auth/react';
 import AuthModal from '@/app/components/Auth/AuthModal';
+import SettingsPanel from '@/app/components/SettingsPanel';
 
 interface HeaderProps {
   onCitySelect: (cityName: string) => void;
@@ -15,9 +16,13 @@ interface HeaderProps {
   currentCity?: string;
   isLocating?: boolean;
   textColorTheme?: TextColorTheme;
+  opacity?: number;
+  onOpacityChange?: (opacity: number) => void;
+  showBackground?: boolean;
+  onShowBackgroundChange?: (show: boolean) => void;
 }
 
-export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme }: HeaderProps) {
+export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme, opacity = 0, onOpacityChange, showBackground = true, onShowBackgroundChange }: HeaderProps) {
   const { data: session } = useSession();
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -98,7 +103,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex((prev) => 
+        setSelectedIndex((prev) =>
           prev < suggestions.length - 1 ? prev + 1 : prev
         );
         break;
@@ -125,14 +130,14 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
 
   const handleLocationClick = () => {
     if (!onLocationSelect) return;
-    
+
     if (!navigator.geolocation) {
       alert('您的浏览器不支持地理位置功能');
       return;
     }
 
     setLocating(true);
-    
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -169,34 +174,47 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
   return (
     <header className="mb-8 relative">
       <div className="absolute top-0 right-0 flex items-center gap-3">
+        {opacity !== undefined && onOpacityChange !== undefined && showBackground !== undefined && onShowBackgroundChange !== undefined && (
+          <SettingsPanel
+            textColorTheme={theme}
+            opacity={opacity}
+            onOpacityChange={onOpacityChange}
+            showBackground={showBackground}
+            onShowBackgroundChange={onShowBackgroundChange}
+          />
+        )}
         {session?.user ? (
           <>
             <span className={`hidden sm:inline text-sm font-medium ${theme.textColor.primary}`}>
               {session.user.name || session.user.email}
             </span>
             <button
-              type="button"
-              onClick={() => signOut()}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${
-                theme.backgroundType === 'dark'
-                  ? 'bg-white/10 hover:bg-white/20 text-white'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              }`}
-            >
-              退出
-            </button>
+            type="button"
+            onClick={() => setAuthOpen(true)}
+            className={`p-2 rounded-full transition-all active:scale-95 ${
+              theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
+            }`}
+          >
+            <Icon
+              src={ICONS.profile}
+              className={`w-8 h-8 ${theme.textColor.secondary}`}
+              title="退出"
+            />
+          </button>
           </>
         ) : (
           <button
             type="button"
             onClick={() => setAuthOpen(true)}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 ${
-              theme.backgroundType === 'dark'
-                ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-lg'
-                : 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-100'
+            className={`p-2 rounded-full transition-all active:scale-95 ${
+              theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
             }`}
           >
-            登录
+            <Icon
+              src={ICONS.profile}
+              className={`w-8 h-8 ${theme.textColor.secondary}`}
+              title="登录"
+            />
           </button>
         )}
       </div>
@@ -218,26 +236,25 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                   setShowSuggestions(true);
                 }
               }}
-            placeholder="搜索城市"
-            className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
+              placeholder="搜索城市"
+              className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <Icon
                 src={ICONS.search}
                 className={`w-5 h-5 ${theme.textColor.muted}`}
                 title="搜索"
-                />
+              />
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleLocationClick}
                 disabled={locating || isLocating}
-                className={`p-2 rounded-lg transition-all ${
-                  locating || isLocating
+                className={`p-2 rounded-lg transition-all ${locating || isLocating
                     ? 'border-sky-300 bg-sky-100/60 cursor-not-allowed'
                     : 'border-sky-200 bg-white/10 hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
-                }`}
+                  }`}
                 title="获取当前位置"
               >
                 {locating || isLocating ? (
@@ -245,13 +262,13 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                     src={ICONS.spinner}
                     className="w-5 h-5 text-sky-500 animate-spin"
                     title="定位中"
-                    />
+                  />
                 ) : (
                   <Icon
                     src={ICONS.location}
                     className="w-5 h-5 text-sky-600"
                     title="获取当前位置"
-                    />
+                  />
                 )}
               </button>
             </div>
@@ -269,13 +286,10 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 key={`${city.englishName}-${index}`}
                 type="button"
                 onClick={() => handleCitySelect(city)}
-                className={`w-full text-left px-4 py-3 ${theme.backgroundType === 'dark' ? 'hover:bg-white/20' : 'hover:bg-sky-50'} transition-colors ${
-                  index === selectedIndex ? (theme.backgroundType === 'dark' ? 'bg-white/30' : 'bg-sky-100') : ''
-                } ${
-                  index === 0 ? 'rounded-t-xl' : ''
-                } ${
-                  index === suggestions.length - 1 ? 'rounded-b-xl' : ''
-                }`}
+                className={`w-full text-left px-4 py-3 ${theme.backgroundType === 'dark' ? 'hover:bg-white/20' : 'hover:bg-sky-50'} transition-colors ${index === selectedIndex ? (theme.backgroundType === 'dark' ? 'bg-white/30' : 'bg-sky-100') : ''
+                  } ${index === 0 ? 'rounded-t-xl' : ''
+                  } ${index === suggestions.length - 1 ? 'rounded-b-xl' : ''
+                  }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -286,7 +300,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                     src={ICONS.chevronRight}
                     className="w-5 h-5 text-sky-400"
                     title="选择"
-                    />
+                  />
                 </div>
               </button>
             ))}

@@ -5,7 +5,7 @@ import type { Hour } from '@/app/types/weather';
 import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
@@ -14,9 +14,10 @@ interface HourlyForecast24hProps {
   currentTime: string; // Current time in format "YYYY-MM-DD HH:mm"
   currentTimeEpoch?: number; // Optional: current time epoch (more accurate)
   textColorTheme: TextColorTheme;
+  opacity?: number;
 }
 
-export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme }: HourlyForecast24hProps) {
+export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, opacity = 100 }: HourlyForecast24hProps) {
   const [selectedHour, setSelectedHour] = useState<Hour | null>(null);
   // Parse current time correctly (format: "YYYY-MM-DD HH:mm")
   // Use provided epoch if available (more accurate), otherwise parse from string
@@ -138,7 +139,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   }, [selectedHour]);
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col`}>
+    <div className={`rounded-2xl shadow-xl p-4 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`}>未来24小时</h2>
       <div className="overflow-x-auto flex-1">
         <div className="flex gap-3 min-w-max pb-2 pr-1">

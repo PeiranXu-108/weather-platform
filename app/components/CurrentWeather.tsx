@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
@@ -15,9 +15,10 @@ interface CurrentWeatherProps {
   cityQuery?: string;
   isFavorite?: boolean;
   onToggleFavorite?: (cityQuery: string, displayName: string) => void;
+  opacity?: number;
 }
 
-export default function CurrentWeather({ location, current, textColorTheme, cityQuery, isFavorite, onToggleFavorite }: CurrentWeatherProps) {
+export default function CurrentWeather({ location, current, textColorTheme, cityQuery, isFavorite, onToggleFavorite, opacity = 100 }: CurrentWeatherProps) {
   const translatedLocation = translateLocation(location);
 
   // Format local time from location.localtime
@@ -39,7 +40,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
   const formattedLocalTime = formatTime(location.localtime);
   
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full relative overflow-hidden flex flex-col`}>
+    <div className={`rounded-2xl shadow-xl p-4 h-full relative overflow-hidden flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* Favorite button */}
       {cityQuery && onToggleFavorite && (
         <button

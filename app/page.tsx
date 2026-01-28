@@ -7,6 +7,7 @@ import TemperatureChart from './components/Forcast30days';
 import HourlyChart from './components/HourlyChart';
 import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
+import SettingsPanel from './components/SettingsPanel';
 import Modal from './models/Modal';
 import WeatherSkeleton from './components/WeatherSkeleton';
 import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
@@ -115,6 +116,8 @@ export default function Home() {
   const [currentCityQuery, setCurrentCityQuery] = useState<string>('hangzhou');
   const [favorites, setFavorites] = useState<FavoriteCity[]>([]);
   const [isLocating, setIsLocating] = useState(false);
+  const [opacity, setOpacity] = useState(0);
+  const [showBackground, setShowBackground] = useState(true);
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
     isOpen: false,
     message: '',
@@ -388,9 +391,19 @@ export default function Home() {
     }
   })();
   
-  const textColorTheme = weatherData 
-    ? getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day)
-    : defaultTheme;
+  const textColorTheme = !showBackground 
+    ? {
+        backgroundType: 'light' as const,
+        textColor: {
+          primary: 'text-gray-900',
+          secondary: 'text-gray-700',
+          muted: 'text-gray-600',
+          accent: 'text-sky-700',
+        },
+      }
+    : (weatherData 
+      ? getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day)
+      : defaultTheme);
 
   // Collect all hourly data
   const allHourlyData: Hour[] = weatherData?.forecast.forecastday.reduce((acc, day) => {
@@ -408,13 +421,14 @@ export default function Home() {
         onSelectCity={handleSelectFavorite}
       />
       {/* Backgrounds */}
-      {isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
-      {isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
+      {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {!weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
-      {!isSnowy && !isRainy && !isSunny && !isFoggy && !isCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {!showBackground && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
 
       <div className={`max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
         {/* Header with Search - Always visible */}
@@ -424,6 +438,10 @@ export default function Home() {
           currentCity={currentCity}
           isLocating={isLocating}
           textColorTheme={textColorTheme}
+          opacity={opacity}
+          onOpacityChange={setOpacity}
+          showBackground={showBackground}
+          onShowBackgroundChange={setShowBackground}
         />
 
         <Suspense fallback={<WeatherSkeleton />}>
@@ -441,6 +459,7 @@ export default function Home() {
                     cityQuery={currentCityQuery}
                     isFavorite={favorites.some((f) => f.query === currentCityQuery)}
                     onToggleFavorite={handleToggleFavorite}
+                    opacity={opacity}
                   />
                 </div>
                 <div className="lg:col-span-2">
@@ -449,6 +468,7 @@ export default function Home() {
                     currentTime={weatherData.location.localtime}
                     currentTimeEpoch={weatherData.location.localtime_epoch}
                     textColorTheme={textColorTheme}
+                    opacity={opacity}
                   />
                 </div>
               </div>
@@ -462,12 +482,14 @@ export default function Home() {
                       lon: Number(weatherData.location.lon.toFixed(2))
                     }}
                     textColorTheme={textColorTheme}
+                    opacity={opacity}
                   />
                 </div>
                 <div className="lg:col-span-1">
                   <WeatherMetrics 
                     current={weatherData.current}
                     textColorTheme={textColorTheme}
+                    opacity={opacity}
                   />
                 </div>
               </div>
@@ -476,6 +498,7 @@ export default function Home() {
               <HourlyChart 
                 hourlyData={allHourlyData}
                 textColorTheme={textColorTheme}
+                opacity={opacity}
               />
 
               {/* Weather Map - 仅显示国内城市（包括港澳台） */}

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
@@ -12,6 +12,7 @@ import { getTemperatureColor } from '@/app/utils/utils';
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
   textColorTheme: TextColorTheme;
+  opacity?: number;
 }
 
 interface DailyForecast {
@@ -47,7 +48,7 @@ interface DailyForecast {
 type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
 type ViewType = 'chart' | 'table';
 
-export default function TemperatureChart({ location, textColorTheme }: TemperatureChartProps) {
+export default function TemperatureChart({ location, textColorTheme, opacity = 100 }: TemperatureChartProps) {
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [viewType, setViewType] = useState<ViewType>('chart');
   const [forecastData, setForecastData] = useState<DailyForecast[]>([]);
@@ -586,7 +587,7 @@ export default function TemperatureChart({ location, textColorTheme }: Temperatu
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex flex-col`}>
+    <div className={`rounded-2xl shadow-xl p-6 h-full relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* View Type Selector */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}

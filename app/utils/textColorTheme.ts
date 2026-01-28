@@ -97,3 +97,21 @@ export function getCardStyle(backgroundType: BackgroundType): string {
     return 'bg-white/10';   // 浅色背景：半透明白色
   }
 }
+
+/**
+ * 获取带透明度的卡片背景样式
+ * @param opacity 透明度百分比 (0-100)
+ * @param backgroundType 背景类型 ('dark' 或 'light')
+ */
+export function getCardBackgroundStyle(opacity: number, backgroundType: BackgroundType = 'dark'): string {
+  // 计算rgba值：从0（完全透明）到1（完全不透明）
+  const alpha = (opacity / 100);
+  
+  if (backgroundType === 'dark') {
+    // 深色背景：从透明调整到深色（黑色）
+    return `rgba(0, 0, 0, ${alpha * 0.5})`;  // 最多50%的黑色透明度
+  } else {
+    // 浅色背景：从透明调整到白色
+    return `rgba(255, 255, 255, ${alpha * 0.8})`;  // 最多80%的白色透明度
+  }
+}
