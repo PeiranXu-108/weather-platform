@@ -38,9 +38,9 @@ export interface TemperatureGridConfig {
 
 const DEFAULT_CONFIG: TemperatureGridConfig = {
   minGridCells: 15, // 3x5
-  maxGridCells: 1500, // 30x50
+  maxGridCells: 6000, 
   cacheExpiry: 5 * 60 * 1000, // 5分钟
-  apiRequestDelay: 100, // 100ms
+  apiRequestDelay: 100, 
 };
 
 /**
@@ -63,7 +63,6 @@ function calculateGridDimensions(
   const aspectRatio = lngDiff / latDiff;
 
   // 减少网格密度以提高性能
-  // 改为更稀疏的网格：最多 100-150 个单元格
   const maxCells = 150;
   const baseGridSize = Math.sqrt(maxCells / 2);
 

@@ -1,11 +1,12 @@
-  // Generate gradient color based on temperature
+  // Generate gradient color based on temperature with deep purple for lower temps
   export const getTemperatureColor = (temp: number): string => {
-    const minTemp = -10;
+    const minTemp = -15;
     const maxTemp = 40;
     const normalized = Math.max(0, Math.min(1, (temp - minTemp) / (maxTemp - minTemp)));
 
     const colorStops = [
-      { t: 0.0, r: 59, g: 130, b: 246 },
+      { t: 0.0, r: 55, g: 0, b: 120 },      
+      { t: 0.12, r: 59, g: 130, b: 246 },  
       { t: 0.2, r: 6, g: 182, b: 212 },
       { t: 0.4, r: 16, g: 185, b: 129 },
       { t: 0.6, r: 234, g: 179, b: 8 },
@@ -22,6 +23,5 @@
         return `rgb(${r}, ${g}, ${b})`;
       }
     }
-
-    return `rgb(59, 130, 246)`;
+    return `rgb(55, 0, 120)`;
   };

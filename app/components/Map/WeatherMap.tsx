@@ -1,12 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Location, Current } from '@/app/types/weather';
+import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
-import { getTemperatureColor } from '@/app/utils/utils';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
+import SegmentedDropdown from '@/app/models/SegmentedDropdown';
+import {
+  centerMarkerSize,
+  formatCenterTemp,
+  buildCenterMarkerContent
+} from './centerMarker';
 
 interface WeatherMapProps {
   location: Location;
@@ -22,47 +27,12 @@ declare global {
 const Key = process.env.NEXT_PUBLIC_AMAP_KEY 
 const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 
-const centerMarkerSize = 42;
-const defaultCenterMarkerBorder = '#9be16a';
-
-const formatCenterTemp = (current?: Current | null) => {
-  if (!current || typeof current.temp_c !== 'number' || Number.isNaN(current.temp_c)) {
-    return '--';
-  }
-  return `${Math.round(current.temp_c)}`;
-};
-
-const getCenterMarkerBorderColor = (current?: Current | null) => {
-  if (!current || typeof current.temp_c !== 'number' || Number.isNaN(current.temp_c)) {
-    return defaultCenterMarkerBorder;
-  }
-  return getTemperatureColor(current.temp_c);
-};
-
-const buildCenterMarkerContent = (tempText: string, borderColor: string) => `
-  <div style="
-    width: ${centerMarkerSize}px;
-    height: ${centerMarkerSize}px;
-    border-radius: 50%;
-    background: #ffffff;
-    border: 4px solid ${borderColor};
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    font-weight: 700;
-    color: #1f2937;
-    line-height: 1;
-  ">${tempText}°</div>
-`;
-
 export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const centerMarkerRef = useRef<any>(null);
   const scriptLoadedRef = useRef(false);
-  const [centerWeather, setCenterWeather] = useState<{ location: Location; current: Current } | null>(null);
+  const [centerWeather, setCenterWeather] = useState<WeatherResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
@@ -166,7 +136,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }
     temperatureDebounceRef.current = setTimeout(() => {
       renderTemperatureLayer(enabled !== undefined ? enabled : temperatureLayerEnabled);
-    }, 500); // 500ms 防抖
+    }, 800); // 
   }, [renderTemperatureLayer, temperatureLayerEnabled]);
 
   // 处理温度图层启用/禁用
@@ -237,10 +207,12 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         position: center,
         title: location.name || '当前位置',
         content: buildCenterMarkerContent(
-          formatCenterTemp(centerWeather?.current),
-          getCenterMarkerBorderColor(centerWeather?.current)
+          centerWeather?.current?.temp_c ?? null,
+          centerWeather?.forecast?.forecastday?.[0]?.day?.mintemp_c ?? null,
+          centerWeather?.forecast?.forecastday?.[0]?.day?.maxtemp_c ?? null,
+          formatCenterTemp(centerWeather?.current)
         ),
-        offset: new window.AMap.Pixel(-centerMarkerSize / 2, -centerMarkerSize / 2),
+        offset: new window.AMap.Pixel(-centerMarkerSize / 2, -(centerMarkerSize + 15) / 2),
       });
 
       mapInstanceRef.current.add(marker);
@@ -412,8 +384,10 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   useEffect(() => {
     if (!centerMarkerRef.current) return;
     centerMarkerRef.current.setContent(buildCenterMarkerContent(
-      formatCenterTemp(centerWeather?.current),
-      getCenterMarkerBorderColor(centerWeather?.current)
+      centerWeather?.current?.temp_c ?? null,
+      centerWeather?.forecast?.forecastday?.[0]?.day?.mintemp_c ?? null,
+      centerWeather?.forecast?.forecastday?.[0]?.day?.maxtemp_c ?? null,
+      formatCenterTemp(centerWeather?.current)
     ));
   }, [centerWeather]);
 
@@ -424,20 +398,20 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           地图位置
         </h2>
         {/* Temperature Layer Selector - Top Right */}
-        <select
-          value={temperatureLayerEnabled ? 'temperature' : 'none'}
-          onChange={(e) => handleTemperatureLayerChange(e.target.value === 'temperature')}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
-            textColorTheme.backgroundType === 'dark'
-              ? 'bg-white/10 border-white/20 text-white hover:bg-white/15'
-              : 'bg-sky-50 border-sky-200 text-gray-900 hover:bg-sky-100'
-          } focus:outline-none focus:ring-2 ${
-            textColorTheme.backgroundType === 'dark' ? 'focus:ring-sky-400' : 'focus:ring-sky-500'
-          }`}
-        >
-          <option value="none">请选择</option>
-          <option value="temperature">温度图层：开始渲染</option>
-        </select>
+        
+        <SegmentedDropdown
+          textColorTheme={textColorTheme}
+          mainButton={{
+            value: temperatureLayerEnabled ? 'temperature' : 'none',
+            label: temperatureLayerEnabled ? '温度图层：已开启' : '请选择',
+            showChevron: true,
+          }}
+          dropdownOptions={[
+            { value: 'none', label: '请选择' },
+            { value: 'temperature', label: '温度图层：开始渲染' }
+          ]}
+          onSelect={(value) => handleTemperatureLayerChange(value === 'temperature')}
+        />
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '600px' }}>
         <div
