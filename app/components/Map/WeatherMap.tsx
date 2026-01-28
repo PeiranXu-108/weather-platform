@@ -6,6 +6,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import { getTemperatureColor } from '@/app/utils/utils';
+import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
 
 interface WeatherMapProps {
   location: Location;
@@ -64,6 +65,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const [centerWeather, setCenterWeather] = useState<{ location: Location; current: Current } | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
+  const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
+  const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // 获取地图中心点的天气数据
   const fetchCenterWeather = useCallback(async (lat: number, lon: number) => {
@@ -94,6 +98,101 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       fetchCenterWeather(lat, lon);
     }, 500); // 500ms 防抖
   }, [fetchCenterWeather]);
+
+  // 获取地图边界信息用于温度网格渲染
+  const renderTemperatureLayer = useCallback(async (enabled: boolean = temperatureLayerEnabled) => {
+    console.log('renderTemperatureLayer called with enabled:', enabled, 'mapInstanceRef:', !!mapInstanceRef.current);
+    
+    if (!mapInstanceRef.current) {
+      console.log('Map not initialized yet');
+      return;
+    }
+
+    // 检查地图是否完全加载
+    try {
+      // 尝试获取地图中心点，如果失败说明地图未完全初始化
+      const center = mapInstanceRef.current.getCenter();
+      if (!center) {
+        console.log('Map center not available, waiting for initialization');
+        return;
+      }
+    } catch (error) {
+      console.log('Map not fully initialized yet:', error);
+      return;
+    }
+
+    if (!enabled) {
+      console.log('Temperature layer disabled, clearing grid');
+      if (temperatureLayerRef.current) {
+        temperatureLayerRef.current.clear();
+      }
+      return;
+    }
+
+    const bounds = mapInstanceRef.current.getBounds();
+    if (!bounds) {
+      console.error('Could not get map bounds');
+      return;
+    }
+
+    // 高德地图 Bounds 对象使用方法获取坐标
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+
+    console.log('Map bounds:', { ne: { lat: ne.lat, lng: ne.lng }, sw: { lat: sw.lat, lng: sw.lng } });
+
+    const mapBounds = {
+      northeast: { lat: ne.lat, lng: ne.lng },
+      southwest: { lat: sw.lat, lng: sw.lng },
+    };
+
+    try {
+      if (!temperatureLayerRef.current) {
+        console.log('Creating new TemperatureGridRenderer');
+        temperatureLayerRef.current = new TemperatureGridRenderer(mapInstanceRef.current);
+      }
+      console.log('Starting temperature grid render');
+      await temperatureLayerRef.current.renderTemperatureGrid(mapBounds);
+      console.log('Temperature grid rendered successfully');
+    } catch (error) {
+      console.error('Error rendering temperature layer:', error);
+    }
+  }, [temperatureLayerEnabled]);
+
+  // 防抖温度网格渲染
+  const debouncedRenderTemperatureLayer = useCallback((enabled?: boolean) => {
+    if (temperatureDebounceRef.current) {
+      clearTimeout(temperatureDebounceRef.current);
+    }
+    temperatureDebounceRef.current = setTimeout(() => {
+      renderTemperatureLayer(enabled !== undefined ? enabled : temperatureLayerEnabled);
+    }, 500); // 500ms 防抖
+  }, [renderTemperatureLayer, temperatureLayerEnabled]);
+
+  // 处理温度图层启用/禁用
+  const handleTemperatureLayerChange = useCallback((enabled: boolean) => {
+    console.log('handleTemperatureLayerChange called with enabled:', enabled);
+    setTemperatureLayerEnabled(enabled);
+    
+    if (enabled) {
+      // 立即渲染当前视图的温度图层
+      debouncedRenderTemperatureLayer(enabled);
+    } else {
+      // 清除温度网格
+      if (temperatureLayerRef.current) {
+        temperatureLayerRef.current.clear();
+      }
+    }
+    
+    // Note: We no longer call onTemperatureLayerChange since layer is managed internally
+  }, [debouncedRenderTemperatureLayer]);
+
+  // 同步父组件的温度图层状态
+  useEffect(() => {
+    // 由于父组件会触发 onTemperatureLayerChange 更新，
+    // 而 handleTemperatureLayerChange 已经处理了同步逻辑，
+    // 这里不需要额外的同步逻辑
+  }, []);
 
   useEffect(() => {
     // 如果地图已经初始化，更新中心点
@@ -171,6 +270,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           centerMarkerRef.current.setPosition([lon, lat]);
         }
         debouncedFetchWeather(lat, lon);
+        
+        // 如果启用了温度图层，也更新温度网格
+        if (temperatureLayerEnabled) {
+          debouncedRenderTemperatureLayer();
+        }
       };
 
       const handleZoomEnd = () => {
@@ -182,6 +286,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           centerMarkerRef.current.setPosition([lon, lat]);
         }
         debouncedFetchWeather(lat, lon);
+        
+        // 如果启用了温度图层，也更新温度网格
+        if (temperatureLayerEnabled) {
+          debouncedRenderTemperatureLayer();
+        }
       };
 
       mapInstanceRef.current.on('moveend', handleMoveEnd);
@@ -244,6 +353,12 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 监听地图加载完成事件
       mapInstanceRef.current.on('complete', () => {
         setTimeout(removeWatermark, 100);
+        // 地图加载完成后，如果启用了温度图层，渲染温度图层
+        if (temperatureLayerEnabled) {
+          setTimeout(() => {
+            debouncedRenderTemperatureLayer();
+          }, 500);
+        }
       });
     };
 
@@ -279,13 +394,20 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
+      if (temperatureDebounceRef.current) {
+        clearTimeout(temperatureDebounceRef.current);
+      }
+      if (temperatureLayerRef.current) {
+        temperatureLayerRef.current.clear();
+        temperatureLayerRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather]);
+  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, temperatureLayerEnabled]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -297,9 +419,26 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col relative`}>
-      <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
-        地图位置
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
+          地图位置
+        </h2>
+        {/* Temperature Layer Selector - Top Right */}
+        <select
+          value={temperatureLayerEnabled ? 'temperature' : 'none'}
+          onChange={(e) => handleTemperatureLayerChange(e.target.value === 'temperature')}
+          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+            textColorTheme.backgroundType === 'dark'
+              ? 'bg-white/10 border-white/20 text-white hover:bg-white/15'
+              : 'bg-sky-50 border-sky-200 text-gray-900 hover:bg-sky-100'
+          } focus:outline-none focus:ring-2 ${
+            textColorTheme.backgroundType === 'dark' ? 'focus:ring-sky-400' : 'focus:ring-sky-500'
+          }`}
+        >
+          <option value="none">请选择</option>
+          <option value="temperature">温度图层：开始渲染</option>
+        </select>
+      </div>
       <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '600px' }}>
         <div
           ref={mapContainerRef}
