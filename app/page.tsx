@@ -65,7 +65,7 @@ function isDomesticCity(location: { country?: string; region?: string; name?: st
   if (country === 'china' || country === 'hongkong' || country === 'macau' || country === 'macao' || country === 'taiwan') {
     return true;
   }
-  
+
   // 检查地区和城市名称（包含港澳台相关关键词）
   const searchText = `${region} ${name}`.toLowerCase();
   return (
@@ -127,15 +127,15 @@ export default function Home() {
       setLoading(true);
       setError(null);
       const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');
       }
-      
+
       const data: WeatherResponse = await response.json();
       console.log(data);
       setWeatherData(data);
-      
+
       // Update current city display name and query
       const translated = translateLocation(data.location);
       setCurrentCity(translated.name);
@@ -158,14 +158,14 @@ export default function Home() {
         setIsLocating(true);
       }
       const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');
       }
-      
+
       const data: WeatherResponse = await response.json();
       setWeatherData(data);
-      
+
       // Update current city display name and query
       const translated = translateLocation(data.location);
       setCurrentCity(translated.name);
@@ -212,7 +212,7 @@ export default function Home() {
       fetch('/api/favorites')
         .then((r) => (r.ok ? r.json() : []))
         .then((data) => setFavorites(Array.isArray(data) ? data : []))
-        .catch(() => {});
+        .catch(() => { });
       return;
     }
     if (status === 'unauthenticated') {
@@ -228,7 +228,7 @@ export default function Home() {
       fetch('/api/favorites')
         .then((r) => (r.ok ? r.json() : []))
         .then((data) => setFavorites(Array.isArray(data) ? data : []))
-        .catch(() => {});
+        .catch(() => { });
     };
     window.addEventListener('favorites:synced', onSynced);
     return () => window.removeEventListener('favorites:synced', onSynced);
@@ -237,7 +237,7 @@ export default function Home() {
   // Auto-refresh - run every 30 minutes for current city/location
   useEffect(() => {
     if (!currentCityQuery) return;
-    
+
     const interval = setInterval(() => {
       // Check if it's coordinates (lat,lon format) or city name
       if (currentCityQuery.includes(',')) {
@@ -247,7 +247,7 @@ export default function Home() {
         fetchWeatherData(currentCityQuery);
       }
     }, 30 * 60 * 1000);
-    
+
     return () => clearInterval(interval);
   }, [currentCityQuery]);
 
@@ -337,7 +337,7 @@ export default function Home() {
   const isSunny = weatherCondition.includes('晴');
   const isFoggy = weatherCondition.includes('雾');
   const isCloudy = !isFoggy && (weatherCondition.includes('云') || weatherCondition.includes('阴'));
-  
+
   const todayForecast = weatherData?.forecast.forecastday[0];
   const sunsetTime = todayForecast?.astro?.sunset;
   const sunriseTime = todayForecast?.astro?.sunrise;
@@ -389,18 +389,18 @@ export default function Home() {
       return { isSunset: false, isNight: false };
     }
   })();
-  
-  const textColorTheme = !showBackground 
+
+  const textColorTheme = !showBackground
     ? {
-        backgroundType: 'light' as const,
-        textColor: {
-          primary: 'text-gray-900',
-          secondary: 'text-gray-700',
-          muted: 'text-gray-600',
-          accent: 'text-sky-700',
-        },
-      }
-    : (weatherData 
+      backgroundType: 'light' as const,
+      textColor: {
+        primary: 'text-gray-900',
+        secondary: 'text-gray-700',
+        muted: 'text-gray-600',
+        accent: 'text-sky-700',
+      },
+    }
+    : (weatherData
       ? getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day)
       : defaultTheme);
 
@@ -431,8 +431,8 @@ export default function Home() {
 
       <div className={`max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
         {/* Header with Search - Always visible */}
-        <Header 
-          onCitySelect={handleCitySelect} 
+        <Header
+          onCitySelect={handleCitySelect}
           onLocationSelect={handleLocationSelect}
           currentCity={currentCity}
           isLocating={isLocating}
@@ -462,8 +462,8 @@ export default function Home() {
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <HourlyForecast24h 
-                    hourlyData={allHourlyData} 
+                  <HourlyForecast24h
+                    hourlyData={allHourlyData}
                     currentTime={weatherData.location.localtime}
                     currentTimeEpoch={weatherData.location.localtime_epoch}
                     textColorTheme={textColorTheme}
@@ -475,7 +475,7 @@ export default function Home() {
               {/* Temperature Chart and Metrics Row */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                  <TemperatureChart 
+                  <TemperatureChart
                     location={{
                       lat: Number(weatherData.location.lat.toFixed(2)),
                       lon: Number(weatherData.location.lon.toFixed(2))
@@ -485,7 +485,7 @@ export default function Home() {
                   />
                 </div>
                 <div className="lg:col-span-1">
-                  <WeatherMetrics 
+                  <WeatherMetrics
                     current={weatherData.current}
                     textColorTheme={textColorTheme}
                     opacity={opacity}
@@ -494,19 +494,16 @@ export default function Home() {
               </div>
 
               {/* Hourly Forecast */}
-              <HourlyChart 
+              <HourlyChart
                 hourlyData={allHourlyData}
                 textColorTheme={textColorTheme}
                 opacity={opacity}
               />
 
-              {/* Weather Map - 仅显示国内城市（包括港澳台） */}
-              {isDomesticCity(weatherData.location) && (
-                <WeatherMap 
-                  location={weatherData.location}
-                  textColorTheme={textColorTheme}
-                />
-              )}
+              <WeatherMap
+                location={weatherData.location}
+                textColorTheme={textColorTheme}
+              />
 
               {/* Footer */}
               <footer className="text-center pt-8 pb-4">

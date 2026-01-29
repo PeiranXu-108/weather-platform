@@ -108,18 +108,25 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     // 高德地图 Bounds 对象使用方法获取坐标
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
+    
+    // 获取地图缩放级别，用于动态调整网格密度
+    const zoom = mapInstanceRef.current.getZoom();
 
-    console.log('Map bounds:', { ne: { lat: ne.lat, lng: ne.lng }, sw: { lat: sw.lat, lng: sw.lng } });
+    console.log('Map bounds:', { ne: { lat: ne.lat, lng: ne.lng }, sw: { lat: sw.lat, lng: sw.lng }, zoom });
 
     const mapBounds = {
       northeast: { lat: ne.lat, lng: ne.lng },
       southwest: { lat: sw.lat, lng: sw.lng },
+      zoom: zoom, // 传递缩放级别
     };
 
     try {
       if (!temperatureLayerRef.current) {
         console.log('Creating new TemperatureGridRenderer');
         temperatureLayerRef.current = new TemperatureGridRenderer(mapInstanceRef.current);
+      } else {
+        // 如果 renderer 已存在，更新地图实例（地图可能重新初始化了）
+        temperatureLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
       console.log('Starting temperature grid render');
       await temperatureLayerRef.current.renderTemperatureGrid(mapBounds);
@@ -184,8 +191,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
       // 如果地图已存在，先销毁
       if (mapInstanceRef.current) {
+        // 清除温度图层
+        if (temperatureLayerRef.current) {
+          temperatureLayerRef.current.clear();
+        }
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
+      }
+      
+      // 重置温度图层 renderer（地图重新初始化后需要重新创建）
+      if (temperatureLayerRef.current) {
+        temperatureLayerRef.current = null;
       }
 
       // 使用当前城市的经纬度作为中心点
@@ -413,11 +429,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           onSelect={(value) => handleTemperatureLayerChange(value === 'temperature')}
         />
       </div>
-      <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '600px' }}>
+      <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '800px' }}>
         <div
           ref={mapContainerRef}
           className="w-full h-full"
-          style={{ minHeight: '600px', position: 'relative', zIndex: 0 }}
+          style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
         {/* 悬浮天气信息组件 */}
         <FloatingWeatherInfo 
