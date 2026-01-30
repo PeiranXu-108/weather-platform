@@ -576,7 +576,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
 
   if (error) {
     return (
-      <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full relative flex items-center justify-center`}>
+      <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full min-h-[320px] sm:min-h-[380px] relative flex items-center justify-center`}>
         <div className={`${textColorTheme.textColor.secondary}`}>加载失败: {error}</div>
       </div>
     );
@@ -587,7 +587,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
   return (
-    <div className={`rounded-2xl shadow-xl p-6 h-full relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+    <div className={`rounded-2xl shadow-xl p-6 h-full min-h-[320px] sm:min-h-[380px] relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* View Type Selector */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
@@ -628,8 +628,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
       />
 
       {viewType === 'chart' ? (
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 min-h-[240px] sm:min-h-[280px]" style={{ minHeight: 0 }}>
             <ReactECharts
               option={option}
               notMerge={true}
@@ -667,7 +667,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           )}
         </div>
       ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-[280px] sm:min-h-[320px]">
           {/* Calendar Table View Title */}
           <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}>
             30日天气预报
