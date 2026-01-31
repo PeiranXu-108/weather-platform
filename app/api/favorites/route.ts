@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/app/lib/auth';
 import dbConnect from '@/app/lib/mongodb';
-import { UserModel } from '@/app/lib/models/User';
+import { UserModel, type FavoriteCity } from '@/app/lib/models/User';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const user = await UserModel.findOne({ email });
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  if (!user.favorites.some((f) => f.query === body.query)) {
+  if (!user.favorites.some((f: FavoriteCity) => f.query === body.query)) {
     user.favorites.unshift({ query: body.query, label: body.label, addedAt: new Date() });
     await user.save();
   }
@@ -48,7 +48,7 @@ export async function DELETE(req: NextRequest) {
   const user = await UserModel.findOne({ email });
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-  user.favorites = user.favorites.filter((f) => f.query !== query);
+  user.favorites = user.favorites.filter((f: FavoriteCity) => f.query !== query);
   await user.save();
 
   return NextResponse.json(user.favorites);

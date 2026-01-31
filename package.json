@@ -17,6 +17,7 @@
     "mongoose": "^9.1.5",
     "next": "14.2.3",
     "next-auth": "^4.24.13",
+    "nprogress": "^0.2.0",
     "react": "^18",
     "react-dom": "^18",
     "three": "^0.181.2",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/nprogress": "^0.2.3",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/three": "^0.181.0",
