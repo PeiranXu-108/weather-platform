@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+
+import { authOptions } from '@/app/lib/auth';
+import { recordApiUsage } from '@/app/lib/apiUsage';
 
 // 和风天气30日预报API的响应类型
 export interface QWeather30DayDaily {
@@ -70,7 +74,13 @@ export async function GET(request: NextRequest) {
       console.error('QWeather API returned error code:', data.code);
       throw new Error(`QWeather API error code: ${data.code}`);
     }
-    
+
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as { id?: string })?.id;
+    if (userId) {
+      await recordApiUsage(userId);
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching 30-day weather data:', error);

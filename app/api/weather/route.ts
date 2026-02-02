@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import type { WeatherResponse } from '@/app/types/weather';
+
+import { authOptions } from '@/app/lib/auth';
+import { recordApiUsage } from '@/app/lib/apiUsage';
 
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL;
@@ -35,7 +39,13 @@ export async function GET(request: NextRequest) {
     }
 
     const data: WeatherResponse = await response.json();
-    
+
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as { id?: string })?.id;
+    if (userId) {
+      await recordApiUsage(userId);
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching weather data:', error);

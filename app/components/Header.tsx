@@ -6,8 +6,9 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
-import { signOut, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import AuthModal from '@/app/components/Auth/AuthModal';
+import ProfileModal from '@/app/components/Auth/ProfileModal';
 import SettingsPanel from '@/app/components/SettingsPanel';
 
 interface HeaderProps {
@@ -25,6 +26,7 @@ interface HeaderProps {
 export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme, opacity = 0, onOpacityChange, showBackground = true, onShowBackgroundChange }: HeaderProps) {
   const { data: session } = useSession();
   const [authOpen, setAuthOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // 默认主题（如果没有提供）
   const theme = textColorTheme || {
@@ -189,18 +191,19 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               {session.user.name || session.user.email}
             </span>
             <button
-            type="button"
-            onClick={() => setAuthOpen(true)}
-            className={`p-2 rounded-full transition-all active:scale-95 ${
-              theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
-            }`}
-          >
-            <Icon
-              src={ICONS.profile}
-              className={`w-8 h-8 ${theme.textColor.secondary}`}
-              title="退出"
-            />
-          </button>
+              type="button"
+              onClick={() => setProfileOpen(true)}
+              className={`p-2 rounded-full transition-all active:scale-95 ${
+                theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
+              }`}
+              title="个人中心"
+            >
+              <Icon
+                src={ICONS.profile}
+                className={`w-8 h-8 ${theme.textColor.secondary}`}
+                title="个人中心"
+              />
+            </button>
           </>
         ) : (
           <button
@@ -220,6 +223,12 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
       </div>
 
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} textColorTheme={theme} />
+      <ProfileModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        textColorTheme={theme}
+        session={session}
+      />
 
       {/* Search Bar */}
       <div className="max-w-2xl mx-auto relative">
