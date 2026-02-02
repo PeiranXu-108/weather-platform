@@ -5,8 +5,8 @@ import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
+import TemperatureLegend from './TemperatureLegend';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
-import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import {
   centerMarkerSize,
   formatCenterTemp,
@@ -38,6 +38,21 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
   const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
+  const layerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭温度图层下拉
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (layerDropdownRef.current && !layerDropdownRef.current.contains(e.target as Node)) {
+        setLayerDropdownOpen(false);
+      }
+    };
+    if (layerDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [layerDropdownOpen]);
 
   // 获取地图中心点的天气数据
   const fetchCenterWeather = useCallback(async (lat: number, lon: number) => {
@@ -145,6 +160,18 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       renderTemperatureLayer(enabled !== undefined ? enabled : temperatureLayerEnabled);
     }, 800); // 
   }, [renderTemperatureLayer, temperatureLayerEnabled]);
+
+  const handleZoomIn = useCallback(() => {
+    if (!mapInstanceRef.current) return;
+    const zoom = mapInstanceRef.current.getZoom();
+    mapInstanceRef.current.setZoom(Math.min(18, Math.round(zoom) + 1));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (!mapInstanceRef.current) return;
+    const zoom = mapInstanceRef.current.getZoom();
+    mapInstanceRef.current.setZoom(Math.max(3, Math.round(zoom) - 1));
+  }, []);
 
   // 处理温度图层启用/禁用
   const handleTemperatureLayerChange = useCallback((enabled: boolean) => {
@@ -409,25 +436,10 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col relative`}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center mb-4">
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
           地图位置
         </h2>
-        {/* Temperature Layer Selector - Top Right */}
-        
-        <SegmentedDropdown
-          textColorTheme={textColorTheme}
-          mainButton={{
-            value: temperatureLayerEnabled ? 'temperature' : 'none',
-            label: temperatureLayerEnabled ? '温度图层：已开启' : '请选择',
-            showChevron: true,
-          }}
-          dropdownOptions={[
-            { value: 'none', label: '请选择' },
-            { value: 'temperature', label: '温度图层：开始渲染' }
-          ]}
-          onSelect={(value) => handleTemperatureLayerChange(value === 'temperature')}
-        />
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '800px' }}>
         <div
@@ -435,7 +447,85 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
-        {/* 悬浮天气信息组件 */}
+        {/* 左上角：气温图例（与温度图层配色一致） */}
+        <TemperatureLegend />
+        {/* 右上角：温度图层（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
+        <div className="absolute top-4 right-4 z-10" ref={layerDropdownRef}>
+          <button
+            type="button"
+            onClick={() => setLayerDropdownOpen((v) => !v)}
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+            aria-expanded={layerDropdownOpen}
+            aria-haspopup="true"
+            title={temperatureLayerEnabled ? '温度图层：已开启' : '图层选项'}
+          >
+            {/* 苹果天气风格：两层叠放图标 */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <rect x="3" y="7" width="14" height="14" rx="2" />
+              <rect x="7" y="3" width="14" height="14" rx="2" />
+            </svg>
+          </button>
+          {layerDropdownOpen && (
+            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[140px] py-2 px-2 bg-white/70 backdrop-blur-md rounded-2xl shadow-xl border border-white/40">
+              <button
+                type="button"
+                onClick={() => {
+                  handleTemperatureLayerChange(false);
+                  setLayerDropdownOpen(false);
+                }}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${!temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                  {!temperatureLayerEnabled ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
+                  )}
+                </span>
+                <span>请选择</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleTemperatureLayerChange(true);
+                  setLayerDropdownOpen(false);
+                }}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                  {temperatureLayerEnabled ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-500"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" /></svg>
+                  )}
+                </span>
+                <span>气温</span>
+              </button>
+            </div>
+          )}
+        </div>
+        {/* 上方正中间：缩放按钮（左右排布） */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-row gap-px">
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-md rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            title="缩小"
+            aria-label="缩小"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-md rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            title="放大"
+            aria-label="放大"
+          >
+            +
+          </button>
+        </div>
+        {/* 右下角：悬浮天气信息组件 */}
         <FloatingWeatherInfo 
           location={centerWeather?.location || location}
           current={centerWeather?.current}

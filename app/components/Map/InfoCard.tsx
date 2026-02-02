@@ -19,7 +19,7 @@ export default function FloatingWeatherInfo({
 
     return (
       loading ? null : <div className="absolute bottom-4 right-4 z-10">
-        <div className="bg-white rounded-xl shadow-2xl p-2 min-w-[120px] border border-gray-200">
+        <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10">
           {current ? (
             <>
               <div className="flex items-center justify-between mb-2">
