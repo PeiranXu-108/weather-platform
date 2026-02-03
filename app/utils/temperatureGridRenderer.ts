@@ -43,7 +43,7 @@ export interface TemperatureGridConfig {
 const DEFAULT_CONFIG: TemperatureGridConfig = {
   minGridCells: 30, // 5x6，提高最小网格数
   maxGridCells: 2000, // 增加到2000个网格，提供更细致的渲染
-  cacheExpiry: 5 * 60 * 1000, // 5分钟
+  cacheExpiry: 3 * 60 * 1000, // 5分钟
   apiRequestDelay: 100,
   samplingRatio: 0.2, // 降低到20%采样，因为网格更多，插值算法可以处理
   enableInterpolation: true, // 默认启用插值

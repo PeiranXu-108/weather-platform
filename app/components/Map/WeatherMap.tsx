@@ -8,6 +8,7 @@ import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
 import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
+import { CloudLayerRenderer } from '@/app/utils/cloudLayerRenderer';
 import {
   centerMarkerSize,
   formatCenterTemp,
@@ -42,6 +43,10 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const windLayerRef = useRef<WindFieldRenderer | null>(null);
   const [windLayerEnabled, setWindLayerEnabled] = useState(false);
   const windDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const cloudLayerRef = useRef<CloudLayerRenderer | null>(null);
+  const [cloudLayerEnabled, setCloudLayerEnabled] = useState(false);
+  const cloudDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [cloudRenderStyle, setCloudRenderStyle] = useState<'soft' | 'noise'>('noise');
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -224,6 +229,73 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }, 800);
   }, [renderWindLayer, windLayerEnabled]);
 
+  // 获取地图边界信息用于云量图层渲染
+  const renderCloudLayer = useCallback(async (enabled: boolean = cloudLayerEnabled) => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    try {
+      const center = mapInstanceRef.current.getCenter();
+      if (!center) {
+        return;
+      }
+    } catch (error) {
+      return;
+    }
+
+    if (!enabled) {
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current.clear();
+      }
+      return;
+    }
+
+    const bounds = mapInstanceRef.current.getBounds();
+    if (!bounds) {
+      return;
+    }
+
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const zoom = mapInstanceRef.current.getZoom();
+
+    const mapBounds = {
+      northeast: { lat: ne.lat, lng: ne.lng },
+      southwest: { lat: sw.lat, lng: sw.lng },
+      zoom: zoom,
+    };
+
+    try {
+      if (!cloudLayerRef.current) {
+        cloudLayerRef.current = new CloudLayerRenderer(mapInstanceRef.current, {
+          renderStyle: cloudRenderStyle,
+        });
+      } else {
+        cloudLayerRef.current.setMapInstance(mapInstanceRef.current);
+        cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
+      }
+      await cloudLayerRef.current.renderCloudLayer(mapBounds);
+    } catch (error) {
+      console.error('Error rendering cloud layer:', error);
+    }
+  }, [cloudLayerEnabled, cloudRenderStyle]);
+
+  // 防抖云量图层渲染
+  const debouncedRenderCloudLayer = useCallback((enabled?: boolean) => {
+    if (cloudDebounceRef.current) {
+      clearTimeout(cloudDebounceRef.current);
+    }
+    cloudDebounceRef.current = setTimeout(() => {
+      renderCloudLayer(enabled !== undefined ? enabled : cloudLayerEnabled);
+    }, 800);
+  }, [renderCloudLayer, cloudLayerEnabled]);
+
+  useEffect(() => {
+    if (!cloudLayerEnabled || !cloudLayerRef.current) return;
+    cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
+  }, [cloudLayerEnabled, cloudRenderStyle]);
+
   const handleZoomIn = useCallback(() => {
     if (!mapInstanceRef.current) return;
     const zoom = mapInstanceRef.current.getZoom();
@@ -265,6 +337,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }
   }, [debouncedRenderWindLayer]);
 
+  // 处理云量图层启用/禁用
+  const handleCloudLayerChange = useCallback((enabled: boolean) => {
+    setCloudLayerEnabled(enabled);
+
+    if (enabled) {
+      debouncedRenderCloudLayer(enabled);
+    } else if (cloudLayerRef.current) {
+      cloudLayerRef.current.clear();
+    }
+  }, [debouncedRenderCloudLayer]);
+
   // 同步父组件的温度图层状态
   useEffect(() => {
     // 由于父组件会触发 onTemperatureLayerChange 更新，
@@ -299,6 +382,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (windLayerRef.current) {
           windLayerRef.current.clear();
         }
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current.clear();
+      }
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
@@ -309,6 +395,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       if (windLayerRef.current) {
         windLayerRef.current = null;
+      }
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current = null;
       }
 
       // 使用当前城市的经纬度作为中心点
@@ -373,6 +462,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (windLayerEnabled) {
           debouncedRenderWindLayer();
         }
+        if (cloudLayerEnabled) {
+          debouncedRenderCloudLayer();
+        }
       };
 
       const handleZoomEnd = () => {
@@ -391,6 +483,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         }
         if (windLayerEnabled) {
           debouncedRenderWindLayer();
+        }
+        if (cloudLayerEnabled) {
+          debouncedRenderCloudLayer();
         }
       };
 
@@ -465,6 +560,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             debouncedRenderWindLayer();
           }, 500);
         }
+        if (cloudLayerEnabled) {
+          setTimeout(() => {
+            debouncedRenderCloudLayer();
+          }, 500);
+        }
       });
     };
 
@@ -506,6 +606,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (windDebounceRef.current) {
         clearTimeout(windDebounceRef.current);
       }
+      if (cloudDebounceRef.current) {
+        clearTimeout(cloudDebounceRef.current);
+      }
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
         temperatureLayerRef.current = null;
@@ -514,13 +617,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         windLayerRef.current.clear();
         windLayerRef.current = null;
       }
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current.clear();
+        cloudLayerRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, temperatureLayerEnabled, windLayerEnabled]);
+  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, debouncedRenderCloudLayer, temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -545,8 +652,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
-        {/* 左上角：气温图例（与温度图层配色一致） */}
-        <TemperatureLegend />
+        {/* 左上角：气温图例（仅在温度图层开启时显示） */}
+        {temperatureLayerEnabled && <TemperatureLegend />}
         {/* 右上角：温度图层（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
         <div className="absolute top-4 right-4 z-10" ref={layerDropdownRef}>
           <button
@@ -555,7 +662,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
             aria-expanded={layerDropdownOpen}
             aria-haspopup="true"
-            title={temperatureLayerEnabled || windLayerEnabled ? '图层：已开启' : '图层选项'}
+            title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled ? '图层：已开启' : '图层选项'}
           >
             {/* 苹果天气风格：两层叠放图标 */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -600,6 +707,37 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
                 </span>
                 <span>风力</span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCloudLayerChange(!cloudLayerEnabled);
+                }}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${cloudLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                  {cloudLayerEnabled ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                      <path d="M5 18h11a4 4 0 0 0 .4-7.98A5 5 0 0 0 6.2 9.8 3.5 3.5 0 0 0 5 18z" />
+                    </svg>
+                  )}
+                </span>
+                <span>云量</span>
+              </button>
+              {/* {process.env.NODE_ENV !== 'production' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCloudRenderStyle((prev) => (prev === 'noise' ? 'soft' : 'noise'));
+                  }}
+                  className="flex items-center gap-2 w-full px-4 py-2 rounded-full text-xs text-slate-600 bg-white/50 hover:bg-white/70 transition-colors"
+                  title="云量渲染风格（开发用）"
+                >
+                  <span className="inline-flex w-2 h-2 rounded-full bg-slate-400" />
+                  <span>云量风格：{cloudRenderStyle === 'noise' ? '噪声' : '柔和'}</span>
+                </button>
+              )} */}
             </div>
           )}
         </div>
