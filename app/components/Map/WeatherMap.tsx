@@ -6,9 +6,11 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
+import PrecipLegend from './PrecipLegend';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
 import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
 import { CloudLayerRenderer } from '@/app/utils/cloudLayerRenderer';
+import { PrecipLayerRenderer } from '@/app/utils/precipLayerRenderer';
 import {
   centerMarkerSize,
   formatCenterTemp,
@@ -47,6 +49,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const [cloudLayerEnabled, setCloudLayerEnabled] = useState(false);
   const cloudDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [cloudRenderStyle, setCloudRenderStyle] = useState<'soft' | 'noise'>('noise');
+  const precipLayerRef = useRef<PrecipLayerRenderer | null>(null);
+  const [precipLayerEnabled, setPrecipLayerEnabled] = useState(false);
+  const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -291,6 +296,65 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }, 800);
   }, [renderCloudLayer, cloudLayerEnabled]);
 
+  // 获取地图边界信息用于降水图层渲染
+  const renderPrecipLayer = useCallback(async (enabled: boolean = precipLayerEnabled) => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    try {
+      const center = mapInstanceRef.current.getCenter();
+      if (!center) {
+        return;
+      }
+    } catch (error) {
+      return;
+    }
+
+    if (!enabled) {
+      if (precipLayerRef.current) {
+        precipLayerRef.current.clear();
+      }
+      return;
+    }
+
+    const bounds = mapInstanceRef.current.getBounds();
+    if (!bounds) {
+      return;
+    }
+
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const zoom = mapInstanceRef.current.getZoom();
+
+    const mapBounds = {
+      northeast: { lat: ne.lat, lng: ne.lng },
+      southwest: { lat: sw.lat, lng: sw.lng },
+      zoom: zoom,
+    };
+
+    try {
+      if (!precipLayerRef.current) {
+        precipLayerRef.current = new PrecipLayerRenderer(mapInstanceRef.current);
+      } else {
+        precipLayerRef.current.setMapInstance(mapInstanceRef.current);
+      }
+      await precipLayerRef.current.renderPrecipLayer(mapBounds);
+    } catch (error) {
+      console.error('Error rendering precip layer:', error);
+    }
+  }, [precipLayerEnabled]);
+
+  // 防抖降水图层渲染
+  const debouncedRenderPrecipLayer = useCallback((enabled?: boolean) => {
+    if (precipDebounceRef.current) {
+      clearTimeout(precipDebounceRef.current);
+    }
+    precipDebounceRef.current = setTimeout(() => {
+      renderPrecipLayer(enabled !== undefined ? enabled : precipLayerEnabled);
+    }, 800);
+  }, [renderPrecipLayer, precipLayerEnabled]);
+
   useEffect(() => {
     if (!cloudLayerEnabled || !cloudLayerRef.current) return;
     cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
@@ -348,6 +412,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }
   }, [debouncedRenderCloudLayer]);
 
+  // 处理降水图层启用/禁用
+  const handlePrecipLayerChange = useCallback((enabled: boolean) => {
+    setPrecipLayerEnabled(enabled);
+
+    if (enabled) {
+      debouncedRenderPrecipLayer(enabled);
+    } else if (precipLayerRef.current) {
+      precipLayerRef.current.clear();
+    }
+  }, [debouncedRenderPrecipLayer]);
+
   // 同步父组件的温度图层状态
   useEffect(() => {
     // 由于父组件会触发 onTemperatureLayerChange 更新，
@@ -385,6 +460,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (cloudLayerRef.current) {
         cloudLayerRef.current.clear();
       }
+      if (precipLayerRef.current) {
+        precipLayerRef.current.clear();
+      }
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
@@ -398,6 +476,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       if (cloudLayerRef.current) {
         cloudLayerRef.current = null;
+      }
+      if (precipLayerRef.current) {
+        precipLayerRef.current = null;
       }
 
       // 使用当前城市的经纬度作为中心点
@@ -465,6 +546,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (cloudLayerEnabled) {
           debouncedRenderCloudLayer();
         }
+        if (precipLayerEnabled) {
+          debouncedRenderPrecipLayer();
+        }
       };
 
       const handleZoomEnd = () => {
@@ -486,6 +570,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         }
         if (cloudLayerEnabled) {
           debouncedRenderCloudLayer();
+        }
+        if (precipLayerEnabled) {
+          debouncedRenderPrecipLayer();
         }
       };
 
@@ -565,6 +652,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             debouncedRenderCloudLayer();
           }, 500);
         }
+        if (precipLayerEnabled) {
+          setTimeout(() => {
+            debouncedRenderPrecipLayer();
+          }, 500);
+        }
       });
     };
 
@@ -609,6 +701,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (cloudDebounceRef.current) {
         clearTimeout(cloudDebounceRef.current);
       }
+      if (precipDebounceRef.current) {
+        clearTimeout(precipDebounceRef.current);
+      }
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
         temperatureLayerRef.current = null;
@@ -621,13 +716,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         cloudLayerRef.current.clear();
         cloudLayerRef.current = null;
       }
+      if (precipLayerRef.current) {
+        precipLayerRef.current.clear();
+        precipLayerRef.current = null;
+      }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, debouncedRenderCloudLayer, temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled]);
+  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, debouncedRenderCloudLayer, debouncedRenderPrecipLayer, temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled, precipLayerEnabled]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -652,8 +751,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
-        {/* 左上角：气温图例（仅在温度图层开启时显示） */}
-        {temperatureLayerEnabled && <TemperatureLegend />}
+        {/* 左上角：图例（降水在上，温度在下） */}
+        {(precipLayerEnabled || temperatureLayerEnabled) && (
+          <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
+            {precipLayerEnabled && <PrecipLegend />}
+            {temperatureLayerEnabled && <TemperatureLegend />}
+          </div>
+        )}
         {/* 右上角：温度图层（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
         <div className="absolute top-4 right-4 z-10" ref={layerDropdownRef}>
           <button
@@ -662,7 +766,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
             aria-expanded={layerDropdownOpen}
             aria-haspopup="true"
-            title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled ? '图层：已开启' : '图层选项'}
+            title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled ? '图层：已开启' : '图层选项'}
           >
             {/* 苹果天气风格：两层叠放图标 */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -724,6 +828,27 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
                   )}
                 </span>
                 <span>云量</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handlePrecipLayerChange(!precipLayerEnabled);
+                }}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${precipLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                  {precipLayerEnabled ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                      <path d="M8 7.5a4 4 0 0 1 8 0" />
+                      <path d="M6.5 10.5h11a3.5 3.5 0 1 1-2.8 5.6" />
+                      <path d="M9 16.5v3" />
+                      <path d="M13 17.5v3" />
+                    </svg>
+                  )}
+                </span>
+                <span>降水</span>
               </button>
               {/* {process.env.NODE_ENV !== 'production' && (
                 <button

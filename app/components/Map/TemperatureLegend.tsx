@@ -18,25 +18,23 @@ const gradientValue = GRADIENT_STOPS.map((s) => `${s.rgb} ${s.pct}%`).join(', ')
 
 export default function TemperatureLegend() {
   return (
-    <div className="absolute top-4 left-4 z-10">
-      <div className="bg-white/70 backdrop-blur-md rounded-xl shadow-2xl px-3 py-2 border border-white/40">
-        <p className="text-xs font-medium text-gray-800 mb-2">气温</p>
-        <div className="flex items-stretch gap-2">
-          <div
-            className="w-1 rounded-full flex-shrink-0"
-            style={{
-              background: `linear-gradient(to top, ${gradientValue})`,
-              minHeight: '120px',
-            }}
-          />
-          <div
-            className="flex flex-col justify-between text-xs text-gray-800 py-0.5"
-            style={{ minHeight: '120px' }}
-          >
-            {LABELS.map((t) => (
-              <span key={t}>{t}°</span>
-            ))}
-          </div>
+    <div className="bg-white/70 backdrop-blur-md rounded-xl shadow-2xl px-3 py-2 border border-white/40">
+      <p className="text-xs font-medium text-gray-800 mb-2">气温</p>
+      <div className="flex items-stretch gap-2">
+        <div
+          className="w-1 rounded-full flex-shrink-0"
+          style={{
+            background: `linear-gradient(to top, ${gradientValue})`,
+            minHeight: '120px',
+          }}
+        />
+        <div
+          className="flex flex-col justify-between text-xs text-gray-800 py-0.5"
+          style={{ minHeight: '120px' }}
+        >
+          {LABELS.map((t) => (
+            <span key={t}>{t}°</span>
+          ))}
         </div>
       </div>
     </div>
