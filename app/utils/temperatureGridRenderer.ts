@@ -1,4 +1,5 @@
 import { getTemperatureColor } from './utils';
+import { fetchWeatherPoint } from './weatherPointCache';
 
 /**
  * 温度网格单元格的温度数据
@@ -349,18 +350,9 @@ async function fetchTemperature(lat: number, lon: number): Promise<number | null
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000); // 3秒超时
-
-    const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}&lang=zh`, {
-      signal: controller.signal,
-    });
-
+    const data = await fetchWeatherPoint(lat, lon, controller.signal);
     clearTimeout(timeout);
-
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return data.current?.temp_c || null;
+    return data?.current?.temp_c ?? null;
   } catch (error) {
     return null;
   }

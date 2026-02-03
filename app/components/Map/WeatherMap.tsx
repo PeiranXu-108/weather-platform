@@ -7,6 +7,7 @@ import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
+import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
 import {
   centerMarkerSize,
   formatCenterTemp,
@@ -38,6 +39,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
   const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const windLayerRef = useRef<WindFieldRenderer | null>(null);
+  const [windLayerEnabled, setWindLayerEnabled] = useState(false);
+  const windDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -161,6 +165,65 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }, 800); // 
   }, [renderTemperatureLayer, temperatureLayerEnabled]);
 
+  // 获取地图边界信息用于风力图层渲染
+  const renderWindLayer = useCallback(async (enabled: boolean = windLayerEnabled) => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    try {
+      const center = mapInstanceRef.current.getCenter();
+      if (!center) {
+        return;
+      }
+    } catch (error) {
+      return;
+    }
+
+    if (!enabled) {
+      if (windLayerRef.current) {
+        windLayerRef.current.clear();
+      }
+      return;
+    }
+
+    const bounds = mapInstanceRef.current.getBounds();
+    if (!bounds) {
+      return;
+    }
+
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const zoom = mapInstanceRef.current.getZoom();
+
+    const mapBounds = {
+      northeast: { lat: ne.lat, lng: ne.lng },
+      southwest: { lat: sw.lat, lng: sw.lng },
+      zoom: zoom,
+    };
+
+    try {
+      if (!windLayerRef.current) {
+        windLayerRef.current = new WindFieldRenderer(mapInstanceRef.current);
+      } else {
+        windLayerRef.current.setMapInstance(mapInstanceRef.current);
+      }
+      await windLayerRef.current.renderWindField(mapBounds);
+    } catch (error) {
+      console.error('Error rendering wind layer:', error);
+    }
+  }, [windLayerEnabled]);
+
+  // 防抖风力图层渲染
+  const debouncedRenderWindLayer = useCallback((enabled?: boolean) => {
+    if (windDebounceRef.current) {
+      clearTimeout(windDebounceRef.current);
+    }
+    windDebounceRef.current = setTimeout(() => {
+      renderWindLayer(enabled !== undefined ? enabled : windLayerEnabled);
+    }, 800);
+  }, [renderWindLayer, windLayerEnabled]);
+
   const handleZoomIn = useCallback(() => {
     if (!mapInstanceRef.current) return;
     const zoom = mapInstanceRef.current.getZoom();
@@ -190,6 +253,17 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     
     // Note: We no longer call onTemperatureLayerChange since layer is managed internally
   }, [debouncedRenderTemperatureLayer]);
+
+  // 处理风力图层启用/禁用
+  const handleWindLayerChange = useCallback((enabled: boolean) => {
+    setWindLayerEnabled(enabled);
+
+    if (enabled) {
+      debouncedRenderWindLayer(enabled);
+    } else if (windLayerRef.current) {
+      windLayerRef.current.clear();
+    }
+  }, [debouncedRenderWindLayer]);
 
   // 同步父组件的温度图层状态
   useEffect(() => {
@@ -222,6 +296,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (temperatureLayerRef.current) {
           temperatureLayerRef.current.clear();
         }
+        if (windLayerRef.current) {
+          windLayerRef.current.clear();
+        }
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
@@ -229,6 +306,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 重置温度图层 renderer（地图重新初始化后需要重新创建）
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current = null;
+      }
+      if (windLayerRef.current) {
+        windLayerRef.current = null;
       }
 
       // 使用当前城市的经纬度作为中心点
@@ -290,6 +370,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (temperatureLayerEnabled) {
           debouncedRenderTemperatureLayer();
         }
+        if (windLayerEnabled) {
+          debouncedRenderWindLayer();
+        }
       };
 
       const handleZoomEnd = () => {
@@ -305,6 +388,9 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         // 如果启用了温度图层，也更新温度网格
         if (temperatureLayerEnabled) {
           debouncedRenderTemperatureLayer();
+        }
+        if (windLayerEnabled) {
+          debouncedRenderWindLayer();
         }
       };
 
@@ -374,6 +460,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             debouncedRenderTemperatureLayer();
           }, 500);
         }
+        if (windLayerEnabled) {
+          setTimeout(() => {
+            debouncedRenderWindLayer();
+          }, 500);
+        }
       });
     };
 
@@ -412,9 +503,16 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (temperatureDebounceRef.current) {
         clearTimeout(temperatureDebounceRef.current);
       }
+      if (windDebounceRef.current) {
+        clearTimeout(windDebounceRef.current);
+      }
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
         temperatureLayerRef.current = null;
+      }
+      if (windLayerRef.current) {
+        windLayerRef.current.clear();
+        windLayerRef.current = null;
       }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.destroy();
@@ -422,7 +520,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, temperatureLayerEnabled]);
+  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, temperatureLayerEnabled, windLayerEnabled]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -457,7 +555,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
             aria-expanded={layerDropdownOpen}
             aria-haspopup="true"
-            title={temperatureLayerEnabled ? '温度图层：已开启' : '图层选项'}
+            title={temperatureLayerEnabled || windLayerEnabled ? '图层：已开启' : '图层选项'}
           >
             {/* 苹果天气风格：两层叠放图标 */}
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -470,25 +568,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
               <button
                 type="button"
                 onClick={() => {
-                  handleTemperatureLayerChange(false);
-                  setLayerDropdownOpen(false);
-                }}
-                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${!temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                  {!temperatureLayerEnabled ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
-                  )}
-                </span>
-                <span>请选择</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleTemperatureLayerChange(true);
-                  setLayerDropdownOpen(false);
+                  handleTemperatureLayerChange(!temperatureLayerEnabled);
                 }}
                 className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
               >
@@ -496,10 +576,29 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
                   {temperatureLayerEnabled ? (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
                   ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-slate-500"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" /></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
                   )}
                 </span>
                 <span>气温</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleWindLayerChange(!windLayerEnabled);
+                }}
+                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${windLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                  {windLayerEnabled ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                      <path d="M3 8h8a3 3 0 1 0-3-3" />
+                      <path d="M3 14h13a3 3 0 1 1-3 3" />
+                    </svg>
+                  )}
+                </span>
+                <span>风力</span>
               </button>
             </div>
           )}
