@@ -70,6 +70,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const debouncedFetchWeatherRef = useRef<((lat: number, lon: number) => void) | null>(null);
   const debouncedRenderTemperatureLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
   const debouncedRenderWindLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
@@ -545,6 +547,41 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     mapInstanceRef.current.setZoom(Math.max(3, Math.round(zoom) - 1));
   }, []);
 
+  // 切换全屏模式
+  const toggleFullscreen = useCallback(() => {
+    if (!fullscreenContainerRef.current) return;
+
+    const element = fullscreenContainerRef.current;
+    
+    // 检查是否支持全屏 API
+    if (!document.fullscreenElement && 
+        !(document as any).webkitFullscreenElement && 
+        !(document as any).mozFullScreenElement && 
+        !(document as any).msFullscreenElement) {
+      // 进入全屏
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        (element as any).msRequestFullscreen();
+      }
+    } else {
+      // 退出全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+    }
+  }, []);
+
   // 处理温度图层启用/禁用
   const handleTemperatureLayerChange = useCallback((enabled: boolean) => {
     console.log('handleTemperatureLayerChange called with enabled:', enabled);
@@ -961,6 +998,31 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     ));
   }, [centerWeather]);
 
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
   return (
     <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col relative`}>
       <div className="flex items-center mb-4">
@@ -968,7 +1030,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           地图位置
         </h2>
       </div>
-      <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '800px' }}>
+      <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '800px' }} ref={fullscreenContainerRef}>
         <div
           ref={mapContainerRef}
           className="w-full h-full"
@@ -1019,22 +1081,23 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             {temperatureLayerEnabled && <TemperatureLegend />}
           </div>
         )}
-        {/* 右上角：温度图层（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
-        <div className="absolute top-4 right-4 z-10" ref={layerDropdownRef}>
-          <button
-            type="button"
-            onClick={() => setLayerDropdownOpen((v) => !v)}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
-            aria-expanded={layerDropdownOpen}
-            aria-haspopup="true"
-            title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled ? '图层：已开启' : '图层选项'}
-          >
-            {/* 苹果天气风格：两层叠放图标 */}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-              <rect x="3" y="7" width="14" height="14" rx="2" />
-              <rect x="7" y="3" width="14" height="14" rx="2" />
-            </svg>
-          </button>
+        {/* 右上角：图层按钮和全屏按钮（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <div ref={layerDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setLayerDropdownOpen((v) => !v)}
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+              aria-expanded={layerDropdownOpen}
+              aria-haspopup="true"
+              title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled ? '图层：已开启' : '图层选项'}
+            >
+              {/* 苹果天气风格：两层叠放图标 */}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <rect x="3" y="7" width="14" height="14" rx="2" />
+                <rect x="7" y="3" width="14" height="14" rx="2" />
+              </svg>
+            </button>
           {layerDropdownOpen && (
             <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[140px] py-2 px-2 bg-white/70 backdrop-blur-md rounded-2xl shadow-xl border border-white/40">
               <button
@@ -1126,6 +1189,27 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
               )} */}
             </div>
           )}
+          </div>
+          {/* 全屏按钮 */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+            title={isFullscreen ? '退出全屏' : '全屏'}
+            aria-label={isFullscreen ? '退出全屏' : '全屏'}
+          >
+            {isFullscreen ? (
+              // 退出全屏图标
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+              </svg>
+            ) : (
+              // 全屏图标
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
+            )}
+          </button>
         </div>
         {/* 上方正中间：缩放按钮（左右排布） */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-row gap-px">
