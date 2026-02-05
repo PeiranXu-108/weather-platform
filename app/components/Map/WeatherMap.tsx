@@ -41,19 +41,28 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
+  const temperatureLayerEnabledRef = useRef(false);
   const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const windLayerRef = useRef<WindFieldRenderer | null>(null);
   const [windLayerEnabled, setWindLayerEnabled] = useState(false);
+  const windLayerEnabledRef = useRef(false);
   const windDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const cloudLayerRef = useRef<CloudLayerRenderer | null>(null);
   const [cloudLayerEnabled, setCloudLayerEnabled] = useState(false);
+  const cloudLayerEnabledRef = useRef(false);
   const cloudDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [cloudRenderStyle, setCloudRenderStyle] = useState<'soft' | 'noise'>('noise');
   const precipLayerRef = useRef<PrecipLayerRenderer | null>(null);
   const [precipLayerEnabled, setPrecipLayerEnabled] = useState(false);
+  const precipLayerEnabledRef = useRef(false);
   const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
+  const debouncedFetchWeatherRef = useRef<((lat: number, lon: number) => void) | null>(null);
+  const debouncedRenderTemperatureLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
+  const debouncedRenderWindLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
+  const debouncedRenderCloudLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
+  const debouncedRenderPrecipLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
 
   // 点击外部关闭温度图层下拉
   useEffect(() => {
@@ -356,6 +365,42 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, [renderPrecipLayer, precipLayerEnabled]);
 
   useEffect(() => {
+    temperatureLayerEnabledRef.current = temperatureLayerEnabled;
+  }, [temperatureLayerEnabled]);
+
+  useEffect(() => {
+    windLayerEnabledRef.current = windLayerEnabled;
+  }, [windLayerEnabled]);
+
+  useEffect(() => {
+    cloudLayerEnabledRef.current = cloudLayerEnabled;
+  }, [cloudLayerEnabled]);
+
+  useEffect(() => {
+    precipLayerEnabledRef.current = precipLayerEnabled;
+  }, [precipLayerEnabled]);
+
+  useEffect(() => {
+    debouncedFetchWeatherRef.current = debouncedFetchWeather;
+  }, [debouncedFetchWeather]);
+
+  useEffect(() => {
+    debouncedRenderTemperatureLayerRef.current = debouncedRenderTemperatureLayer;
+  }, [debouncedRenderTemperatureLayer]);
+
+  useEffect(() => {
+    debouncedRenderWindLayerRef.current = debouncedRenderWindLayer;
+  }, [debouncedRenderWindLayer]);
+
+  useEffect(() => {
+    debouncedRenderCloudLayerRef.current = debouncedRenderCloudLayer;
+  }, [debouncedRenderCloudLayer]);
+
+  useEffect(() => {
+    debouncedRenderPrecipLayerRef.current = debouncedRenderPrecipLayer;
+  }, [debouncedRenderPrecipLayer]);
+
+  useEffect(() => {
     if (!cloudLayerEnabled || !cloudLayerRef.current) return;
     cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
   }, [cloudLayerEnabled, cloudRenderStyle]);
@@ -534,20 +579,20 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (centerMarkerRef.current) {
           centerMarkerRef.current.setPosition([lon, lat]);
         }
-        debouncedFetchWeather(lat, lon);
+        debouncedFetchWeatherRef.current?.(lat, lon);
         
         // 如果启用了温度图层，也更新温度网格
-        if (temperatureLayerEnabled) {
-          debouncedRenderTemperatureLayer();
+        if (temperatureLayerEnabledRef.current) {
+          debouncedRenderTemperatureLayerRef.current?.(true);
         }
-        if (windLayerEnabled) {
-          debouncedRenderWindLayer();
+        if (windLayerEnabledRef.current) {
+          debouncedRenderWindLayerRef.current?.(true);
         }
-        if (cloudLayerEnabled) {
-          debouncedRenderCloudLayer();
+        if (cloudLayerEnabledRef.current) {
+          debouncedRenderCloudLayerRef.current?.(true);
         }
-        if (precipLayerEnabled) {
-          debouncedRenderPrecipLayer();
+        if (precipLayerEnabledRef.current) {
+          debouncedRenderPrecipLayerRef.current?.(true);
         }
       };
 
@@ -559,20 +604,20 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         if (centerMarkerRef.current) {
           centerMarkerRef.current.setPosition([lon, lat]);
         }
-        debouncedFetchWeather(lat, lon);
+        debouncedFetchWeatherRef.current?.(lat, lon);
         
         // 如果启用了温度图层，也更新温度网格
-        if (temperatureLayerEnabled) {
-          debouncedRenderTemperatureLayer();
+        if (temperatureLayerEnabledRef.current) {
+          debouncedRenderTemperatureLayerRef.current?.(true);
         }
-        if (windLayerEnabled) {
-          debouncedRenderWindLayer();
+        if (windLayerEnabledRef.current) {
+          debouncedRenderWindLayerRef.current?.(true);
         }
-        if (cloudLayerEnabled) {
-          debouncedRenderCloudLayer();
+        if (cloudLayerEnabledRef.current) {
+          debouncedRenderCloudLayerRef.current?.(true);
         }
-        if (precipLayerEnabled) {
-          debouncedRenderPrecipLayer();
+        if (precipLayerEnabledRef.current) {
+          debouncedRenderPrecipLayerRef.current?.(true);
         }
       };
 
@@ -581,7 +626,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
       // 初始化时获取中心点天气
       setTimeout(() => {
-        debouncedFetchWeather(location.lat, location.lon);
+        debouncedFetchWeatherRef.current?.(location.lat, location.lon);
       }, 300);
 
       // 删除高德地图水印
@@ -637,24 +682,24 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       mapInstanceRef.current.on('complete', () => {
         setTimeout(removeWatermark, 100);
         // 地图加载完成后，如果启用了温度图层，渲染温度图层
-        if (temperatureLayerEnabled) {
+        if (temperatureLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderTemperatureLayer();
+            debouncedRenderTemperatureLayerRef.current?.(true);
           }, 500);
         }
-        if (windLayerEnabled) {
+        if (windLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderWindLayer();
+            debouncedRenderWindLayerRef.current?.(true);
           }, 500);
         }
-        if (cloudLayerEnabled) {
+        if (cloudLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderCloudLayer();
+            debouncedRenderCloudLayerRef.current?.(true);
           }, 500);
         }
-        if (precipLayerEnabled) {
+        if (precipLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderPrecipLayer();
+            debouncedRenderPrecipLayerRef.current?.(true);
           }, 500);
         }
       });
@@ -726,7 +771,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, debouncedFetchWeather, debouncedRenderTemperatureLayer, debouncedRenderWindLayer, debouncedRenderCloudLayer, debouncedRenderPrecipLayer, temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled, precipLayerEnabled]);
+  }, [location.lat, location.lon, location.name, location.region, location.country]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
