@@ -30,6 +30,10 @@ export interface WindFieldConfig {
   maxLineLength: number;
 }
 
+export interface WindFieldRenderOptions {
+  onProgress?: (progress: number) => void;
+}
+
 const DEFAULT_CONFIG: WindFieldConfig = {
   minGridCells: 30,
   maxGridCells: 1600,
@@ -238,12 +242,14 @@ function calculateDynamicSamplingRatio(totalPoints: number, baseSamplingRatio: n
 
 async function pLimit<T>(
   tasks: Array<() => Promise<T>>,
-  limit: number
+  limit: number,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<Array<{ success: boolean; result: T | null; index: number }>> {
   if (tasks.length === 0) return [];
   const results: Array<{ success: boolean; result: T | null; index: number }> = [];
   const executing: Promise<void>[] = [];
   let currentIndex = 0;
+  let completed = 0;
 
   const run = async (taskIndex: number): Promise<void> => {
     const task = tasks[taskIndex];
@@ -252,6 +258,9 @@ async function pLimit<T>(
       results[taskIndex] = { success: true, result, index: taskIndex };
     } catch (error) {
       results[taskIndex] = { success: false, result: null, index: taskIndex };
+    } finally {
+      completed += 1;
+      onProgress?.(completed, tasks.length);
     }
   };
 
@@ -304,7 +313,8 @@ async function fetchGridWind(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
-  config: WindFieldConfig
+  config: WindFieldConfig,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<WindVectorCell[]> {
   const concurrencyLimit = 18;
   const baseSamplingRatio = config.enableInterpolation ? config.samplingRatio : 1.0;
@@ -316,7 +326,8 @@ async function fetchGridWind(
   const tasks = samplePoints.map((point) => async () => {
     return await fetchWindVector(point.lat, point.lon);
   });
-  const results = await pLimit(tasks, concurrencyLimit);
+  onProgress?.(0, samplePoints.length);
+  const results = await pLimit(tasks, concurrencyLimit, onProgress);
 
   const sampleVectors: Array<{ lat: number; lon: number; u: number; v: number; speed: number }> = [];
   const sampleVectorMap = new Map<number, { u: number; v: number; speed: number }>();
@@ -406,6 +417,7 @@ export class WindFieldRenderer {
   private lastBoundsHash: string | null = null;
   private windCells: WindVectorCell[] = [];
   private currentBounds: MapBounds | null = null;
+  private progress: number = 0;
 
   constructor(amap: any, config: Partial<WindFieldConfig> = {}) {
     if (!amap) {
@@ -621,9 +633,23 @@ export class WindFieldRenderer {
     this.animationFrame = requestAnimationFrame(animate);
   }
 
-  async renderWindField(bounds: MapBounds): Promise<void> {
-    if (!this.isValidMapInstance()) return;
-    if (this.requestInProgress) return;
+  async renderWindField(
+    bounds: MapBounds,
+    options: WindFieldRenderOptions = {}
+  ): Promise<void> {
+    const reportProgress = (value: number) => {
+      this.progress = value;
+      options.onProgress?.(value);
+    };
+
+    if (!this.isValidMapInstance()) {
+      reportProgress(100);
+      return;
+    }
+    if (this.requestInProgress) {
+      options.onProgress?.(this.progress);
+      return;
+    }
 
     const boundsHash = generateBoundsHash(bounds);
     this.currentBounds = bounds;
@@ -631,6 +657,7 @@ export class WindFieldRenderer {
 
     if (this.lastBoundsHash === boundsHash && this.windCells.length > 0) {
       this.startAnimation();
+      reportProgress(100);
       return;
     }
 
@@ -639,22 +666,32 @@ export class WindFieldRenderer {
       this.windCells = cached;
       this.lastBoundsHash = boundsHash;
       this.startAnimation();
+      reportProgress(100);
       return;
     }
 
     this.requestInProgress = true;
     try {
+      reportProgress(0);
       const { rows, cols } = calculateGridDimensions(bounds, this.config);
       const points = generateGridPoints(bounds, rows, cols);
-      const cells = await fetchGridWind(points, rows, cols, this.config);
+      const cells = await fetchGridWind(points, rows, cols, this.config, (completed, total) => {
+        const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
+        reportProgress(Math.min(85, percent));
+      });
+      reportProgress(90);
       this.windCells = cells;
       this.setCachedCells(boundsHash, cells);
       this.lastBoundsHash = boundsHash;
       this.startAnimation();
+      reportProgress(100);
     } catch (error) {
       console.error('Error rendering wind field:', error);
     } finally {
       this.requestInProgress = false;
+      if (this.progress < 100) {
+        reportProgress(100);
+      }
     }
   }
 

@@ -42,19 +42,31 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
   const temperatureLayerEnabledRef = useRef(false);
+  const [temperatureLayerProgress, setTemperatureLayerProgress] = useState(0);
+  const [temperatureLayerLoading, setTemperatureLayerLoading] = useState(false);
+  const temperatureProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const windLayerRef = useRef<WindFieldRenderer | null>(null);
   const [windLayerEnabled, setWindLayerEnabled] = useState(false);
   const windLayerEnabledRef = useRef(false);
+  const [windLayerProgress, setWindLayerProgress] = useState(0);
+  const [windLayerLoading, setWindLayerLoading] = useState(false);
+  const windProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const windDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const cloudLayerRef = useRef<CloudLayerRenderer | null>(null);
   const [cloudLayerEnabled, setCloudLayerEnabled] = useState(false);
   const cloudLayerEnabledRef = useRef(false);
+  const [cloudLayerProgress, setCloudLayerProgress] = useState(0);
+  const [cloudLayerLoading, setCloudLayerLoading] = useState(false);
+  const cloudProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cloudDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [cloudRenderStyle, setCloudRenderStyle] = useState<'soft' | 'noise'>('noise');
   const precipLayerRef = useRef<PrecipLayerRenderer | null>(null);
   const [precipLayerEnabled, setPrecipLayerEnabled] = useState(false);
   const precipLayerEnabledRef = useRef(false);
+  const [precipLayerProgress, setPrecipLayerProgress] = useState(0);
+  const [precipLayerLoading, setPrecipLayerLoading] = useState(false);
+  const precipProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
@@ -76,6 +88,106 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [layerDropdownOpen]);
+
+  const handleTemperatureProgress = useCallback((progress: number) => {
+    if (!temperatureLayerEnabledRef.current) {
+      setTemperatureLayerLoading(false);
+      setTemperatureLayerProgress(0);
+      return;
+    }
+    setTemperatureLayerProgress(progress);
+
+    if (progress >= 100) {
+      if (temperatureProgressHideTimerRef.current) {
+        clearTimeout(temperatureProgressHideTimerRef.current);
+      }
+      temperatureProgressHideTimerRef.current = setTimeout(() => {
+        setTemperatureLayerLoading(false);
+      }, 200);
+      return;
+    }
+
+    if (temperatureProgressHideTimerRef.current) {
+      clearTimeout(temperatureProgressHideTimerRef.current);
+      temperatureProgressHideTimerRef.current = null;
+    }
+    setTemperatureLayerLoading(true);
+  }, []);
+
+  const handleWindProgress = useCallback((progress: number) => {
+    if (!windLayerEnabledRef.current) {
+      setWindLayerLoading(false);
+      setWindLayerProgress(0);
+      return;
+    }
+    setWindLayerProgress(progress);
+
+    if (progress >= 100) {
+      if (windProgressHideTimerRef.current) {
+        clearTimeout(windProgressHideTimerRef.current);
+      }
+      windProgressHideTimerRef.current = setTimeout(() => {
+        setWindLayerLoading(false);
+      }, 200);
+      return;
+    }
+
+    if (windProgressHideTimerRef.current) {
+      clearTimeout(windProgressHideTimerRef.current);
+      windProgressHideTimerRef.current = null;
+    }
+    setWindLayerLoading(true);
+  }, []);
+
+  const handleCloudProgress = useCallback((progress: number) => {
+    if (!cloudLayerEnabledRef.current) {
+      setCloudLayerLoading(false);
+      setCloudLayerProgress(0);
+      return;
+    }
+    setCloudLayerProgress(progress);
+
+    if (progress >= 100) {
+      if (cloudProgressHideTimerRef.current) {
+        clearTimeout(cloudProgressHideTimerRef.current);
+      }
+      cloudProgressHideTimerRef.current = setTimeout(() => {
+        setCloudLayerLoading(false);
+      }, 200);
+      return;
+    }
+
+    if (cloudProgressHideTimerRef.current) {
+      clearTimeout(cloudProgressHideTimerRef.current);
+      cloudProgressHideTimerRef.current = null;
+    }
+    setCloudLayerLoading(true);
+  }, []);
+
+  const handlePrecipProgress = useCallback((progress: number) => {
+    if (!precipLayerEnabledRef.current) {
+      setPrecipLayerLoading(false);
+      setPrecipLayerProgress(0);
+      return;
+    }
+    setPrecipLayerProgress(progress);
+
+    if (progress >= 100) {
+      if (precipProgressHideTimerRef.current) {
+        clearTimeout(precipProgressHideTimerRef.current);
+      }
+      precipProgressHideTimerRef.current = setTimeout(() => {
+        setPrecipLayerLoading(false);
+      }, 200);
+      return;
+    }
+
+    if (precipProgressHideTimerRef.current) {
+      clearTimeout(precipProgressHideTimerRef.current);
+      precipProgressHideTimerRef.current = null;
+    }
+    setPrecipLayerLoading(true);
+  }, []);
 
   // 获取地图中心点的天气数据
   const fetchCenterWeather = useCallback(async (lat: number, lon: number) => {
@@ -134,6 +246,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
       }
+      setTemperatureLayerLoading(false);
+      setTemperatureLayerProgress(0);
       return;
     }
 
@@ -167,12 +281,14 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         temperatureLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
       console.log('Starting temperature grid render');
-      await temperatureLayerRef.current.renderTemperatureGrid(mapBounds);
+      await temperatureLayerRef.current.renderTemperatureGrid(mapBounds, {
+        onProgress: handleTemperatureProgress,
+      });
       console.log('Temperature grid rendered successfully');
     } catch (error) {
       console.error('Error rendering temperature layer:', error);
     }
-  }, [temperatureLayerEnabled]);
+  }, [handleTemperatureProgress, temperatureLayerEnabled]);
 
   // 防抖温度网格渲染
   const debouncedRenderTemperatureLayer = useCallback((enabled?: boolean) => {
@@ -203,6 +319,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (windLayerRef.current) {
         windLayerRef.current.clear();
       }
+      setWindLayerLoading(false);
+      setWindLayerProgress(0);
       return;
     }
 
@@ -227,11 +345,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       } else {
         windLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
-      await windLayerRef.current.renderWindField(mapBounds);
+      await windLayerRef.current.renderWindField(mapBounds, {
+        onProgress: handleWindProgress,
+      });
     } catch (error) {
       console.error('Error rendering wind layer:', error);
     }
-  }, [windLayerEnabled]);
+  }, [handleWindProgress, windLayerEnabled]);
 
   // 防抖风力图层渲染
   const debouncedRenderWindLayer = useCallback((enabled?: boolean) => {
@@ -262,6 +382,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (cloudLayerRef.current) {
         cloudLayerRef.current.clear();
       }
+      setCloudLayerLoading(false);
+      setCloudLayerProgress(0);
       return;
     }
 
@@ -289,11 +411,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         cloudLayerRef.current.setMapInstance(mapInstanceRef.current);
         cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
       }
-      await cloudLayerRef.current.renderCloudLayer(mapBounds);
+      await cloudLayerRef.current.renderCloudLayer(mapBounds, {
+        onProgress: handleCloudProgress,
+      });
     } catch (error) {
       console.error('Error rendering cloud layer:', error);
     }
-  }, [cloudLayerEnabled, cloudRenderStyle]);
+  }, [cloudLayerEnabled, cloudRenderStyle, handleCloudProgress]);
 
   // 防抖云量图层渲染
   const debouncedRenderCloudLayer = useCallback((enabled?: boolean) => {
@@ -324,6 +448,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (precipLayerRef.current) {
         precipLayerRef.current.clear();
       }
+      setPrecipLayerLoading(false);
+      setPrecipLayerProgress(0);
       return;
     }
 
@@ -348,11 +474,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       } else {
         precipLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
-      await precipLayerRef.current.renderPrecipLayer(mapBounds);
+      await precipLayerRef.current.renderPrecipLayer(mapBounds, {
+        onProgress: handlePrecipProgress,
+      });
     } catch (error) {
       console.error('Error rendering precip layer:', error);
     }
-  }, [precipLayerEnabled]);
+  }, [handlePrecipProgress, precipLayerEnabled]);
 
   // 防抖降水图层渲染
   const debouncedRenderPrecipLayer = useCallback((enabled?: boolean) => {
@@ -423,6 +551,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     setTemperatureLayerEnabled(enabled);
     
     if (enabled) {
+      setTemperatureLayerProgress(0);
       // 立即渲染当前视图的温度图层
       debouncedRenderTemperatureLayer(enabled);
     } else {
@@ -430,6 +559,12 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
       }
+      if (temperatureProgressHideTimerRef.current) {
+        clearTimeout(temperatureProgressHideTimerRef.current);
+        temperatureProgressHideTimerRef.current = null;
+      }
+      setTemperatureLayerLoading(false);
+      setTemperatureLayerProgress(0);
     }
     
     // Note: We no longer call onTemperatureLayerChange since layer is managed internally
@@ -440,9 +575,18 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     setWindLayerEnabled(enabled);
 
     if (enabled) {
+      setWindLayerProgress(0);
       debouncedRenderWindLayer(enabled);
-    } else if (windLayerRef.current) {
-      windLayerRef.current.clear();
+    } else {
+      if (windLayerRef.current) {
+        windLayerRef.current.clear();
+      }
+      if (windProgressHideTimerRef.current) {
+        clearTimeout(windProgressHideTimerRef.current);
+        windProgressHideTimerRef.current = null;
+      }
+      setWindLayerLoading(false);
+      setWindLayerProgress(0);
     }
   }, [debouncedRenderWindLayer]);
 
@@ -451,9 +595,18 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     setCloudLayerEnabled(enabled);
 
     if (enabled) {
+      setCloudLayerProgress(0);
       debouncedRenderCloudLayer(enabled);
-    } else if (cloudLayerRef.current) {
-      cloudLayerRef.current.clear();
+    } else {
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current.clear();
+      }
+      if (cloudProgressHideTimerRef.current) {
+        clearTimeout(cloudProgressHideTimerRef.current);
+        cloudProgressHideTimerRef.current = null;
+      }
+      setCloudLayerLoading(false);
+      setCloudLayerProgress(0);
     }
   }, [debouncedRenderCloudLayer]);
 
@@ -462,9 +615,18 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     setPrecipLayerEnabled(enabled);
 
     if (enabled) {
+      setPrecipLayerProgress(0);
       debouncedRenderPrecipLayer(enabled);
-    } else if (precipLayerRef.current) {
-      precipLayerRef.current.clear();
+    } else {
+      if (precipLayerRef.current) {
+        precipLayerRef.current.clear();
+      }
+      if (precipProgressHideTimerRef.current) {
+        clearTimeout(precipProgressHideTimerRef.current);
+        precipProgressHideTimerRef.current = null;
+      }
+      setPrecipLayerLoading(false);
+      setPrecipLayerProgress(0);
     }
   }, [debouncedRenderPrecipLayer]);
 
@@ -749,6 +911,22 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       if (precipDebounceRef.current) {
         clearTimeout(precipDebounceRef.current);
       }
+      if (temperatureProgressHideTimerRef.current) {
+        clearTimeout(temperatureProgressHideTimerRef.current);
+        temperatureProgressHideTimerRef.current = null;
+      }
+      if (windProgressHideTimerRef.current) {
+        clearTimeout(windProgressHideTimerRef.current);
+        windProgressHideTimerRef.current = null;
+      }
+      if (cloudProgressHideTimerRef.current) {
+        clearTimeout(cloudProgressHideTimerRef.current);
+        cloudProgressHideTimerRef.current = null;
+      }
+      if (precipProgressHideTimerRef.current) {
+        clearTimeout(precipProgressHideTimerRef.current);
+        precipProgressHideTimerRef.current = null;
+      }
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
         temperatureLayerRef.current = null;
@@ -796,6 +974,44 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
+        {(temperatureLayerLoading || windLayerLoading || cloudLayerLoading || precipLayerLoading) && (
+          <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
+            <div className="flex flex-col">
+              {temperatureLayerLoading && (
+                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                  <div
+                    className="h-full bg-sky-500 transition-[width] duration-200 ease-out"
+                    style={{ width: `${temperatureLayerProgress}%` }}
+                  />
+                </div>
+              )}
+              {windLayerLoading && (
+                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                  <div
+                    className="h-full bg-emerald-500 transition-[width] duration-200 ease-out"
+                    style={{ width: `${windLayerProgress}%` }}
+                  />
+                </div>
+              )}
+              {cloudLayerLoading && (
+                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                  <div
+                    className="h-full bg-slate-500 transition-[width] duration-200 ease-out"
+                    style={{ width: `${cloudLayerProgress}%` }}
+                  />
+                </div>
+              )}
+              {precipLayerLoading && (
+                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                  <div
+                    className="h-full bg-indigo-500 transition-[width] duration-200 ease-out"
+                    style={{ width: `${precipLayerProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* 左上角：图例（降水在上，温度在下） */}
         {(precipLayerEnabled || temperatureLayerEnabled) && (
           <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">

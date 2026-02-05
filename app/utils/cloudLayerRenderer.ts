@@ -27,6 +27,10 @@ export interface CloudLayerConfig {
   renderStyle: 'soft' | 'noise';
 }
 
+export interface CloudLayerRenderOptions {
+  onProgress?: (progress: number) => void;
+}
+
 const DEFAULT_CONFIG: CloudLayerConfig = {
   minGridCells: 30,
   maxGridCells: 1600,
@@ -228,12 +232,14 @@ function calculateDynamicSamplingRatio(totalPoints: number, baseSamplingRatio: n
 
 async function pLimit<T>(
   tasks: Array<() => Promise<T>>,
-  limit: number
+  limit: number,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<Array<{ success: boolean; result: T | null; index: number }>> {
   if (tasks.length === 0) return [];
   const results: Array<{ success: boolean; result: T | null; index: number }> = [];
   const executing: Promise<void>[] = [];
   let currentIndex = 0;
+  let completed = 0;
 
   const run = async (taskIndex: number): Promise<void> => {
     const task = tasks[taskIndex];
@@ -242,6 +248,9 @@ async function pLimit<T>(
       results[taskIndex] = { success: true, result, index: taskIndex };
     } catch (error) {
       results[taskIndex] = { success: false, result: null, index: taskIndex };
+    } finally {
+      completed += 1;
+      onProgress?.(completed, tasks.length);
     }
   };
 
@@ -282,7 +291,8 @@ async function fetchGridClouds(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
-  config: CloudLayerConfig
+  config: CloudLayerConfig,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<CloudCell[]> {
   const concurrencyLimit = 18;
   const baseSamplingRatio = config.enableInterpolation ? config.samplingRatio : 1.0;
@@ -294,7 +304,8 @@ async function fetchGridClouds(
   const tasks = samplePoints.map((point) => async () => {
     return await fetchCloudValue(point.lat, point.lon);
   });
-  const results = await pLimit(tasks, concurrencyLimit);
+  onProgress?.(0, samplePoints.length);
+  const results = await pLimit(tasks, concurrencyLimit, onProgress);
 
   const sampleValues: Array<{ lat: number; lon: number; value: number }> = [];
   const sampleValueMap = new Map<number, number>();
@@ -368,6 +379,7 @@ export class CloudLayerRenderer {
   private noisePattern: CanvasPattern | null = null;
   private noiseSeed: number = Math.random() * 1000;
   private lastNoiseSize: number = 0;
+  private progress: number = 0;
 
   constructor(amap: any, config: Partial<CloudLayerConfig> = {}) {
     if (!amap) {
@@ -554,15 +566,30 @@ export class CloudLayerRenderer {
     }
   }
 
-  async renderCloudLayer(bounds: MapBounds): Promise<void> {
-    if (!this.isValidMapInstance()) return;
-    if (this.requestInProgress) return;
+  async renderCloudLayer(
+    bounds: MapBounds,
+    options: CloudLayerRenderOptions = {}
+  ): Promise<void> {
+    const reportProgress = (value: number) => {
+      this.progress = value;
+      options.onProgress?.(value);
+    };
+
+    if (!this.isValidMapInstance()) {
+      reportProgress(100);
+      return;
+    }
+    if (this.requestInProgress) {
+      options.onProgress?.(this.progress);
+      return;
+    }
 
     const boundsHash = generateBoundsHash(bounds);
     this.ensureCanvasLayer(bounds);
 
     if (this.lastBoundsHash === boundsHash && this.cloudCells.length > 0) {
       this.renderClouds();
+      reportProgress(100);
       return;
     }
 
@@ -571,22 +598,32 @@ export class CloudLayerRenderer {
       this.cloudCells = cached;
       this.lastBoundsHash = boundsHash;
       this.renderClouds();
+      reportProgress(100);
       return;
     }
 
     this.requestInProgress = true;
     try {
+      reportProgress(0);
       const { rows, cols } = calculateGridDimensions(bounds, this.config);
       const points = generateGridPoints(bounds, rows, cols);
-      const cells = await fetchGridClouds(points, rows, cols, this.config);
+      const cells = await fetchGridClouds(points, rows, cols, this.config, (completed, total) => {
+        const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
+        reportProgress(Math.min(85, percent));
+      });
+      reportProgress(90);
       this.cloudCells = cells;
       this.setCachedCells(boundsHash, cells);
       this.lastBoundsHash = boundsHash;
       this.renderClouds();
+      reportProgress(100);
     } catch (error) {
       console.error('Error rendering cloud layer:', error);
     } finally {
       this.requestInProgress = false;
+      if (this.progress < 100) {
+        reportProgress(100);
+      }
     }
   }
 
