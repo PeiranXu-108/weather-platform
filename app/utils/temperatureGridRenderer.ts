@@ -1,4 +1,5 @@
 import { getTemperatureColor } from './utils';
+import { fetchWeatherPoint } from './weatherPointCache';
 
 /**
  * 温度网格单元格的温度数据
@@ -27,6 +28,10 @@ interface MapBounds {
   zoom?: number; // 可选的地图缩放级别
 }
 
+export interface TemperatureGridRenderOptions {
+  onProgress?: (progress: number) => void;
+}
+
 /**
  * 温度网格渲染器配置
  */
@@ -42,7 +47,7 @@ export interface TemperatureGridConfig {
 const DEFAULT_CONFIG: TemperatureGridConfig = {
   minGridCells: 30, // 5x6，提高最小网格数
   maxGridCells: 2000, // 增加到2000个网格，提供更细致的渲染
-  cacheExpiry: 5 * 60 * 1000, // 5分钟
+  cacheExpiry: 3 * 60 * 1000, // 5分钟
   apiRequestDelay: 100,
   samplingRatio: 0.2, // 降低到20%采样，因为网格更多，插值算法可以处理
   enableInterpolation: true, // 默认启用插值
@@ -349,18 +354,9 @@ async function fetchTemperature(lat: number, lon: number): Promise<number | null
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000); // 3秒超时
-
-    const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}&lang=zh`, {
-      signal: controller.signal,
-    });
-
+    const data = await fetchWeatherPoint(lat, lon, controller.signal);
     clearTimeout(timeout);
-
-    if (!response.ok) {
-      return null;
-    }
-    const data = await response.json();
-    return data.current?.temp_c || null;
+    return data?.current?.temp_c ?? null;
   } catch (error) {
     return null;
   }
@@ -372,7 +368,8 @@ async function fetchTemperature(lat: number, lon: number): Promise<number | null
  */
 async function pLimit<T>(
   tasks: Array<() => Promise<T>>,
-  limit: number
+  limit: number,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<Array<{ success: boolean; result: T | null; index: number }>> {
   if (tasks.length === 0) {
     return [];
@@ -382,6 +379,8 @@ async function pLimit<T>(
   const executing: Promise<void>[] = [];
   let currentIndex = 0;
 
+  let completed = 0;
+
   const run = async (taskIndex: number): Promise<void> => {
     const task = tasks[taskIndex];
     try {
@@ -389,6 +388,9 @@ async function pLimit<T>(
       results[taskIndex] = { success: true, result, index: taskIndex };
     } catch (error) {
       results[taskIndex] = { success: false, result: null, index: taskIndex };
+    } finally {
+      completed += 1;
+      onProgress?.(completed, tasks.length);
     }
   };
 
@@ -456,7 +458,8 @@ async function fetchGridTemperatures(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
-  config: TemperatureGridConfig
+  config: TemperatureGridConfig,
+  onProgress?: (completed: number, total: number) => void
 ): Promise<TemperatureCell[]> {
   const startTime = Date.now();
   const concurrencyLimit = 20;
@@ -484,7 +487,8 @@ async function fetchGridTemperatures(
     return await fetchTemperature(point.lat, point.lon);
   });
 
-  const results = await pLimit(tasks, concurrencyLimit);
+  onProgress?.(0, samplePoints.length);
+  const results = await pLimit(tasks, concurrencyLimit, onProgress);
 
   // 收集采样点的温度数据，并创建索引映射
   const sampleTemperatures: Array<{
@@ -618,6 +622,7 @@ export class TemperatureGridRenderer {
   private rectangles: any[] = [];
   private requestInProgress: boolean = false;
   private lastBoundsHash: string | null = null;
+  private progress: number = 0;
 
   constructor(amap: any, config: Partial<TemperatureGridConfig> = {}) {
     if (!amap) {
@@ -738,16 +743,26 @@ export class TemperatureGridRenderer {
   /**
    * 渲染温度网格
    */
-  async renderTemperatureGrid(bounds: MapBounds): Promise<void> {
+  async renderTemperatureGrid(
+    bounds: MapBounds,
+    options: TemperatureGridRenderOptions = {}
+  ): Promise<void> {
+    const reportProgress = (value: number) => {
+      this.progress = value;
+      options.onProgress?.(value);
+    };
+
     // 首先检查地图实例是否有效
     if (!this.isValidMapInstance()) {
       console.warn('renderTemperatureGrid: Map instance is not valid, skipping');
+      reportProgress(100);
       return;
     }
 
     // 避免重复请求
     if (this.requestInProgress) {
       console.log('Request already in progress, skipping');
+      options.onProgress?.(this.progress);
       return;
     }
 
@@ -757,6 +772,7 @@ export class TemperatureGridRenderer {
     // 如果边界没有变化且矩形已存在，不重新渲染
     if (this.lastBoundsHash === boundsHash && this.rectangles.length > 0) {
       console.log('Bounds unchanged and rectangles exist, skipping');
+      reportProgress(100);
       return;
     }
 
@@ -767,12 +783,14 @@ export class TemperatureGridRenderer {
       this.clearRectangles();
       this._renderCells(cells, bounds);
       this.lastBoundsHash = boundsHash;
+      reportProgress(100);
       return;
     }
 
     // 执行新的请求
     this.requestInProgress = true;
     try {
+      reportProgress(0);
       const { rows, cols } = calculateGridDimensions(bounds, this.config);
       const totalCells = rows * cols;
       const dynamicMaxCells = calculateDynamicMaxCells(bounds.zoom, this.config.maxGridCells);
@@ -787,7 +805,10 @@ export class TemperatureGridRenderer {
       console.log(`Fetching temperature for ${points.length} grid points (${rows}x${cols})`);
 
       // 使用智能采样 + 插值算法
-      cells = await fetchGridTemperatures(points, rows, cols, this.config);
+      cells = await fetchGridTemperatures(points, rows, cols, this.config, (completed, total) => {
+        const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
+        reportProgress(Math.min(85, percent));
+      });
       
       console.log(`Fetched ${cells.length} cells with temperature data`);
 
@@ -795,8 +816,10 @@ export class TemperatureGridRenderer {
       this.setCachedCells(boundsHash, cells);
 
       // 渲染网格
+      reportProgress(90);
       this.clearRectangles();
       this._renderCells(cells, bounds, rows, cols);
+      reportProgress(100);
 
       this.lastBoundsHash = boundsHash;
       console.log('Temperature grid render completed successfully');
@@ -804,6 +827,9 @@ export class TemperatureGridRenderer {
       console.error('Error rendering temperature grid:', error);
     } finally {
       this.requestInProgress = false;
+      if (this.progress < 100) {
+        reportProgress(100);
+      }
     }
   }
 
@@ -993,9 +1019,10 @@ export class TemperatureGridRenderer {
 export async function renderTemperatureGridOnMap(
   amap: any,
   bounds: MapBounds,
-  config?: Partial<TemperatureGridConfig>
+  config?: Partial<TemperatureGridConfig>,
+  options?: TemperatureGridRenderOptions
 ): Promise<TemperatureGridRenderer> {
   const renderer = new TemperatureGridRenderer(amap, config);
-  await renderer.renderTemperatureGrid(bounds);
+  await renderer.renderTemperatureGrid(bounds, options);
   return renderer;
 }
