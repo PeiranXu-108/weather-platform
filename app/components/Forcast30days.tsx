@@ -68,7 +68,6 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           : '116.41,39.92'; // 默认北京
 
         const response = await fetch(`/api/weather/30d?location=${locationParam}`);
-        console.log(response)
 
         if (!response.ok) {
           throw new Error('Failed to fetch 30-day forecast');

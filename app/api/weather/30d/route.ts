@@ -53,7 +53,6 @@ export async function GET(request: NextRequest) {
     const location = searchParams.get('location')
     
     const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
-    console.log('Fetching 30d forecast:', url);
     
     const response = await fetch(url, {
       headers: {

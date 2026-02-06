@@ -223,10 +223,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
   // 获取地图边界信息用于温度网格渲染
   const renderTemperatureLayer = useCallback(async (enabled: boolean = temperatureLayerEnabled) => {
-    console.log('renderTemperatureLayer called with enabled:', enabled, 'mapInstanceRef:', !!mapInstanceRef.current);
-    
     if (!mapInstanceRef.current) {
-      console.log('Map not initialized yet');
       return;
     }
 
@@ -235,16 +232,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 尝试获取地图中心点，如果失败说明地图未完全初始化
       const center = mapInstanceRef.current.getCenter();
       if (!center) {
-        console.log('Map center not available, waiting for initialization');
         return;
       }
     } catch (error) {
-      console.log('Map not fully initialized yet:', error);
       return;
     }
 
     if (!enabled) {
-      console.log('Temperature layer disabled, clearing grid');
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current.clear();
       }
@@ -266,8 +260,6 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     // 获取地图缩放级别，用于动态调整网格密度
     const zoom = mapInstanceRef.current.getZoom();
 
-    console.log('Map bounds:', { ne: { lat: ne.lat, lng: ne.lng }, sw: { lat: sw.lat, lng: sw.lng }, zoom });
-
     const mapBounds = {
       northeast: { lat: ne.lat, lng: ne.lng },
       southwest: { lat: sw.lat, lng: sw.lng },
@@ -276,17 +268,14 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
     try {
       if (!temperatureLayerRef.current) {
-        console.log('Creating new TemperatureGridRenderer');
         temperatureLayerRef.current = new TemperatureGridRenderer(mapInstanceRef.current);
       } else {
         // 如果 renderer 已存在，更新地图实例（地图可能重新初始化了）
         temperatureLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
-      console.log('Starting temperature grid render');
       await temperatureLayerRef.current.renderTemperatureGrid(mapBounds, {
         onProgress: handleTemperatureProgress,
       });
-      console.log('Temperature grid rendered successfully');
     } catch (error) {
       console.error('Error rendering temperature layer:', error);
     }
@@ -584,7 +573,6 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
   // 处理温度图层启用/禁用
   const handleTemperatureLayerChange = useCallback((enabled: boolean) => {
-    console.log('handleTemperatureLayerChange called with enabled:', enabled);
     setTemperatureLayerEnabled(enabled);
     
     if (enabled) {

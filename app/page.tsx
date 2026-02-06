@@ -133,7 +133,6 @@ export default function Home() {
       }
 
       const data: WeatherResponse = await response.json();
-      console.log(data);
       setWeatherData(data);
 
       // Update current city display name and query

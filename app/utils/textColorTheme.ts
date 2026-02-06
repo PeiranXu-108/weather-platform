@@ -61,7 +61,6 @@ export function getTextColorTheme(
   isDay?: number
 ): TextColorTheme {
   const backgroundType = getBackgroundType(weatherCondition, isSunset, isNight, isDay);
-  console.log(backgroundType);
   if (backgroundType === 'dark') {
     // 深色背景使用浅色字体
     return {

@@ -478,10 +478,6 @@ async function fetchGridTemperatures(
     cols
   );
 
-  console.log(
-    `[fetchGridTemperatures] Total points: ${allPoints.length}, Sampling: ${samplePoints.length} (${((samplePoints.length / allPoints.length) * 100).toFixed(1)}%), Interpolation: ${config.enableInterpolation}`
-  );
-
   // 只请求采样点的温度数据
   const tasks = samplePoints.map((point) => async () => {
     return await fetchTemperature(point.lat, point.lon);
@@ -513,10 +509,6 @@ async function fetchGridTemperatures(
       sampleTempMap.set(pointIndex, result.result);
     }
   });
-
-  console.log(
-    `[fetchGridTemperatures] Successfully fetched ${sampleTemperatures.length}/${samplePoints.length} sample points`
-  );
 
   // 如果采样点太少，警告并建议提高采样比例
   if (sampleTemperatures.length < samplePoints.length * 0.5) {
@@ -605,9 +597,6 @@ async function fetchGridTemperatures(
 
   const duration = Date.now() - startTime;
   const reduction = ((1 - samplePoints.length / allPoints.length) * 100).toFixed(1);
-  console.log(
-    `[fetchGridTemperatures] Generated ${cells.length} cells in ${duration}ms (API requests: ${samplePoints.length}, Reduction: ${reduction}%, Speedup: ~${(allPoints.length / samplePoints.length).toFixed(1)}x)`
-  );
 
   return cells;
 }
@@ -761,17 +750,14 @@ export class TemperatureGridRenderer {
 
     // 避免重复请求
     if (this.requestInProgress) {
-      console.log('Request already in progress, skipping');
       options.onProgress?.(this.progress);
       return;
     }
 
     const boundsHash = generateBoundsHash(bounds);
-    console.log('renderTemperatureGrid called with bounds:', bounds, 'hash:', boundsHash);
 
     // 如果边界没有变化且矩形已存在，不重新渲染
     if (this.lastBoundsHash === boundsHash && this.rectangles.length > 0) {
-      console.log('Bounds unchanged and rectangles exist, skipping');
       reportProgress(100);
       return;
     }
@@ -779,7 +765,6 @@ export class TemperatureGridRenderer {
     // 检查缓存
     let cells = this.getCachedCells(boundsHash);
     if (cells) {
-      console.log('Using cached cells:', cells.length);
       this.clearRectangles();
       this._renderCells(cells, bounds);
       this.lastBoundsHash = boundsHash;
@@ -792,17 +777,7 @@ export class TemperatureGridRenderer {
     try {
       reportProgress(0);
       const { rows, cols } = calculateGridDimensions(bounds, this.config);
-      const totalCells = rows * cols;
-      const dynamicMaxCells = calculateDynamicMaxCells(bounds.zoom, this.config.maxGridCells);
-
-      console.log(
-        `[renderTemperatureGrid] Grid dimensions: ${rows}x${cols} = ${totalCells} cells, ` +
-        `Zoom: ${bounds.zoom || 'N/A'}, Dynamic max cells: ${dynamicMaxCells}`
-      );
-
       const points = generateGridPoints(bounds, rows, cols);
-
-      console.log(`Fetching temperature for ${points.length} grid points (${rows}x${cols})`);
 
       // 使用智能采样 + 插值算法
       cells = await fetchGridTemperatures(points, rows, cols, this.config, (completed, total) => {
@@ -810,7 +785,6 @@ export class TemperatureGridRenderer {
         reportProgress(Math.min(85, percent));
       });
       
-      console.log(`Fetched ${cells.length} cells with temperature data`);
 
       // 缓存结果
       this.setCachedCells(boundsHash, cells);
@@ -822,7 +796,6 @@ export class TemperatureGridRenderer {
       reportProgress(100);
 
       this.lastBoundsHash = boundsHash;
-      console.log('Temperature grid render completed successfully');
     } catch (error) {
       console.error('Error rendering temperature grid:', error);
     } finally {
@@ -882,8 +855,6 @@ export class TemperatureGridRenderer {
     }
 
     this.clearRectangles();
-
-    console.log(`[_renderCells] Rendering ${cells.length} cells with grid ${rows}x${cols}`);
 
     // 创建并添加所有矩形
     // 使用 Map 来跟踪已渲染的单元格，避免重复渲染
@@ -987,7 +958,6 @@ export class TemperatureGridRenderer {
       );
     }
 
-    console.log(`[_renderCells] Successfully rendered ${this.rectangles.length} rectangles`);
   }
 
   /**
