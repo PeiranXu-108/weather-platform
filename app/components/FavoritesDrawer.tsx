@@ -8,6 +8,7 @@ import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { weatherUrl } from '@/app/lib/api';
 
 export type FavoriteCity = {
   query: string; // city name or "lat,lon"
@@ -33,11 +34,7 @@ function safeParseJson<T>(value: string | null): T | null {
 }
 
 function buildWeatherUrl(query: string): string {
-  if (query.includes(',')) {
-    const [lat, lon] = query.split(',');
-    return `/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-  }
-  return `/api/weather?city=${encodeURIComponent(query)}`;
+  return weatherUrl(query);
 }
 
 export function loadFavoritesFromStorage(): FavoriteCity[] {

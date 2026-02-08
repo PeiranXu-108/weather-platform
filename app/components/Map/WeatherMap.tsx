@@ -16,6 +16,7 @@ import {
   formatCenterTemp,
   buildCenterMarkerContent
 } from './centerMarker';
+import { fetchWeatherByCoords } from '@/app/lib/api';
 
 interface WeatherMapProps {
   location: Location;
@@ -195,7 +196,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const fetchCenterWeather = useCallback(async (lat: number, lon: number) => {
     try {
       setLoadingWeather(true);
-      const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}&lang=zh`);
+      const response = await fetchWeatherByCoords(lat, lon);
       
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');

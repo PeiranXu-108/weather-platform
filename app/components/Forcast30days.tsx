@@ -8,6 +8,7 @@ import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { getTemperatureColor } from '@/app/utils/utils';
+import { fetchWeather30d } from '@/app/lib/api';
 
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
@@ -67,7 +68,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           ? `${location.lon},${location.lat}`
           : '116.41,39.92'; // 默认北京
 
-        const response = await fetch(`/api/weather/30d?location=${locationParam}`);
+        const response = await fetchWeather30d(locationParam);
         console.log(response)
 
         if (!response.ok) {

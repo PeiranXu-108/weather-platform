@@ -1,4 +1,5 @@
 import type { WeatherResponse } from '@/app/types/weather';
+import { fetchWeatherByCoords } from '@/app/lib/api';
 
 interface CacheEntry {
   data: WeatherResponse | null;
@@ -30,7 +31,7 @@ export async function fetchWeatherPoint(
     return existing;
   }
 
-  const request = fetch(`/api/weather?lat=${lat}&lon=${lon}&lang=zh`, { signal })
+  const request = fetchWeatherByCoords(lat, lon, { signal })
     .then((response) => {
       if (!response.ok) return null;
       return response.json() as Promise<WeatherResponse>;
