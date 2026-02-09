@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 import type { WeatherResponse, Hour } from './types/weather';
 import { useSyncFavorites } from './hooks/useSyncFavorites';
 import { useSession } from 'next-auth/react';
+import { fetchWeatherByCity, fetchWeatherByCoords, favoritesApi } from './lib/api';
 
 // 动态导入 Three.js 组件，禁用 SSR
 const CloudyWeatherBackground = dynamic(
@@ -126,7 +127,7 @@ export default function Home() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+      const response = await fetchWeatherByCity(city);
 
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');
@@ -156,7 +157,7 @@ export default function Home() {
       if (!skipLocating) {
         setIsLocating(true);
       }
-      const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      const response = await fetchWeatherByCoords(lat, lon);
 
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');
@@ -208,7 +209,8 @@ export default function Home() {
   // Load favorites: authed from DB, guest from localStorage
   useEffect(() => {
     if (status === 'authenticated') {
-      fetch('/api/favorites')
+      favoritesApi
+        .list()
         .then((r) => (r.ok ? r.json() : []))
         .then((data) => setFavorites(Array.isArray(data) ? data : []))
         .catch(() => { });
@@ -224,7 +226,8 @@ export default function Home() {
     if (typeof window === 'undefined') return;
     const onSynced = () => {
       if (status !== 'authenticated') return;
-      fetch('/api/favorites')
+      favoritesApi
+        .list()
         .then((r) => (r.ok ? r.json() : []))
         .then((data) => setFavorites(Array.isArray(data) ? data : []))
         .catch(() => { });
@@ -272,7 +275,7 @@ export default function Home() {
 
     if (status === 'authenticated') {
       if (exists) {
-        const res = await fetch(`/api/favorites?query=${encodeURIComponent(cityQuery)}`, { method: 'DELETE' });
+        const res = await favoritesApi.remove(cityQuery);
         if (res.ok) {
           const next = await res.json();
           if (Array.isArray(next)) setFavorites(next);
@@ -280,11 +283,7 @@ export default function Home() {
         return;
       }
 
-      const res = await fetch('/api/favorites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: cityQuery, label: displayName }),
-      });
+      const res = await favoritesApi.add({ query: cityQuery, label: displayName });
       if (res.ok) {
         const next = await res.json();
         if (Array.isArray(next)) setFavorites(next);

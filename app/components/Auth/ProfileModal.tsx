@@ -8,6 +8,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { fetchUsage } from '@/app/lib/api';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export default function ProfileModal({
     if (!isOpen || !userId) return;
 
     setLoading(true);
-    fetch('/api/usage', { credentials: 'include' })
+    fetchUsage()
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch usage');
         return res.json();
