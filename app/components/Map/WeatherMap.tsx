@@ -34,6 +34,11 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const mapLabelLayerRef = useRef<any[]>([]);
+  const mapLabelLayerZIndexRef = useRef<Map<any, number>>(new Map());
+  const mapLabelLayerDomRef = useRef<HTMLElement | null>(null);
+  const mapLabelLayerDomZIndexRef = useRef<string | null>(null);
+  const mapLabelLayerBoostedRef = useRef(false);
   const centerMarkerRef = useRef<any>(null);
   const scriptLoadedRef = useRef(false);
   const [centerWeather, setCenterWeather] = useState<WeatherResponse | null>(null);
@@ -189,6 +194,100 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       precipProgressHideTimerRef.current = null;
     }
     setPrecipLayerLoading(true);
+  }, []);
+
+  const syncMapTextLayer = useCallback((enabled: boolean) => {
+    const container = mapInstanceRef.current?.getContainer?.() as HTMLElement | undefined;
+    const map = mapInstanceRef.current;
+    if (!container || !map) return;
+
+    const boostLayerObjects = () => {
+      const layers = map.getLayers?.() || [];
+      const labelLayers = layers.filter((layer: any) => {
+        const name = layer?.CLASS_NAME || layer?.constructor?.name || '';
+        return typeof name === 'string' && /label/i.test(name);
+      });
+      if (labelLayers.length) {
+        labelLayers.forEach((layer: any) => {
+          if (!mapLabelLayerZIndexRef.current.has(layer)) {
+            const current =
+              typeof layer.getzIndex === 'function'
+                ? layer.getzIndex()
+                : typeof layer.getZIndex === 'function'
+                ? layer.getZIndex()
+                : layer.zIndex ?? 0;
+            mapLabelLayerZIndexRef.current.set(layer, typeof current === 'number' ? current : 0);
+          }
+          if (typeof layer.setzIndex === 'function') {
+            layer.setzIndex(300);
+          } else if (typeof layer.setZIndex === 'function') {
+            layer.setZIndex(300);
+          }
+        });
+        mapLabelLayerRef.current = labelLayers;
+        return true;
+      }
+      return false;
+    };
+
+    const boostLabelDom = () => {
+      if (!mapLabelLayerDomRef.current) {
+        const selectors = [
+          '.amap-labels-layer',
+          '.amap-labels',
+          '.amap-label',
+          '.amap-text',
+        ];
+        for (const selector of selectors) {
+          const found = container.querySelector(selector) as HTMLElement | null;
+          if (found) {
+            mapLabelLayerDomRef.current = found;
+            break;
+          }
+        }
+        if (!mapLabelLayerDomRef.current) {
+          const candidates = Array.from(container.querySelectorAll('[class]')) as HTMLElement[];
+          mapLabelLayerDomRef.current =
+            candidates.find((el) => /amap.*label/i.test(el.className) && /layer|labels?/i.test(el.className)) ||
+            null;
+        }
+      }
+
+      if (!mapLabelLayerDomRef.current) return false;
+      if (mapLabelLayerDomZIndexRef.current === null) {
+        mapLabelLayerDomZIndexRef.current = mapLabelLayerDomRef.current.style.zIndex || '';
+      }
+      mapLabelLayerDomRef.current.style.zIndex = '300';
+      mapLabelLayerDomRef.current.style.pointerEvents = 'none';
+      return true;
+    };
+
+    if (enabled) {
+      const boosted = boostLayerObjects() || boostLabelDom();
+      if (boosted) {
+        mapLabelLayerBoostedRef.current = true;
+      }
+    } else if (mapLabelLayerBoostedRef.current) {
+      mapLabelLayerRef.current.forEach((layer) => {
+        const original = mapLabelLayerZIndexRef.current.get(layer);
+        if (typeof original === 'number') {
+          if (typeof layer.setzIndex === 'function') {
+            layer.setzIndex(original);
+          } else if (typeof layer.setZIndex === 'function') {
+            layer.setZIndex(original);
+          }
+        }
+      });
+      mapLabelLayerRef.current = [];
+      mapLabelLayerZIndexRef.current.clear();
+
+      if (mapLabelLayerDomRef.current) {
+        mapLabelLayerDomRef.current.style.zIndex = mapLabelLayerDomZIndexRef.current || '';
+        mapLabelLayerDomRef.current.style.pointerEvents = '';
+      }
+      mapLabelLayerDomZIndexRef.current = null;
+      mapLabelLayerBoostedRef.current = false;
+    }
   }, []);
 
   // 获取地图中心点的天气数据
@@ -500,6 +599,11 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, [precipLayerEnabled]);
 
   useEffect(() => {
+    const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
+    syncMapTextLayer(anyLayerEnabled);
+  }, [temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled, precipLayerEnabled, syncMapTextLayer]);
+
+  useEffect(() => {
     debouncedFetchWeatherRef.current = debouncedFetchWeather;
   }, [debouncedFetchWeather]);
 
@@ -727,6 +831,13 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         features: ['bg', 'point', 'road', 'building'], // 显示要素
       });
 
+      syncMapTextLayer(
+        temperatureLayerEnabledRef.current ||
+          windLayerEnabledRef.current ||
+          cloudLayerEnabledRef.current ||
+          precipLayerEnabledRef.current
+      );
+
       // 添加标记点
       const marker = new window.AMap.Marker({
         position: center,
@@ -868,6 +979,14 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       // 监听地图加载完成事件
       mapInstanceRef.current.on('complete', () => {
         setTimeout(removeWatermark, 100);
+        const hasLayer =
+          temperatureLayerEnabledRef.current ||
+          windLayerEnabledRef.current ||
+          cloudLayerEnabledRef.current ||
+          precipLayerEnabledRef.current;
+        syncMapTextLayer(hasLayer);
+        setTimeout(() => syncMapTextLayer(hasLayer), 300);
+        setTimeout(() => syncMapTextLayer(hasLayer), 800);
         // 地图加载完成后，如果启用了温度图层，渲染温度图层
         if (temperatureLayerEnabledRef.current) {
           setTimeout(() => {
@@ -972,9 +1091,14 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         mapInstanceRef.current.destroy();
         mapInstanceRef.current = null;
       }
+      mapLabelLayerBoostedRef.current = false;
+      mapLabelLayerRef.current = [];
+      mapLabelLayerZIndexRef.current.clear();
+      mapLabelLayerDomRef.current = null;
+      mapLabelLayerDomZIndexRef.current = null;
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country]);
+  }, [location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;

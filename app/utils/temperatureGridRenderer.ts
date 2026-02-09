@@ -722,7 +722,7 @@ export class TemperatureGridRenderer {
       strokeWeight: 0,
       fillColor: cell.color,
       fillOpacity: 0.6, // 60% 透明度
-      zIndex: 100, // 提高 zIndex 确保显示在地图图层之上
+      zIndex: 60, // 保持在底图之上，但低于地名标注
       cursor: 'default', // 设置鼠标样式
     });
 

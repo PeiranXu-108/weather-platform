@@ -476,7 +476,7 @@ export class WindFieldRenderer {
         new window.AMap.LngLat(bounds.southwest.lng, bounds.southwest.lat),
         new window.AMap.LngLat(bounds.northeast.lng, bounds.northeast.lat)
       ),
-      zIndex: 120,
+      zIndex: 80,
       opacity: 1,
       zooms: [3, 20],
     });

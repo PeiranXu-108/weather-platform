@@ -444,7 +444,7 @@ export class CloudLayerRenderer {
         new window.AMap.LngLat(bounds.southwest.lng, bounds.southwest.lat),
         new window.AMap.LngLat(bounds.northeast.lng, bounds.northeast.lat)
       ),
-      zIndex: 110,
+      zIndex: 70,
       opacity: 1,
       zooms: [3, 20],
     });
