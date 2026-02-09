@@ -18,6 +18,7 @@ import type { WeatherResponse, Hour } from './types/weather';
 import { useSyncFavorites } from './hooks/useSyncFavorites';
 import { useSession } from 'next-auth/react';
 import { fetchWeatherByCity, fetchWeatherByCoords, favoritesApi } from './lib/api';
+import ChatBot from './components/ChatBot/ChatBot';
 
 // 动态导入 Three.js 组件，禁用 SSR
 const CloudyWeatherBackground = dynamic(
@@ -521,6 +522,9 @@ export default function Home() {
         message={modalConfig.message}
         textColorTheme={textColorTheme}
       />
+
+      {/* AI 天气助手 ChatBot */}
+      <ChatBot textColorTheme={textColorTheme} />
     </main>
   );
 }
