@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import PrecipLegend from './PrecipLegend';
+import MapTimelinePlayback, { TIMELINE_TOTAL_STEPS } from './MapTimelinePlayback';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
 import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
 import { CloudLayerRenderer } from '@/app/utils/cloudLayerRenderer';
@@ -31,6 +32,8 @@ declare global {
 
 const Key = process.env.NEXT_PUBLIC_AMAP_KEY 
 const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
+const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
+const TIMELINE_PLAY_INTERVAL_MS = 400;
 
 export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -78,11 +81,43 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   const layerDropdownRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
+  const [timelineStep, setTimelineStep] = useState(0);
+  const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
   const debouncedFetchWeatherRef = useRef<((lat: number, lon: number) => void) | null>(null);
-  const debouncedRenderTemperatureLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
-  const debouncedRenderWindLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
-  const debouncedRenderCloudLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
-  const debouncedRenderPrecipLayerRef = useRef<((enabled?: boolean) => void) | null>(null);
+  const debouncedRenderTemperatureLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
+  const debouncedRenderWindLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
+  const debouncedRenderCloudLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
+  const debouncedRenderPrecipLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
+  const targetTimelineEpochRef = useRef(0);
+  const playbackFrameRenderingRef = useRef(false);
+
+  const timelineBaseEpoch = useMemo(() => {
+    const sourceEpoch =
+      centerWeather?.location?.localtime_epoch ?? location.localtime_epoch ?? Math.floor(Date.now() / 1000);
+    return Math.floor(sourceEpoch / 3600) * 3600;
+  }, [centerWeather?.location?.localtime_epoch, location.localtime_epoch]);
+
+  const targetTimelineEpoch = useMemo(
+    () => timelineBaseEpoch + timelineStep * TIMELINE_STEP_SECONDS,
+    [timelineBaseEpoch, timelineStep]
+  );
+
+  const timelineTimeLabel = useMemo(() => {
+    return new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(targetTimelineEpoch * 1000));
+  }, [targetTimelineEpoch]);
+
+  const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
+  const showLayerProgress =
+    (temperatureLayerEnabled && temperatureLayerLoading) ||
+    (windLayerEnabled && windLayerLoading) ||
+    (cloudLayerEnabled && cloudLayerLoading) ||
+    (precipLayerEnabled && precipLayerLoading);
 
   // 点击外部关闭温度图层下拉
   useEffect(() => {
@@ -322,7 +357,10 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, [fetchCenterWeather]);
 
   // 获取地图边界信息用于温度网格渲染
-  const renderTemperatureLayer = useCallback(async (enabled: boolean = temperatureLayerEnabled) => {
+  const renderTemperatureLayer = useCallback(async (
+    enabled: boolean = temperatureLayerEnabled,
+    targetEpoch: number = targetTimelineEpoch
+  ) => {
     if (!mapInstanceRef.current) {
       return;
     }
@@ -375,24 +413,38 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       await temperatureLayerRef.current.renderTemperatureGrid(mapBounds, {
         onProgress: handleTemperatureProgress,
+        targetEpoch,
       });
     } catch (error) {
       console.error('Error rendering temperature layer:', error);
     }
-  }, [handleTemperatureProgress, temperatureLayerEnabled]);
+  }, [handleTemperatureProgress, targetTimelineEpoch, temperatureLayerEnabled]);
 
   // 防抖温度网格渲染
-  const debouncedRenderTemperatureLayer = useCallback((enabled?: boolean) => {
+  const debouncedRenderTemperatureLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
     if (temperatureDebounceRef.current) {
       clearTimeout(temperatureDebounceRef.current);
     }
+    if (isTimelinePlaying) {
+      void renderTemperatureLayer(
+        enabled !== undefined ? enabled : temperatureLayerEnabled,
+        targetEpoch ?? targetTimelineEpoch
+      );
+      return;
+    }
     temperatureDebounceRef.current = setTimeout(() => {
-      renderTemperatureLayer(enabled !== undefined ? enabled : temperatureLayerEnabled);
+      renderTemperatureLayer(
+        enabled !== undefined ? enabled : temperatureLayerEnabled,
+        targetEpoch ?? targetTimelineEpoch
+      );
     }, 800); // 
-  }, [renderTemperatureLayer, temperatureLayerEnabled]);
+  }, [isTimelinePlaying, renderTemperatureLayer, targetTimelineEpoch, temperatureLayerEnabled]);
 
   // 获取地图边界信息用于风力图层渲染
-  const renderWindLayer = useCallback(async (enabled: boolean = windLayerEnabled) => {
+  const renderWindLayer = useCallback(async (
+    enabled: boolean = windLayerEnabled,
+    targetEpoch: number = targetTimelineEpoch
+  ) => {
     if (!mapInstanceRef.current) {
       return;
     }
@@ -438,24 +490,32 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       await windLayerRef.current.renderWindField(mapBounds, {
         onProgress: handleWindProgress,
+        targetEpoch,
       });
     } catch (error) {
       console.error('Error rendering wind layer:', error);
     }
-  }, [handleWindProgress, windLayerEnabled]);
+  }, [handleWindProgress, targetTimelineEpoch, windLayerEnabled]);
 
   // 防抖风力图层渲染
-  const debouncedRenderWindLayer = useCallback((enabled?: boolean) => {
+  const debouncedRenderWindLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
     if (windDebounceRef.current) {
       clearTimeout(windDebounceRef.current);
     }
+    if (isTimelinePlaying) {
+      void renderWindLayer(enabled !== undefined ? enabled : windLayerEnabled, targetEpoch ?? targetTimelineEpoch);
+      return;
+    }
     windDebounceRef.current = setTimeout(() => {
-      renderWindLayer(enabled !== undefined ? enabled : windLayerEnabled);
+      renderWindLayer(enabled !== undefined ? enabled : windLayerEnabled, targetEpoch ?? targetTimelineEpoch);
     }, 800);
-  }, [renderWindLayer, windLayerEnabled]);
+  }, [isTimelinePlaying, renderWindLayer, targetTimelineEpoch, windLayerEnabled]);
 
   // 获取地图边界信息用于云量图层渲染
-  const renderCloudLayer = useCallback(async (enabled: boolean = cloudLayerEnabled) => {
+  const renderCloudLayer = useCallback(async (
+    enabled: boolean = cloudLayerEnabled,
+    targetEpoch: number = targetTimelineEpoch
+  ) => {
     if (!mapInstanceRef.current) {
       return;
     }
@@ -504,24 +564,32 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       await cloudLayerRef.current.renderCloudLayer(mapBounds, {
         onProgress: handleCloudProgress,
+        targetEpoch,
       });
     } catch (error) {
       console.error('Error rendering cloud layer:', error);
     }
-  }, [cloudLayerEnabled, cloudRenderStyle, handleCloudProgress]);
+  }, [cloudLayerEnabled, cloudRenderStyle, handleCloudProgress, targetTimelineEpoch]);
 
   // 防抖云量图层渲染
-  const debouncedRenderCloudLayer = useCallback((enabled?: boolean) => {
+  const debouncedRenderCloudLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
     if (cloudDebounceRef.current) {
       clearTimeout(cloudDebounceRef.current);
     }
+    if (isTimelinePlaying) {
+      void renderCloudLayer(enabled !== undefined ? enabled : cloudLayerEnabled, targetEpoch ?? targetTimelineEpoch);
+      return;
+    }
     cloudDebounceRef.current = setTimeout(() => {
-      renderCloudLayer(enabled !== undefined ? enabled : cloudLayerEnabled);
+      renderCloudLayer(enabled !== undefined ? enabled : cloudLayerEnabled, targetEpoch ?? targetTimelineEpoch);
     }, 800);
-  }, [renderCloudLayer, cloudLayerEnabled]);
+  }, [isTimelinePlaying, renderCloudLayer, targetTimelineEpoch, cloudLayerEnabled]);
 
   // 获取地图边界信息用于降水图层渲染
-  const renderPrecipLayer = useCallback(async (enabled: boolean = precipLayerEnabled) => {
+  const renderPrecipLayer = useCallback(async (
+    enabled: boolean = precipLayerEnabled,
+    targetEpoch: number = targetTimelineEpoch
+  ) => {
     if (!mapInstanceRef.current) {
       return;
     }
@@ -567,21 +635,26 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       }
       await precipLayerRef.current.renderPrecipLayer(mapBounds, {
         onProgress: handlePrecipProgress,
+        targetEpoch,
       });
     } catch (error) {
       console.error('Error rendering precip layer:', error);
     }
-  }, [handlePrecipProgress, precipLayerEnabled]);
+  }, [handlePrecipProgress, precipLayerEnabled, targetTimelineEpoch]);
 
   // 防抖降水图层渲染
-  const debouncedRenderPrecipLayer = useCallback((enabled?: boolean) => {
+  const debouncedRenderPrecipLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
     if (precipDebounceRef.current) {
       clearTimeout(precipDebounceRef.current);
     }
+    if (isTimelinePlaying) {
+      void renderPrecipLayer(enabled !== undefined ? enabled : precipLayerEnabled, targetEpoch ?? targetTimelineEpoch);
+      return;
+    }
     precipDebounceRef.current = setTimeout(() => {
-      renderPrecipLayer(enabled !== undefined ? enabled : precipLayerEnabled);
+      renderPrecipLayer(enabled !== undefined ? enabled : precipLayerEnabled, targetEpoch ?? targetTimelineEpoch);
     }, 800);
-  }, [renderPrecipLayer, precipLayerEnabled]);
+  }, [isTimelinePlaying, renderPrecipLayer, targetTimelineEpoch, precipLayerEnabled]);
 
   useEffect(() => {
     temperatureLayerEnabledRef.current = temperatureLayerEnabled;
@@ -600,9 +673,8 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, [precipLayerEnabled]);
 
   useEffect(() => {
-    const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
     syncMapTextLayer(anyLayerEnabled);
-  }, [temperatureLayerEnabled, windLayerEnabled, cloudLayerEnabled, precipLayerEnabled, syncMapTextLayer]);
+  }, [anyLayerEnabled, syncMapTextLayer]);
 
   useEffect(() => {
     debouncedFetchWeatherRef.current = debouncedFetchWeather;
@@ -625,9 +697,112 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, [debouncedRenderPrecipLayer]);
 
   useEffect(() => {
+    targetTimelineEpochRef.current = targetTimelineEpoch;
+  }, [targetTimelineEpoch]);
+
+  useEffect(() => {
+    const enabledTasks: Array<Promise<void>> = [];
+    if (temperatureLayerEnabledRef.current) {
+      const task = isTimelinePlaying
+        ? renderTemperatureLayer(true, targetTimelineEpoch)
+        : new Promise<void>((resolve) => {
+            debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpoch);
+            resolve();
+          });
+      enabledTasks.push(task);
+    }
+    if (windLayerEnabledRef.current) {
+      const task = isTimelinePlaying
+        ? renderWindLayer(true, targetTimelineEpoch)
+        : new Promise<void>((resolve) => {
+            debouncedRenderWindLayerRef.current?.(true, targetTimelineEpoch);
+            resolve();
+          });
+      enabledTasks.push(task);
+    }
+    if (cloudLayerEnabledRef.current) {
+      const task = isTimelinePlaying
+        ? renderCloudLayer(true, targetTimelineEpoch)
+        : new Promise<void>((resolve) => {
+            debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpoch);
+            resolve();
+          });
+      enabledTasks.push(task);
+    }
+    if (precipLayerEnabledRef.current) {
+      const task = isTimelinePlaying
+        ? renderPrecipLayer(true, targetTimelineEpoch)
+        : new Promise<void>((resolve) => {
+            debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpoch);
+            resolve();
+          });
+      enabledTasks.push(task);
+    }
+
+    if (!isTimelinePlaying || enabledTasks.length === 0) {
+      return;
+    }
+
+    playbackFrameRenderingRef.current = true;
+    void Promise.all(enabledTasks).finally(() => {
+      playbackFrameRenderingRef.current = false;
+    });
+  }, [
+    isTimelinePlaying,
+    renderCloudLayer,
+    renderPrecipLayer,
+    renderTemperatureLayer,
+    renderWindLayer,
+    targetTimelineEpoch,
+  ]);
+
+  useEffect(() => {
+    if (!isTimelinePlaying) {
+      return;
+    }
+    const timer = setInterval(() => {
+      if (playbackFrameRenderingRef.current) {
+        return;
+      }
+      const hasActiveLayerLoading =
+        (temperatureLayerEnabledRef.current && temperatureLayerLoading) ||
+        (windLayerEnabledRef.current && windLayerLoading) ||
+        (cloudLayerEnabledRef.current && cloudLayerLoading) ||
+        (precipLayerEnabledRef.current && precipLayerLoading);
+      if (hasActiveLayerLoading) {
+        return;
+      }
+      setTimelineStep((prev) => {
+        const next = prev + 1;
+        if (next >= TIMELINE_TOTAL_STEPS) {
+          queueMicrotask(() => setIsTimelinePlaying(false));
+          return 0;
+        }
+        return next;
+      });
+    }, TIMELINE_PLAY_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [
+    cloudLayerLoading,
+    isTimelinePlaying,
+    precipLayerLoading,
+    temperatureLayerLoading,
+    windLayerLoading,
+  ]);
+
+  useEffect(() => {
     if (!cloudLayerEnabled || !cloudLayerRef.current) return;
     cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
   }, [cloudLayerEnabled, cloudRenderStyle]);
+
+  const handleTimelineChange = useCallback((nextStep: number) => {
+    setIsTimelinePlaying(false);
+    setTimelineStep(nextStep);
+  }, []);
+
+  const handleToggleTimelinePlay = useCallback(() => {
+    setIsTimelinePlaying((prev) => !prev);
+  }, []);
 
   const handleZoomIn = useCallback(() => {
     if (!mapInstanceRef.current) return;
@@ -683,7 +858,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     if (enabled) {
       setTemperatureLayerProgress(0);
       // 立即渲染当前视图的温度图层
-      debouncedRenderTemperatureLayer(enabled);
+      debouncedRenderTemperatureLayer(enabled, targetTimelineEpoch);
     } else {
       // 清除温度网格
       if (temperatureLayerRef.current) {
@@ -698,7 +873,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
     }
     
     // Note: We no longer call onTemperatureLayerChange since layer is managed internally
-  }, [debouncedRenderTemperatureLayer]);
+  }, [debouncedRenderTemperatureLayer, targetTimelineEpoch]);
 
   // 处理风力图层启用/禁用
   const handleWindLayerChange = useCallback((enabled: boolean) => {
@@ -706,7 +881,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
     if (enabled) {
       setWindLayerProgress(0);
-      debouncedRenderWindLayer(enabled);
+      debouncedRenderWindLayer(enabled, targetTimelineEpoch);
     } else {
       if (windLayerRef.current) {
         windLayerRef.current.clear();
@@ -718,7 +893,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       setWindLayerLoading(false);
       setWindLayerProgress(0);
     }
-  }, [debouncedRenderWindLayer]);
+  }, [debouncedRenderWindLayer, targetTimelineEpoch]);
 
   // 处理云量图层启用/禁用
   const handleCloudLayerChange = useCallback((enabled: boolean) => {
@@ -726,7 +901,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
     if (enabled) {
       setCloudLayerProgress(0);
-      debouncedRenderCloudLayer(enabled);
+      debouncedRenderCloudLayer(enabled, targetTimelineEpoch);
     } else {
       if (cloudLayerRef.current) {
         cloudLayerRef.current.clear();
@@ -738,7 +913,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       setCloudLayerLoading(false);
       setCloudLayerProgress(0);
     }
-  }, [debouncedRenderCloudLayer]);
+  }, [debouncedRenderCloudLayer, targetTimelineEpoch]);
 
   // 处理降水图层启用/禁用
   const handlePrecipLayerChange = useCallback((enabled: boolean) => {
@@ -746,7 +921,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
 
     if (enabled) {
       setPrecipLayerProgress(0);
-      debouncedRenderPrecipLayer(enabled);
+      debouncedRenderPrecipLayer(enabled, targetTimelineEpoch);
     } else {
       if (precipLayerRef.current) {
         precipLayerRef.current.clear();
@@ -758,7 +933,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
       setPrecipLayerLoading(false);
       setPrecipLayerProgress(0);
     }
-  }, [debouncedRenderPrecipLayer]);
+  }, [debouncedRenderPrecipLayer, targetTimelineEpoch]);
 
   // 同步父组件的温度图层状态
   useEffect(() => {
@@ -882,16 +1057,16 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         
         // 如果启用了温度图层，也更新温度网格
         if (temperatureLayerEnabledRef.current) {
-          debouncedRenderTemperatureLayerRef.current?.(true);
+          debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (windLayerEnabledRef.current) {
-          debouncedRenderWindLayerRef.current?.(true);
+          debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (cloudLayerEnabledRef.current) {
-          debouncedRenderCloudLayerRef.current?.(true);
+          debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (precipLayerEnabledRef.current) {
-          debouncedRenderPrecipLayerRef.current?.(true);
+          debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
       };
 
@@ -907,16 +1082,16 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         
         // 如果启用了温度图层，也更新温度网格
         if (temperatureLayerEnabledRef.current) {
-          debouncedRenderTemperatureLayerRef.current?.(true);
+          debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (windLayerEnabledRef.current) {
-          debouncedRenderWindLayerRef.current?.(true);
+          debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (cloudLayerEnabledRef.current) {
-          debouncedRenderCloudLayerRef.current?.(true);
+          debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
         if (precipLayerEnabledRef.current) {
-          debouncedRenderPrecipLayerRef.current?.(true);
+          debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
       };
 
@@ -991,22 +1166,22 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
         // 地图加载完成后，如果启用了温度图层，渲染温度图层
         if (temperatureLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderTemperatureLayerRef.current?.(true);
+            debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (windLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderWindLayerRef.current?.(true);
+            debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (cloudLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderCloudLayerRef.current?.(true);
+            debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (precipLayerEnabledRef.current) {
           setTimeout(() => {
-            debouncedRenderPrecipLayerRef.current?.(true);
+            debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
       });
@@ -1149,7 +1324,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
-        {(temperatureLayerLoading || windLayerLoading || cloudLayerLoading || precipLayerLoading) && (
+        {showLayerProgress && (
           <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
             <div className="flex flex-col">
               {temperatureLayerLoading && (
@@ -1200,10 +1375,10 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
             <button
               type="button"
               onClick={() => setLayerDropdownOpen((v) => !v)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
               aria-expanded={layerDropdownOpen}
               aria-haspopup="true"
-              title={temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled ? '图层：已开启' : '图层选项'}
+              title={anyLayerEnabled ? '图层：已开启' : '图层选项'}
             >
               {/* 苹果天气风格：两层叠放图标 */}
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -1212,7 +1387,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
               </svg>
             </button>
           {layerDropdownOpen && (
-            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[140px] py-2 px-2 bg-white/70 backdrop-blur-md rounded-2xl shadow-xl border border-white/40">
+            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[140px] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
               <button
                 type="button"
                 onClick={() => {
@@ -1307,7 +1482,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-md shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
             title={isFullscreen ? '退出全屏' : '全屏'}
             aria-label={isFullscreen ? '退出全屏' : '全屏'}
           >
@@ -1329,7 +1504,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           <button
             type="button"
             onClick={handleZoomOut}
-            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-md rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
             title="缩小"
             aria-label="缩小"
           >
@@ -1338,13 +1513,22 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
           <button
             type="button"
             onClick={handleZoomIn}
-            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-md rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
             title="放大"
             aria-label="放大"
           >
             +
           </button>
         </div>
+        {anyLayerEnabled && (
+          <MapTimelinePlayback
+            step={timelineStep}
+            isPlaying={isTimelinePlaying}
+            timeLabel={timelineTimeLabel}
+            onStepChange={handleTimelineChange}
+            onTogglePlay={handleToggleTimelinePlay}
+          />
+        )}
         {/* 右下角：悬浮天气信息组件 */}
         <FloatingWeatherInfo 
           location={centerWeather?.location || location}

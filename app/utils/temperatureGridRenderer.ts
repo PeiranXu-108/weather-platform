@@ -1,5 +1,5 @@
 import { getTemperatureColor } from './utils';
-import { fetchWeatherPoint } from './weatherPointCache';
+import { fetchWeatherPoint, getForecastHourByEpoch } from './weatherPointCache';
 
 /**
  * 温度网格单元格的温度数据
@@ -30,6 +30,7 @@ interface MapBounds {
 
 export interface TemperatureGridRenderOptions {
   onProgress?: (progress: number) => void;
+  targetEpoch?: number;
 }
 
 /**
@@ -56,8 +57,9 @@ const DEFAULT_CONFIG: TemperatureGridConfig = {
 /**
  * 生成网格边界哈希值用于缓存
  */
-function generateBoundsHash(bounds: MapBounds): string {
-  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}`;
+function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+  const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
+  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
 
 /**
@@ -350,13 +352,14 @@ function selectSamplePoints(
 /**
  * 获取单个点的温度数据
  */
-async function fetchTemperature(lat: number, lon: number): Promise<number | null> {
+async function fetchTemperature(lat: number, lon: number, targetEpoch?: number): Promise<number | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000); // 3秒超时
     const data = await fetchWeatherPoint(lat, lon, controller.signal);
     clearTimeout(timeout);
-    return data?.current?.temp_c ?? null;
+    const hour = getForecastHourByEpoch(data, targetEpoch);
+    return hour?.temp_c ?? data?.current?.temp_c ?? null;
   } catch (error) {
     return null;
   }
@@ -459,6 +462,7 @@ async function fetchGridTemperatures(
   rows: number,
   cols: number,
   config: TemperatureGridConfig,
+  targetEpoch?: number,
   onProgress?: (completed: number, total: number) => void
 ): Promise<TemperatureCell[]> {
   const startTime = Date.now();
@@ -480,7 +484,7 @@ async function fetchGridTemperatures(
 
   // 只请求采样点的温度数据
   const tasks = samplePoints.map((point) => async () => {
-    return await fetchTemperature(point.lat, point.lon);
+    return await fetchTemperature(point.lat, point.lon, targetEpoch);
   });
 
   onProgress?.(0, samplePoints.length);
@@ -754,7 +758,7 @@ export class TemperatureGridRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds);
+    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
 
     // 如果边界没有变化且矩形已存在，不重新渲染
     if (this.lastBoundsHash === boundsHash && this.rectangles.length > 0) {
@@ -780,7 +784,7 @@ export class TemperatureGridRenderer {
       const points = generateGridPoints(bounds, rows, cols);
 
       // 使用智能采样 + 插值算法
-      cells = await fetchGridTemperatures(points, rows, cols, this.config, (completed, total) => {
+      cells = await fetchGridTemperatures(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
         const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
         reportProgress(Math.min(85, percent));
       });

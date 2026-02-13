@@ -1,4 +1,4 @@
-import { fetchWeatherPoint } from './weatherPointCache';
+import { fetchWeatherPoint, getForecastHourByEpoch } from './weatherPointCache';
 
 interface MapBounds {
   northeast: { lat: number; lng: number };
@@ -28,6 +28,7 @@ export interface PrecipLayerConfig {
 
 export interface PrecipLayerRenderOptions {
   onProgress?: (progress: number) => void;
+  targetEpoch?: number;
 }
 
 const DEFAULT_CONFIG: PrecipLayerConfig = {
@@ -50,8 +51,9 @@ const DEFAULT_COLORS = [
   'rgba(150, 50, 200, 0.9)',
 ];
 
-function generateBoundsHash(bounds: MapBounds): string {
-  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}`;
+function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+  const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
+  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
 
 function calculateDynamicMaxCells(zoom?: number, baseMaxCells: number = 1600): number {
@@ -283,13 +285,14 @@ async function pLimit<T>(
   return results.sort((a, b) => a.index - b.index);
 }
 
-async function fetchPrecipValue(lat: number, lon: number): Promise<number | null> {
+async function fetchPrecipValue(lat: number, lon: number, targetEpoch?: number): Promise<number | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     const data = await fetchWeatherPoint(lat, lon, controller.signal);
     clearTimeout(timeout);
-    const precip = data?.current?.precip_mm ?? null;
+    const hour = getForecastHourByEpoch(data, targetEpoch);
+    const precip = hour?.precip_mm ?? data?.current?.precip_mm ?? null;
     if (precip === null) return null;
     return Math.max(0, precip);
   } catch (error) {
@@ -311,6 +314,7 @@ async function fetchGridPrecip(
   rows: number,
   cols: number,
   config: PrecipLayerConfig,
+  targetEpoch?: number,
   onProgress?: (completed: number, total: number) => void
 ): Promise<PrecipCell[]> {
   const concurrencyLimit = 18;
@@ -321,7 +325,7 @@ async function fetchGridPrecip(
 
   const { samplePoints, sampleIndices } = selectSamplePoints(allPoints, samplingRatio, rows, cols);
   const tasks = samplePoints.map((point) => async () => {
-    return await fetchPrecipValue(point.lat, point.lon);
+    return await fetchPrecipValue(point.lat, point.lon, targetEpoch);
   });
   onProgress?.(0, samplePoints.length);
   const results = await pLimit(tasks, concurrencyLimit, onProgress);
@@ -561,7 +565,7 @@ export class PrecipLayerRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds);
+    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
     this.ensureCanvasLayer(bounds);
     const { rows, cols } = calculateGridDimensions(bounds, this.config);
     this.lastBounds = bounds;
@@ -587,7 +591,7 @@ export class PrecipLayerRenderer {
     try {
       reportProgress(0);
       const points = generateGridPoints(bounds, rows, cols);
-      const cells = await fetchGridPrecip(points, rows, cols, this.config, (completed, total) => {
+      const cells = await fetchGridPrecip(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
         const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
         reportProgress(Math.min(85, percent));
       });

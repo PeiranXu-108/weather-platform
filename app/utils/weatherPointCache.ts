@@ -1,4 +1,4 @@
-import type { WeatherResponse } from '@/app/types/weather';
+import type { Hour, WeatherResponse } from '@/app/types/weather';
 import { fetchWeatherByCoords } from '@/app/lib/api';
 
 interface CacheEntry {
@@ -45,6 +45,38 @@ export async function fetchWeatherPoint(
 
   inFlight.set(key, request);
   return request;
+}
+
+export function getForecastHourByEpoch(
+  data: WeatherResponse | null | undefined,
+  targetEpoch?: number
+): Hour | null {
+  if (!data || typeof targetEpoch !== 'number') {
+    return null;
+  }
+
+  const days = data.forecast?.forecastday;
+  if (!Array.isArray(days) || days.length === 0) {
+    return null;
+  }
+
+  let nearestHour: Hour | null = null;
+  let nearestDiff = Number.POSITIVE_INFINITY;
+
+  for (const day of days) {
+    if (!Array.isArray(day.hour)) {
+      continue;
+    }
+    for (const hour of day.hour) {
+      const diff = Math.abs(hour.time_epoch - targetEpoch);
+      if (diff < nearestDiff) {
+        nearestDiff = diff;
+        nearestHour = hour;
+      }
+    }
+  }
+
+  return nearestHour;
 }
 
 export function clearWeatherPointCache(): void {

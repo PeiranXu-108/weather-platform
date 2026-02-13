@@ -1,4 +1,4 @@
-import { fetchWeatherPoint } from './weatherPointCache';
+import { fetchWeatherPoint, getForecastHourByEpoch } from './weatherPointCache';
 
 interface MapBounds {
   northeast: { lat: number; lng: number };
@@ -29,6 +29,7 @@ export interface CloudLayerConfig {
 
 export interface CloudLayerRenderOptions {
   onProgress?: (progress: number) => void;
+  targetEpoch?: number;
 }
 
 const DEFAULT_CONFIG: CloudLayerConfig = {
@@ -41,8 +42,9 @@ const DEFAULT_CONFIG: CloudLayerConfig = {
   renderStyle: 'noise',
 };
 
-function generateBoundsHash(bounds: MapBounds): string {
-  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}`;
+function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+  const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
+  return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
 
 function calculateDynamicMaxCells(zoom?: number, baseMaxCells: number = 1600): number {
@@ -274,13 +276,14 @@ async function pLimit<T>(
   return results.sort((a, b) => a.index - b.index);
 }
 
-async function fetchCloudValue(lat: number, lon: number): Promise<number | null> {
+async function fetchCloudValue(lat: number, lon: number, targetEpoch?: number): Promise<number | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     const data = await fetchWeatherPoint(lat, lon, controller.signal);
     clearTimeout(timeout);
-    const cloud = data?.current?.cloud ?? null;
+    const hour = getForecastHourByEpoch(data, targetEpoch);
+    const cloud = hour?.cloud ?? data?.current?.cloud ?? null;
     return cloud === null ? null : Math.max(0, Math.min(100, cloud));
   } catch (error) {
     return null;
@@ -292,6 +295,7 @@ async function fetchGridClouds(
   rows: number,
   cols: number,
   config: CloudLayerConfig,
+  targetEpoch?: number,
   onProgress?: (completed: number, total: number) => void
 ): Promise<CloudCell[]> {
   const concurrencyLimit = 18;
@@ -302,7 +306,7 @@ async function fetchGridClouds(
 
   const { samplePoints, sampleIndices } = selectSamplePoints(allPoints, samplingRatio, rows, cols);
   const tasks = samplePoints.map((point) => async () => {
-    return await fetchCloudValue(point.lat, point.lon);
+    return await fetchCloudValue(point.lat, point.lon, targetEpoch);
   });
   onProgress?.(0, samplePoints.length);
   const results = await pLimit(tasks, concurrencyLimit, onProgress);
@@ -584,7 +588,7 @@ export class CloudLayerRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds);
+    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
     this.ensureCanvasLayer(bounds);
 
     if (this.lastBoundsHash === boundsHash && this.cloudCells.length > 0) {
@@ -607,7 +611,7 @@ export class CloudLayerRenderer {
       reportProgress(0);
       const { rows, cols } = calculateGridDimensions(bounds, this.config);
       const points = generateGridPoints(bounds, rows, cols);
-      const cells = await fetchGridClouds(points, rows, cols, this.config, (completed, total) => {
+      const cells = await fetchGridClouds(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
         const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
         reportProgress(Math.min(85, percent));
       });
