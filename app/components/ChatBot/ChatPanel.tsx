@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MessageBubble, { type ChatMessage } from './MessageBubble';
 import ChatInput from './ChatInput';
+import { fetchChat } from '@/app/lib/api';
 
 interface ChatPanelProps {
   isDark: boolean;
@@ -67,12 +68,7 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
 
       abortRef.current = new AbortController();
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historyMessages }),
-        signal: abortRef.current.signal,
-      });
+      const response = await fetchChat(historyMessages);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: '请求失败' }));

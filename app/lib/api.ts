@@ -69,3 +69,11 @@ export const favoritesApi = {
 export function fetchUsage(): Promise<Response> {
   return fetch(`${BASE}/api/usage`, { credentials: 'include' });
 }
+
+export function fetchChat(historyMessages: Array<{ role: string; content: string }>): Promise<Response> {
+  return fetch(`${BASE}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: historyMessages }),
+  });
+}
