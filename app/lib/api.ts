@@ -70,10 +70,26 @@ export function fetchUsage(): Promise<Response> {
   return fetch(`${BASE}/api/usage`, { credentials: 'include' });
 }
 
-export function fetchChat(historyMessages: Array<{ role: string; content: string }>): Promise<Response> {
+export interface ChatRequestOptions {
+  /** 用户当前位置（经纬度），用于回答"我这的天气"等查询 */
+  userLocation?: { latitude: number; longitude: number };
+  /** 用于取消请求的 AbortSignal */
+  signal?: AbortSignal;
+}
+
+export function fetchChat(
+  historyMessages: Array<{ role: string; content: string }>,
+  options?: ChatRequestOptions
+): Promise<Response> {
   return fetch(`${BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: historyMessages }),
+    body: JSON.stringify({
+      messages: historyMessages,
+      ...(options?.userLocation && {
+        userLocation: options.userLocation,
+      }),
+    }),
+    ...(options?.signal && { signal: options.signal }),
   });
 }

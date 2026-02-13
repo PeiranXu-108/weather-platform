@@ -20,6 +20,7 @@ interface MessageBubbleProps {
 const TOOL_NAME_MAP: Record<string, string> = {
   get_current_weather: '实时天气',
   get_forecast_30d: '30天预报',
+  get_weather_at_my_location: '当前位置天气',
   search_city: '城市搜索',
 };
 

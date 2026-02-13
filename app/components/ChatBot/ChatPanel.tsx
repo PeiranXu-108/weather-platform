@@ -10,12 +10,34 @@ interface ChatPanelProps {
   onClose: () => void;
 }
 
-// 快捷问题
+// 快捷问题池
 const QUICK_QUESTIONS = [
-  '杭州今天天气怎么样？',
   '北京明天会下雨吗？',
   '上海未来一周天气预报',
+  '杭州今天天气怎么样？',
+  '深圳未来3天会下雨吗？',
+  '成都的紫外线强不强？',
+  '广州现在湿度多少？',
+  '南京明天适合户外活动吗？',
+  '武汉周末天气如何？',
+  '西安最近会降温吗？',
+  '苏州空气质量怎么样？',
+  '厦门海边风大吗？',
+  '青岛适合去玩吗？',
 ];
+
+// 需要定位的快捷问题（当有 userLocation 时加入候选池）
+const LOCATION_QUICK_QUESTION = '我这的天气怎么样？';
+
+/** 打乱数组并取前 n 个 */
+function shuffleAndPick<T>(arr: T[], n: number): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, Math.min(n, copy.length));
+}
 
 // 生成唯一 ID
 let msgIdCounter = 0;
@@ -27,8 +49,43 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // 根据 userLocation 是否开启展示快捷问题：开启时「我这的天气怎么样？」一定展示 + 随机 2 个；未开启时随机 2 或 3 个
+  // 使用 useState + useEffect 避免 SSR 水合错误（random 在服务端与客户端结果不同）
+  const [displayedQuestions, setDisplayedQuestions] = useState<string[]>(() =>
+    QUICK_QUESTIONS.slice(0, 3)
+  );
+
+  useEffect(() => {
+    if (userLocation) {
+      const picked = shuffleAndPick(QUICK_QUESTIONS, 2);
+      setDisplayedQuestions([LOCATION_QUICK_QUESTION, ...picked]);
+    } else {
+      const count = Math.random() < 0.5 ? 2 : 3;
+      setDisplayedQuestions(shuffleAndPick(QUICK_QUESTIONS, count));
+    }
+  }, [userLocation]);
+
+  // 获取用户当前位置（打开面板时请求一次）
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+      },
+      () => {
+        // 用户拒绝或获取失败，静默忽略
+      },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 5 * 60 * 1000 }
+    );
+  }, []);
 
   // 自动滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -68,7 +125,10 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
 
       abortRef.current = new AbortController();
 
-      const response = await fetchChat(historyMessages);
+      const response = await fetchChat(historyMessages, {
+        userLocation: userLocation ?? undefined,
+        signal: abortRef.current.signal,
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: '请求失败' }));
@@ -169,7 +229,7 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [isLoading, messages]);
+  }, [isLoading, messages, userLocation]);
 
   const handleSend = useCallback(() => {
     sendMessage(input);
@@ -238,12 +298,12 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
               可以帮你查询全球城市的天气信息
             </p>
 
-            {/* 快捷问题 */}
+            {/* 快捷问题 - 根据 userLocation 随机展示 2 或 3 个 */}
             <div className="w-full space-y-2">
               <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                 试试问我
               </p>
-              {QUICK_QUESTIONS.map((q) => (
+              {displayedQuestions.map((q) => (
                 <button
                   key={q}
                   onClick={() => handleQuickQuestion(q)}

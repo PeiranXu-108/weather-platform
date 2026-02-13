@@ -172,7 +172,82 @@ export function createWeatherServer(): McpServer {
   );
 
   // ============================================================
-  // Tool 3: search_city - 搜索城市
+  // Tool 3: get_weather_at_my_location - 根据经纬度获取当前位置天气
+  // ============================================================
+  server.registerTool(
+    'get_weather_at_my_location',
+    {
+      description: '根据用户提供的经纬度坐标查询当前位置的实时天气和未来3天预报。当用户询问"我这的天气"、"这里的天气"、"当前位置天气"、"我所在地的天气"等时使用此工具。',
+      inputSchema: {
+        latitude: z.number().describe('纬度，如 30.28'),
+        longitude: z.number().describe('经度，如 120.15'),
+      },
+    },
+    async ({ latitude, longitude }) => {
+      try {
+        if (!API_KEY || !API_BASE_URL) {
+          return {
+            content: [{ type: 'text' as const, text: '天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL' }],
+            isError: true,
+          };
+        }
+
+        const query = `${latitude},${longitude}`;
+        const url = `${API_BASE_URL}?key=${API_KEY}&q=${query}&days=3&aqi=no&alerts=no&lang=zh`;
+
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          return {
+            content: [{ type: 'text' as const, text: `天气查询失败，HTTP 状态码: ${response.status}` }],
+            isError: true,
+          };
+        }
+
+        const data = await response.json();
+
+        const current = data.current;
+        const location = data.location;
+        const forecast = data.forecast?.forecastday || [];
+
+        let result = `📍 当前位置：${location.name}（${location.region}，${location.country}）\n`;
+        result += `🕐 当地时间：${location.localtime}\n\n`;
+        result += `【当前天气】\n`;
+        result += `天气：${current.condition.text}\n`;
+        result += `温度：${current.temp_c}°C（体感 ${current.feelslike_c}°C）\n`;
+        result += `湿度：${current.humidity}%\n`;
+        result += `风速：${current.wind_kph} km/h（${current.wind_dir}）\n`;
+        result += `气压：${current.pressure_mb} hPa\n`;
+        result += `能见度：${current.vis_km} km\n`;
+        result += `紫外线指数：${current.uv}\n`;
+        result += `云量：${current.cloud}%\n`;
+        result += `降水量：${current.precip_mm} mm\n`;
+
+        if (forecast.length > 0) {
+          result += `\n【未来${forecast.length}天预报】\n`;
+          for (const day of forecast) {
+            result += `\n${day.date}：${day.day.condition.text}\n`;
+            result += `  温度：${day.day.mintemp_c}°C ~ ${day.day.maxtemp_c}°C\n`;
+            result += `  降雨概率：${day.day.daily_chance_of_rain}%\n`;
+            result += `  湿度：${day.day.avghumidity}%\n`;
+            result += `  紫外线：${day.day.uv}\n`;
+          }
+        }
+
+        return {
+          content: [{ type: 'text' as const, text: result }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================================
+  // Tool 4: search_city - 搜索城市
   // ============================================================
   server.registerTool(
     'search_city',

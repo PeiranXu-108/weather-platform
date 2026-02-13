@@ -22,7 +22,7 @@ const qwenClient = new OpenAI({
   baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
 });
 
-const SYSTEM_PROMPT = `你是一个专业的天气助手，名叫"天气小助手"。你可以帮用户查询全球城市的实时天气、未来天气预报等信息。
+const SYSTEM_PROMPT_BASE = `你是一个专业的天气助手，名叫"天气小助手"。你可以帮用户查询全球城市的实时天气、未来天气预报等信息。
 
 请遵循以下规则：
 1. 使用提供的工具获取天气数据，然后用简洁友好的方式回答用户
@@ -32,6 +32,22 @@ const SYSTEM_PROMPT = `你是一个专业的天气助手，名叫"天气小助�
 5. 如果用户只是闲聊或问好，友好地回应并引导他们查询天气
 6. 不要在回复中展示原始 JSON 数据，而是用自然语言描述天气情况
 7. 如果工具调用失败，友好地告知用户并建议重试`;
+
+function buildSystemPrompt(userLocation?: { latitude: number; longitude: number }): string {
+  let prompt = SYSTEM_PROMPT_BASE;
+
+  if (userLocation) {
+    prompt += `
+
+【重要】用户已授权分享其当前位置：
+- 纬度：${userLocation.latitude}
+- 经度：${userLocation.longitude}
+
+当用户询问"我这的天气"、"这里的天气"、"当前位置天气"、"我所在地的天气"、"查一下我这"等类似问题时，请调用 get_weather_at_my_location 工具，并传入上述经纬度。`;
+  }
+
+  return prompt;
+}
 
 // SSE 事件类型
 interface SSEEvent {
@@ -48,8 +64,9 @@ function formatSSE(event: SSEEvent): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages } = body as {
+    const { messages, userLocation } = body as {
       messages: Array<{ role: string; content: string }>;
+      userLocation?: { latitude: number; longitude: number };
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -77,8 +94,16 @@ export async function POST(request: NextRequest) {
           const openaiTools = mcpToolsToOpenAITools(mcpTools);
 
           // 2. 构建消息历史
+          const systemPrompt = buildSystemPrompt(
+            userLocation &&
+            typeof userLocation.latitude === 'number' &&
+            typeof userLocation.longitude === 'number'
+              ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
+              : undefined
+          );
+
           const allMessages: OpenAI.ChatCompletionMessageParam[] = [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt },
             ...messages.map((m) => ({
               role: m.role as 'user' | 'assistant',
               content: m.content,
