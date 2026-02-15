@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import PrecipLegend from './PrecipLegend';
@@ -22,6 +22,7 @@ import { fetchWeatherByCoords } from '@/app/lib/api';
 interface WeatherMapProps {
   location: Location;
   textColorTheme: TextColorTheme;
+  opacity?: number;
 }
 
 declare global {
@@ -35,7 +36,7 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
-export default function WeatherMap({ location, textColorTheme }: WeatherMapProps) {
+export default function WeatherMap({ location, textColorTheme, opacity = 100 }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -1312,7 +1313,7 @@ export default function WeatherMap({ location, textColorTheme }: WeatherMapProps
   }, []);
 
   return (
-    <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-4 h-full flex flex-col relative`}>
+    <div className="rounded-2xl shadow-xl p-4 h-full flex flex-col relative" style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <div className="flex items-center mb-4">
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
           地图位置

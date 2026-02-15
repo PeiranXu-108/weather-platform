@@ -502,6 +502,7 @@ export default function Home() {
               <WeatherMap
                 location={weatherData.location}
                 textColorTheme={textColorTheme}
+                opacity={opacity}
               />
 
               {/* Footer */}
