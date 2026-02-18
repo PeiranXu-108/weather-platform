@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
-import FloatingWeatherInfo from './InfoCard';
+import FloatingWeatherInfo, { WeatherCardContent } from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import PrecipLegend from './PrecipLegend';
 import MapTimelinePlayback, { TIMELINE_TOTAL_STEPS } from './MapTimelinePlayback';
@@ -48,7 +48,13 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
   const scriptLoadedRef = useRef(false);
   const [centerWeather, setCenterWeather] = useState<WeatherResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
+  const [viewportCenterWeather, setViewportCenterWeather] = useState<WeatherResponse | null>(null);
+  const [viewportCenterLoading, setViewportCenterLoading] = useState(false);
+  const [clickBubblePosition, setClickBubblePosition] = useState<{ x: number; y: number } | null>(null);
+  const [clickBubbleWeather, setClickBubbleWeather] = useState<WeatherResponse | null>(null);
+  const [clickBubbleLoading, setClickBubbleLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const viewportDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
   const temperatureLayerEnabledRef = useRef(false);
@@ -85,6 +91,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
   const [timelineStep, setTimelineStep] = useState(0);
   const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
   const debouncedFetchWeatherRef = useRef<((lat: number, lon: number) => void) | null>(null);
+  const debouncedFetchViewportWeatherRef = useRef<((lat: number, lon: number) => void) | null>(null);
   const debouncedRenderTemperatureLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
   const debouncedRenderWindLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
   const debouncedRenderCloudLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
@@ -347,7 +354,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     }
   }, []);
 
-  // 防抖函数
+  // 防抖函数（用于选中 location 的天气，供中心标记使用）
   const debouncedFetchWeather = useCallback((lat: number, lon: number) => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -356,6 +363,30 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       fetchCenterWeather(lat, lon);
     }, 500); // 500ms 防抖
   }, [fetchCenterWeather]);
+
+  // 获取视口中心坐标的天气数据（供右下角 InfoCard 展示）
+  const fetchViewportCenterWeather = useCallback(async (lat: number, lon: number) => {
+    try {
+      setViewportCenterLoading(true);
+      const response = await fetchWeatherByCoords(lat, lon);
+      if (!response.ok) throw new Error('Failed to fetch weather data');
+      const data = await response.json();
+      setViewportCenterWeather(data);
+    } catch (error) {
+      console.error('Error fetching viewport center weather:', error);
+      setViewportCenterWeather(null);
+    } finally {
+      setViewportCenterLoading(false);
+    }
+  }, []);
+
+  // 防抖：视口中心天气（用于 InfoCard）
+  const debouncedFetchViewportWeather = useCallback((lat: number, lon: number) => {
+    if (viewportDebounceTimerRef.current) clearTimeout(viewportDebounceTimerRef.current);
+    viewportDebounceTimerRef.current = setTimeout(() => {
+      fetchViewportCenterWeather(lat, lon);
+    }, 500);
+  }, [fetchViewportCenterWeather]);
 
   // 获取地图边界信息用于温度网格渲染
   const renderTemperatureLayer = useCallback(async (
@@ -682,6 +713,10 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
   }, [debouncedFetchWeather]);
 
   useEffect(() => {
+    debouncedFetchViewportWeatherRef.current = debouncedFetchViewportWeather;
+  }, [debouncedFetchViewportWeather]);
+
+  useEffect(() => {
     debouncedRenderTemperatureLayerRef.current = debouncedRenderTemperatureLayer;
   }, [debouncedRenderTemperatureLayer]);
 
@@ -950,8 +985,10 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       if (centerMarkerRef.current) {
         centerMarkerRef.current.setPosition([location.lon, location.lat]);
       }
-      // 更新中心点后获取天气数据
+      // 标记用：选中 location 的天气
       fetchCenterWeather(location.lat, location.lon);
+      // InfoCard 用：视口中心即新 location，同步拉取
+      debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
     }
   }, [location.lat, location.lon, fetchCenterWeather]);
 
@@ -1045,18 +1082,15 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         infoWindow.open(mapInstanceRef.current, center);
       });
 
-      // 绑定地图事件：拖拽结束、缩放结束
+      // 绑定地图事件：拖拽结束、缩放结束（中心标记固定于 location 经纬度，不随视口移动）
       const handleMoveEnd = () => {
         if (!mapInstanceRef.current) return;
+        // 右下角 InfoCard 展示视口中心坐标的天气
         const center = mapInstanceRef.current.getCenter();
         const lat = center.getLat();
         const lon = center.getLng();
-        if (centerMarkerRef.current) {
-          centerMarkerRef.current.setPosition([lon, lat]);
-        }
-        debouncedFetchWeatherRef.current?.(lat, lon);
-        
-        // 如果启用了温度图层，也更新温度网格
+        debouncedFetchViewportWeatherRef.current?.(lat, lon);
+        // 刷新各类图层以匹配当前视口
         if (temperatureLayerEnabledRef.current) {
           debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
@@ -1073,15 +1107,12 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
 
       const handleZoomEnd = () => {
         if (!mapInstanceRef.current) return;
+        // 右下角 InfoCard 展示视口中心坐标的天气
         const center = mapInstanceRef.current.getCenter();
         const lat = center.getLat();
         const lon = center.getLng();
-        if (centerMarkerRef.current) {
-          centerMarkerRef.current.setPosition([lon, lat]);
-        }
-        debouncedFetchWeatherRef.current?.(lat, lon);
-        
-        // 如果启用了温度图层，也更新温度网格
+        debouncedFetchViewportWeatherRef.current?.(lat, lon);
+        // 刷新各类图层以匹配当前视口
         if (temperatureLayerEnabledRef.current) {
           debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
         }
@@ -1099,9 +1130,38 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       mapInstanceRef.current.on('moveend', handleMoveEnd);
       mapInstanceRef.current.on('zoomend', handleZoomEnd);
 
-      // 初始化时获取中心点天气
+      // 单击地图：在点击位置显示该点天气气泡（与 InfoCard 样式一致）
+      const handleMapClick = (e: any) => {
+        const map = mapInstanceRef.current;
+        if (!map) return;
+        const lnglat = e.lnglat;
+        const pixel = map.lngLatToContainer(lnglat);
+        const lat = lnglat.getLat();
+        const lon = lnglat.getLng();
+        setClickBubblePosition({ x: pixel.x, y: pixel.y });
+        setClickBubbleLoading(true);
+        setClickBubbleWeather(null);
+        fetchWeatherByCoords(lat, lon)
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to fetch'))))
+          .then((data: WeatherResponse) => {
+            setClickBubbleWeather(data);
+            setClickBubbleLoading(false);
+          })
+          .catch(() => setClickBubbleLoading(false));
+      };
+      // 拖动地图时气泡消失
+      const handleMapMoveStart = () => {
+        setClickBubblePosition(null);
+        setClickBubbleWeather(null);
+        setClickBubbleLoading(false);
+      };
+      mapInstanceRef.current.on('click', handleMapClick);
+      mapInstanceRef.current.on('movestart', handleMapMoveStart);
+
+      // 初始化时：标记用 location 天气，InfoCard 用视口中心天气（初始时与 location 一致）
       setTimeout(() => {
         debouncedFetchWeatherRef.current?.(location.lat, location.lon);
+        debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
       }, 300);
 
       // 删除高德地图水印
@@ -1220,6 +1280,9 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
+      if (viewportDebounceTimerRef.current) {
+        clearTimeout(viewportDebounceTimerRef.current);
+      }
       if (temperatureDebounceRef.current) {
         clearTimeout(temperatureDebounceRef.current);
       }
@@ -1325,6 +1388,29 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           className="w-full h-full"
           style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
         />
+        {/* 单击地图产生的天气气泡（与 InfoCard 样式一致；拖动地图时消失；z-30 位于最上层） */}
+        {clickBubblePosition && (
+          <div
+            className="absolute z-30 pointer-events-none"
+            style={{
+              left: clickBubblePosition.x,
+              top: clickBubblePosition.y,
+              transform: 'translate(-50%, calc(-100% - 8px))',
+            }}
+          >
+            {clickBubbleLoading ? (
+              <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10 flex items-center justify-center text-xs text-gray-500">
+                加载中...
+              </div>
+            ) : clickBubbleWeather?.current && clickBubbleWeather?.location ? (
+              <WeatherCardContent
+                location={clickBubbleWeather.location}
+                current={clickBubbleWeather.current}
+                textColorTheme={textColorTheme}
+              />
+            ) : null}
+          </div>
+        )}
         {showLayerProgress && (
           <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
             <div className="flex flex-col">
@@ -1530,11 +1616,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
             onTogglePlay={handleToggleTimelinePlay}
           />
         )}
-        {/* 右下角：悬浮天气信息组件 */}
+        {/* 右下角：悬浮天气信息组件（展示窗口中央对应坐标的天气） */}
         <FloatingWeatherInfo 
-          location={centerWeather?.location || location}
-          current={centerWeather?.current}
-          loading={loadingWeather}
+          location={viewportCenterWeather?.location ?? location}
+          current={viewportCenterWeather?.current}
+          loading={viewportCenterLoading}
           textColorTheme={textColorTheme}
         />
       </div>
