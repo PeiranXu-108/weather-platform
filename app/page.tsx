@@ -187,22 +187,35 @@ export default function Home() {
 
   // Initial load - only run once on mount
   useEffect(() => {
-    // Try to load saved city from localStorage
     const savedCity = loadCurrentCityFromStorage();
     if (savedCity) {
-      // If saved city exists, use it
       setCurrentCity(savedCity.city);
       setCurrentCityQuery(savedCity.query);
-      // Check if it's coordinates (lat,lon format) or city name
       if (savedCity.query.includes(',')) {
         const [lat, lon] = savedCity.query.split(',');
-        // Skip locating state for initial load
         fetchWeatherByLocation(parseFloat(lat), parseFloat(lon), true);
       } else {
         fetchWeatherData(savedCity.query);
       }
+      return;
+    }
+
+    // 无保存城市时：使用浏览器 Geolocation API 自动定位，一进入页面就显示当地天气
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          fetchWeatherByLocation(latitude, longitude, true);
+          setIsLocating(false);
+        },
+        () => {
+          setIsLocating(false);
+          fetchWeatherData(); // 用户拒绝或超时：回退到默认城市（杭州）
+        },
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 30 * 60 * 1000 }
+      );
     } else {
-      // Otherwise, use default city
       fetchWeatherData();
     }
   }, []); // Empty dependency array - only run on mount
