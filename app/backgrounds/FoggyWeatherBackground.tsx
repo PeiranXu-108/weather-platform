@@ -204,7 +204,7 @@ export default function FoggyWeatherBackground({
   }, [sunsetTime, currentTime]);
 
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
       {/* 浅灰色渐变背景 */}
       {isSunset ? (
         // 日落时的深灰色渐变
@@ -235,7 +235,7 @@ export default function FoggyWeatherBackground({
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: true }}
+        gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
         dpr={[1, 2]}
         performance={{ min: 0.5 }}
       >

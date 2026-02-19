@@ -192,7 +192,7 @@ export default function CloudyWeatherBackground({
     })());
 
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
       {/* 根据时间显示不同的渐变背景 */}
       {isSunset ? (
         // 日落渐变：深灰 -> 灰蓝 -> 灰紫 -> 灰橙（多级渐变，阴天效果）
@@ -216,7 +216,7 @@ export default function CloudyWeatherBackground({
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: true }}
+        gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
       >
         <CloudyScene isSunset={isSunset} />
       </Canvas>

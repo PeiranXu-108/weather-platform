@@ -289,7 +289,7 @@ export default function RainyWeatherBackground({
     })());
 
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
       {/* 深灰色渐变背景 */}
       {isSunset ? (
         // 日落时的深灰蓝渐变
@@ -316,13 +316,14 @@ export default function RainyWeatherBackground({
         gl={{ 
           alpha: true, 
           antialias: true,
+          preserveDrawingBuffer: true,
           powerPreference: "high-performance",
           stencil: false,
           depth: true,
         }}
-        dpr={[1, 2]} // 限制像素比以提高性能
-        performance={{ min: 0.5 }} // 性能监控，低于50%时降低质量
-        frameloop="always" // 始终使用 requestAnimationFrame
+        dpr={[1, 2]}
+        performance={{ min: 0.5 }}
+        frameloop="always"
       >
         <RainyScene />
       </Canvas>

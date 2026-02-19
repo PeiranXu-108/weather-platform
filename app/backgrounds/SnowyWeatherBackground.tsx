@@ -435,7 +435,7 @@ export default function SnowyWeatherBackground({
     })());
 
   return (
-    <div className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
       <div className="absolute inset-0">
         <div 
           className="absolute inset-0"
@@ -452,13 +452,14 @@ export default function SnowyWeatherBackground({
         gl={{ 
           alpha: true, 
           antialias: true,
+          preserveDrawingBuffer: true,
           powerPreference: "high-performance",
           stencil: false,
           depth: true,
         }}
-        dpr={[1, 2]} // 限制像素比以提高性能
-        performance={{ min: 0.5 }} // 性能监控，低于50%时降低质量
-        frameloop="always" // 始终使用 requestAnimationFrame
+        dpr={[1, 2]}
+        performance={{ min: 0.5 }}
+        frameloop="always"
       >
         <SnowyScene />
       </Canvas>
