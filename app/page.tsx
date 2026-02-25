@@ -348,7 +348,8 @@ export default function Home() {
   const isRainy = (weatherCondition.includes('雨') || weatherCondition.includes('雷'));
   const isSunny = weatherCondition.includes('晴');
   const isFoggy = weatherCondition.includes('雾');
-  const isCloudy = !isFoggy && (weatherCondition.includes('云') || weatherCondition.includes('阴'));
+  const isOvercast = !isFoggy && weatherCondition.includes('阴');
+  const isPartlyCloudy = !isFoggy && !isOvercast && weatherCondition.includes('云');
 
   const todayForecast = weatherData?.forecast.forecastday[0];
   const sunsetTime = todayForecast?.astro?.sunset;
@@ -436,9 +437,10 @@ export default function Home() {
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
       {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {showBackground && isCloudy && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} />}
       {!weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
-      {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {!showBackground && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
 
       <div className={`max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>

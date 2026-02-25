@@ -30,20 +30,24 @@ export function getBackgroundType(
   const isSnowy = weatherCondition.includes('雪');
   const isRainy = (weatherCondition.includes('雨') || weatherCondition.includes('雷'));
   const isSunny = weatherCondition.includes('晴');
-  const isCloudy = weatherCondition.includes('云') || weatherCondition.includes('阴');
   const isFoggy = weatherCondition.includes('雾');
-  
-  // 深色背景：雪天、雨天、晴天（包括白天、日落、夜晚）
+  const isOvercast = weatherCondition.includes('阴');
+  const isPartlyCloudy = !isOvercast && weatherCondition.includes('云');
+
   if (isSnowy || isRainy || isSunny) {
     return 'dark';
   }
-  
-  // 浅色背景：阴天、雾天
-  if (isCloudy || isFoggy) {
+
+  // Partly cloudy uses sky-colored backgrounds (blue/sunset/night) → light text
+  if (isPartlyCloudy) {
+    return 'dark';
+  }
+
+  // Overcast and foggy use light grey backgrounds → dark text
+  if (isOvercast || isFoggy) {
     return 'light';
   }
-  
-  // 默认深色背景
+
   return 'dark';
 }
 
