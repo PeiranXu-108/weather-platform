@@ -4,6 +4,7 @@ import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import CloudLayer from './CloudLayer';
 
 // 单个雪花组件 - 使用六角星形状
 function Snowflake({ 
@@ -379,6 +380,36 @@ function SnowyScene() {
       />
       {/* 补充光源 - 从下方反射的冷光 */}
       <directionalLight position={[0, -5, -5]} intensity={0.2} color={0xaaaaaa} />
+
+      {/* Background cloud layers behind snow */}
+      <CloudLayer
+        zDepth={-12}
+        speed={0.025}
+        scale={2.0}
+        opacity={0.35}
+        coverage={0.44}
+        softness={0.22}
+        warpStrength={1.3}
+        cloudColor={new THREE.Color(0.42, 0.44, 0.50)}
+        shadowColor={new THREE.Color(0.22, 0.24, 0.30)}
+        windDir={[1.0, 0.08]}
+        planeSize={[55, 32]}
+        yOffset={2}
+      />
+      <CloudLayer
+        zDepth={-8}
+        speed={0.04}
+        scale={1.4}
+        opacity={0.45}
+        coverage={0.46}
+        softness={0.18}
+        warpStrength={0.9}
+        cloudColor={new THREE.Color(0.36, 0.38, 0.44)}
+        shadowColor={new THREE.Color(0.18, 0.20, 0.26)}
+        windDir={[1.0, 0.12]}
+        planeSize={[52, 30]}
+        yOffset={0}
+      />
       
       {/* 使用 InstancedMesh 批量渲染大量简单雪花 */}
       <InstancedSnowflakes count={simpleCount} detailedFlakes={detailedFlakes} />

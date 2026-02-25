@@ -3,6 +3,7 @@
 import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import CloudLayer from './CloudLayer';
 
 // 单个雨滴组件 - 细长型
 function Raindrop({ 
@@ -233,6 +234,36 @@ function RainyScene() {
       />
       {/* 补充光源 - 从下方反射的冷光 */}
       <directionalLight position={[0, -5, -5]} intensity={0.15} color={0x888888} />
+
+      {/* Background cloud layers behind rain */}
+      <CloudLayer
+        zDepth={-12}
+        speed={0.03}
+        scale={2.2}
+        opacity={0.40}
+        coverage={0.44}
+        softness={0.20}
+        warpStrength={1.4}
+        cloudColor={new THREE.Color(0.38, 0.40, 0.44)}
+        shadowColor={new THREE.Color(0.18, 0.20, 0.24)}
+        windDir={[1.0, 0.10]}
+        planeSize={[55, 32]}
+        yOffset={2}
+      />
+      <CloudLayer
+        zDepth={-8}
+        speed={0.05}
+        scale={1.5}
+        opacity={0.50}
+        coverage={0.46}
+        softness={0.16}
+        warpStrength={1.0}
+        cloudColor={new THREE.Color(0.32, 0.34, 0.38)}
+        shadowColor={new THREE.Color(0.14, 0.16, 0.20)}
+        windDir={[1.0, 0.15]}
+        planeSize={[52, 30]}
+        yOffset={0}
+      />
       
       {/* 使用 InstancedMesh 批量渲染大量雨滴 */}
       <InstancedRaindrops count={simpleCount} />
