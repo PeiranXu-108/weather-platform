@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import CloudLayer from './CloudLayer';
 import type { CloudLayerProps } from './CloudLayer';
+import NightSkyEffects from './NightSky';
 
 // ---------------------------------------------------------------------------
 // Overcast layer presets (grey sky, full dense coverage)
@@ -80,8 +81,17 @@ function CloudyScene({
     return timeState === 'sunset' ? OVERCAST_LAYERS_SUNSET : OVERCAST_LAYERS_DAY;
   }, [timeState, cloudAmount, isPartlyCloudy]);
 
+  const showNightSky = isPartlyCloudy && timeState === 'night';
+
   return (
     <>
+      {showNightSky && (
+        <>
+          <ambientLight intensity={0.1} />
+          <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
+          <NightSkyEffects />
+        </>
+      )}
       {layers.map((cfg, i) => (
         <CloudLayer key={i} {...cfg} />
       ))}
