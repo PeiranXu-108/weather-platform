@@ -4,183 +4,379 @@ import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// 薄雾层组件（柔和朦胧）
-function FogLayer({ 
-  position, 
+// ---------------------------------------------------------------------------
+// GLSL: simplex noise + FBM
+// ---------------------------------------------------------------------------
+const noiseGLSL = /* glsl */ `
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec3 permute(vec3 x) { return mod289(((x * 34.0) + 10.0) * x); }
+
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                             + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
+                             dot(x12.zw, x12.zw)), 0.0);
+    m = m * m; m = m * m;
+    vec3 x_ = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h  = abs(x_) - 0.5;
+    vec3 ox = floor(x_ + 0.5);
+    vec3 a0 = x_ - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    vec3 g;
+    g.x  = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
+  float fbm2(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0);
+  }
+  float fbm3(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0) + 0.125 * snoise(p * 4.0);
+  }
+  float fbm4(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0)
+         + 0.125 * snoise(p * 4.0) + 0.0625 * snoise(p * 8.0);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Vertex shader
+// ---------------------------------------------------------------------------
+const vertexShader = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Fragment shader – soft fog wisps (optimised)
+// Total: 12 snoise per pixel (was 22)
+// ---------------------------------------------------------------------------
+const fragmentShader = /* glsl */ `
+  ${noiseGLSL}
+
+  uniform float uTime;
+  uniform float uSpeed;
+  uniform float uScale;
+  uniform vec3  uFogColor;
+  uniform vec3  uFogShadow;
+  uniform float uOpacity;
+  uniform float uCoverage;
+  uniform float uSoftness;
+  uniform float uWarpStrength;
+  uniform float uAspect;
+  uniform vec2  uWindDir;
+  uniform float uVerticalFade;
+
+  varying vec2 vUv;
+
+  void main() {
+    vec2 uv = vUv;
+    vec2 asp = vec2(uAspect, 1.0);
+    vec2 drift = uWindDir * uTime * uSpeed;
+    vec2 p = uv * asp * uScale + drift;
+
+    // Base fog shape – 4 octaves
+    float base = fbm4(p);
+
+    // Single-level domain warp – 2 octaves each
+    vec2 q = vec2(
+      fbm2(p + vec2(0.0, 0.0)),
+      fbm2(p + vec2(5.2, 1.3))
+    );
+
+    // Warped fog with temporal evolution – 3 octaves
+    float warped = fbm3(p + uWarpStrength * q + 0.08 * uTime * uSpeed);
+
+    float n = mix(base, warped, 0.35);
+    n = n * 0.5 + 0.5;
+
+    float fog = smoothstep(uCoverage, uCoverage + uSoftness, n);
+
+    // Brightness variation
+    float detail = snoise(p * 1.8 + drift * 0.4) * 0.10;
+    float shade = clamp(fog * 0.7 + 0.3 + detail, 0.0, 1.0);
+    vec3 col = mix(uFogShadow, uFogColor, shade);
+
+    // Vertical density: denser at bottom
+    float vertFade = mix(1.0, smoothstep(0.0, 0.85, 1.0 - uv.y), uVerticalFade);
+
+    // Edge vignette
+    float edgeFade = smoothstep(0.0, 0.12, uv.x) * smoothstep(1.0, 0.88, uv.x)
+                   * smoothstep(0.0, 0.10, uv.y) * smoothstep(1.0, 0.90, uv.y);
+
+    gl_FragColor = vec4(col, fog * uOpacity * edgeFade * vertFade);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// FogLayer component
+// ---------------------------------------------------------------------------
+interface FogLayerProps {
+  zDepth: number;
+  speed: number;
+  scale: number;
+  opacity: number;
+  coverage: number;
+  softness: number;
+  fogColor: THREE.Color;
+  fogShadow: THREE.Color;
+  warpStrength?: number;
+  windDir?: [number, number];
+  planeSize?: [number, number];
+  yOffset?: number;
+  verticalFade?: number;
+}
+
+function FogLayerMesh({
+  zDepth,
+  speed,
   scale,
   opacity,
-  seed,
-  speed
-}: { 
-  position: [number, number, number]; 
-  scale: [number, number];
-  opacity: number;
-  seed: number;
-  speed: number;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  
-  // 创建薄雾几何体和材质
-  const { geometry, material } = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(scale[0], scale[1], 1, 1);
-    
-    // 创建柔和噪声纹理用于更自然的雾效果（低频+平滑）
-    const random = (x: number, y: number) => {
-      const value = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-      return value - Math.floor(value);
-    };
-    
-    const smoothNoise = (x: number, y: number) => {
-      // 叠加多层低频噪声，减少粗糙感
-      const n1 = random(x * 0.05 + seed, y * 0.05 + seed);
-      const n2 = random(x * 0.02 + seed * 2, y * 0.02 + seed * 2);
-      const n3 = random(x * 0.01 + seed * 3, y * 0.01 + seed * 3);
-      return (n1 * 0.6 + n2 * 0.3 + n3 * 0.1);
-    };
-    
-    const size = 128; // 更小的纹理，降低噪点感
-    const dataArray = new Uint8Array(size * size * 4);
-    for (let i = 0; i < size * size; i++) {
-      const x = i % size;
-      const y = Math.floor(i / size);
-      const noise = smoothNoise(x, y);
-      const value = Math.floor(noise * 180 + 50); // 更柔和的亮度范围
-      dataArray[i * 4] = value;     // R
-      dataArray[i * 4 + 1] = value; // G
-      dataArray[i * 4 + 2] = value; // B
-      dataArray[i * 4 + 3] = Math.floor(noise * 120 + 30); // 更低透明度
-    }
-    
-    const texture = new THREE.DataTexture(
-      dataArray,
-      size,
-      size,
-      THREE.RGBAFormat
-    );
-    texture.needsUpdate = true;
-    
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xf7f7f7, // 更淡的浅灰
-      transparent: true,
-      opacity: opacity,
-      side: THREE.DoubleSide,
-      fog: true,
-      map: texture,
-      alphaMap: texture,
-      depthWrite: false, // 防止遮挡导致的生硬边缘
-    });
-    
-    return { geometry: geo, material: mat };
-  }, [scale, opacity, seed]);
-  
-  useFrame((state) => {
-    if (meshRef.current) {
-      // 水平移动创造流动效果
-      meshRef.current.position.x += speed * 0.006;
-      
-      // 循环移动
-      if (meshRef.current.position.x > 35) {
-        meshRef.current.position.x = -35;
-      }
-      
-      // 轻微的上下浮动
-      const floatAmount = 0.25;
-      const floatSpeed = 0.12 + seed * 0.04;
-      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * floatSpeed + seed * 10) * floatAmount;
-      
-      // 轻微的透明度变化
-      if (meshRef.current.material instanceof THREE.MeshBasicMaterial) {
-        const opacityVariation = 0.035;
-        const opacitySpeed = 0.09 + seed * 0.04;
-        meshRef.current.material.opacity = opacity + Math.sin(state.clock.elapsedTime * opacitySpeed + seed * 20) * opacityVariation;
-      }
+  coverage,
+  softness,
+  fogColor,
+  fogShadow,
+  warpStrength = 1.0,
+  windDir = [1.0, 0.1],
+  planeSize = [50, 28],
+  yOffset = 0,
+  verticalFade = 0.5,
+}: FogLayerProps) {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+
+  const uniforms = useMemo(
+    () => ({
+      uTime:         { value: 0 },
+      uSpeed:        { value: speed },
+      uScale:        { value: scale },
+      uFogColor:     { value: fogColor },
+      uFogShadow:    { value: fogShadow },
+      uOpacity:      { value: opacity },
+      uCoverage:     { value: coverage },
+      uSoftness:     { value: softness },
+      uWarpStrength: { value: warpStrength },
+      uWindDir:      { value: new THREE.Vector2(windDir[0], windDir[1]) },
+      uAspect:       { value: planeSize[0] / planeSize[1] },
+      uVerticalFade: { value: verticalFade },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.uniforms.uTime.value = clock.elapsedTime;
     }
   });
-  
+
   return (
-    <mesh ref={meshRef} geometry={geometry} material={material} position={position} />
+    <mesh position={[0, yOffset, zDepth]}>
+      <planeGeometry args={[planeSize[0], planeSize[1], 1, 1]} />
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={vertexShader}
+        fragmentShader={fragmentShader}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
   );
 }
 
-// 场景组件
-function FoggyScene() {
-  const fogLayers = useMemo(() => {
-    const layers: Array<{
-      position: [number, number, number];
-      scale: [number, number];
-      opacity: number;
-      seed: number;
-      speed: number;
-    }> = [];
-    
-    // 创建多层薄雾，不同位置、大小和透明度
-    for (let i = 0; i < 6; i++) {
-      const seed = i * 0.2;
-      const random = (offset: number) => {
-        const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      
-      layers.push({
-        position: [
-          (random(1) - 0.5) * 32, // x: -16 到 16，覆盖视野
-          (random(2) - 0.5) * 10 + 1.5, // y: 轻微上下分布
-          -3 - i * 1.2, // z: 从近到远分布，前景更靠近相机
-        ] as [number, number, number],
-        scale: [
-          18 + random(3) * 12, // 更宽
-          10 + random(4) * 6,   // 更高
-        ] as [number, number],
-        opacity: 0.12 + random(5) * 0.18, // 更柔和的透明度
-        seed: seed,
-        speed: 0.22 + random(6) * 0.25, // 更慢的移动速度
-      });
+// ---------------------------------------------------------------------------
+// FoggyScene – multiple fog layers at different depths
+// ---------------------------------------------------------------------------
+function FoggyScene({ isSunset }: { isSunset?: boolean }) {
+  const layers = useMemo(() => {
+    if (isSunset) {
+      return [
+        {
+          zDepth: -10,
+          speed: 0.03,
+          scale: 1.6,
+          opacity: 0.58,
+          coverage: 0.32,
+          softness: 0.24,
+          warpStrength: 0.9,
+          fogColor: new THREE.Color(0.55, 0.51, 0.53),
+          fogShadow: new THREE.Color(0.35, 0.31, 0.35),
+          windDir: [1.0, 0.06] as [number, number],
+          planeSize: [58, 34] as [number, number],
+          yOffset: 0,
+          verticalFade: 0.35,
+        },
+        {
+          zDepth: -5,
+          speed: 0.055,
+          scale: 1.1,
+          opacity: 0.75,
+          coverage: 0.38,
+          softness: 0.20,
+          warpStrength: 1.2,
+          fogColor: new THREE.Color(0.48, 0.44, 0.46),
+          fogShadow: new THREE.Color(0.28, 0.24, 0.28),
+          windDir: [1.0, 0.04] as [number, number],
+          planeSize: [60, 28] as [number, number],
+          yOffset: -3,
+          verticalFade: 0.6,
+        },
+        {
+          zDepth: -2,
+          speed: 0.08,
+          scale: 2.2,
+          opacity: 0.60,
+          coverage: 0.42,
+          softness: 0.18,
+          warpStrength: 0.6,
+          fogColor: new THREE.Color(0.45, 0.42, 0.44),
+          fogShadow: new THREE.Color(0.25, 0.22, 0.26),
+          windDir: [1.0, 0.02] as [number, number],
+          planeSize: [62, 22] as [number, number],
+          yOffset: -5,
+          verticalFade: 0.75,
+        },
+        {
+          zDepth: -0.5,
+          speed: 0.11,
+          scale: 2.8,
+          opacity: 0.40,
+          coverage: 0.48,
+          softness: 0.16,
+          warpStrength: 0.5,
+          fogColor: new THREE.Color(0.42, 0.38, 0.42),
+          fogShadow: new THREE.Color(0.22, 0.20, 0.24),
+          windDir: [1.0, 0.03] as [number, number],
+          planeSize: [64, 18] as [number, number],
+          yOffset: -6,
+          verticalFade: 0.85,
+        },
+      ];
     }
-    
-    return layers;
-  }, []);
-  
+
+    return [
+      // Deep background haze – slow, full coverage, lightest
+      {
+        zDepth: -11,
+        speed: 0.03,
+        scale: 1.6,
+        opacity: 0.62,
+        coverage: 0.30,
+        softness: 0.25,
+        warpStrength: 0.9,
+        fogColor: new THREE.Color(0.86, 0.88, 0.90),
+        fogShadow: new THREE.Color(0.65, 0.67, 0.71),
+        windDir: [1.0, 0.05] as [number, number],
+        planeSize: [58, 34] as [number, number],
+        yOffset: 0,
+        verticalFade: 0.32,
+      },
+      // Mid rolling fog
+      {
+        zDepth: -6,
+        speed: 0.05,
+        scale: 1.2,
+        opacity: 0.75,
+        coverage: 0.36,
+        softness: 0.20,
+        warpStrength: 1.2,
+        fogColor: new THREE.Color(0.80, 0.82, 0.85),
+        fogShadow: new THREE.Color(0.55, 0.58, 0.62),
+        windDir: [1.0, 0.08] as [number, number],
+        planeSize: [58, 30] as [number, number],
+        yOffset: -2,
+        verticalFade: 0.45,
+      },
+      // Lower dense fog band
+      {
+        zDepth: -3.5,
+        speed: 0.065,
+        scale: 1.0,
+        opacity: 0.82,
+        coverage: 0.38,
+        softness: 0.18,
+        warpStrength: 1.3,
+        fogColor: new THREE.Color(0.78, 0.80, 0.83),
+        fogShadow: new THREE.Color(0.50, 0.53, 0.58),
+        windDir: [1.0, 0.04] as [number, number],
+        planeSize: [62, 26] as [number, number],
+        yOffset: -4,
+        verticalFade: 0.6,
+      },
+      // Near ground mist
+      {
+        zDepth: -1.5,
+        speed: 0.09,
+        scale: 2.0,
+        opacity: 0.65,
+        coverage: 0.42,
+        softness: 0.16,
+        warpStrength: 0.7,
+        fogColor: new THREE.Color(0.82, 0.84, 0.86),
+        fogShadow: new THREE.Color(0.58, 0.60, 0.64),
+        windDir: [1.0, 0.02] as [number, number],
+        planeSize: [64, 20] as [number, number],
+        yOffset: -6,
+        verticalFade: 0.75,
+      },
+      // Foreground wisp
+      {
+        zDepth: -0.3,
+        speed: 0.12,
+        scale: 2.6,
+        opacity: 0.45,
+        coverage: 0.46,
+        softness: 0.15,
+        warpStrength: 0.5,
+        fogColor: new THREE.Color(0.85, 0.86, 0.88),
+        fogShadow: new THREE.Color(0.60, 0.62, 0.66),
+        windDir: [1.0, 0.03] as [number, number],
+        planeSize: [66, 16] as [number, number],
+        yOffset: -7,
+        verticalFade: 0.9,
+      },
+    ];
+  }, [isSunset]);
+
   return (
     <>
-      {/* 环境光 - 柔和的光照 */}
-      <ambientLight intensity={0.6} color={0xf5f5f5} />
-      <directionalLight position={[10, 10, 5]} intensity={0.4} color={0xffffff} />
-      
-      {/* 渲染薄雾层 */}
-      {fogLayers.map((layer, index) => (
-        <FogLayer
-          key={`fog-${index}`}
-          position={layer.position}
-          scale={layer.scale}
-          opacity={layer.opacity}
-          seed={layer.seed}
-          speed={layer.speed}
-        />
+      {layers.map((cfg, i) => (
+        <FogLayerMesh key={i} {...cfg} />
       ))}
-      
-      {/* 雾效果 - 增强朦胧感 */}
-      <fog attach="fog" args={[0xd0d0d0, 8, 25]} />
     </>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Exported component
+// ---------------------------------------------------------------------------
 interface FoggyWeatherBackgroundProps {
   className?: string;
   sunsetTime?: string;
   currentTime?: string;
 }
 
-export default function FoggyWeatherBackground({ 
-  className = '', 
+export default function FoggyWeatherBackground({
+  className = '',
   sunsetTime,
-  currentTime 
+  currentTime,
 }: FoggyWeatherBackgroundProps) {
-  // 判断是否是日落时段
   const isSunset = useMemo(() => {
-    if (!sunsetTime || !currentTime) {
-      return false;
-    }
-    
+    if (!sunsetTime || !currentTime) return false;
     try {
       const currentDate = new Date(currentTime.replace(' ', 'T'));
       const [sunsetTimePart, sunsetPeriod] = sunsetTime.split(' ');
@@ -193,11 +389,9 @@ export default function FoggyWeatherBackground({
       }
       const sunsetDate = new Date(currentDate);
       sunsetDate.setHours(sunsetHours24, sunsetMinutes, 0, 0);
-      
-      const oneHourBeforeSunset = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
-      const oneHourAfterSunset = new Date(sunsetDate.getTime() + 60 * 60 * 1000);
-      
-      return currentDate >= oneHourBeforeSunset && currentDate <= oneHourAfterSunset;
+      const oneHourBefore = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
+      const oneHourAfter = new Date(sunsetDate.getTime() + 60 * 60 * 1000);
+      return currentDate >= oneHourBefore && currentDate <= oneHourAfter;
     } catch {
       return false;
     }
@@ -205,41 +399,32 @@ export default function FoggyWeatherBackground({
 
   return (
     <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
-      {/* 浅灰色渐变背景 */}
       {isSunset ? (
-        // 日落时的深灰色渐变
-        <div 
+        <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, rgb(180, 185, 190) 0%, rgb(140, 145, 150) 50%, rgb(100, 105, 110) 100%)'
+            background:
+              'linear-gradient(to bottom, rgb(145, 140, 148) 0%, rgb(125, 120, 128) 30%, rgb(110, 108, 115) 60%, rgb(95, 92, 100) 100%)',
           }}
         />
       ) : (
-        // 正常雾天的浅灰色渐变
-        <div 
+        <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, rgb(230, 232, 235) 0%, rgb(200, 205, 210) 50%, rgb(170, 175, 180) 100%)'
+            background:
+              'linear-gradient(to bottom, rgb(205, 210, 216) 0%, rgb(190, 196, 204) 25%, rgb(175, 182, 192) 50%, rgb(160, 168, 178) 75%, rgb(148, 155, 165) 100%)',
           }}
         />
       )}
-      {/* 柔化边缘的叠加层，避免颗粒感过强 */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle at 50% 20%, rgba(255,255,255,0.35), rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.02) 70%, rgba(255,255,255,0))'
-        }}
-      />
-      
-      {/* Three.js Canvas - 薄雾效果 */}
+
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
-        dpr={[1, 2]}
+        gl={{ alpha: true, antialias: false }}
+        dpr={[1, 1]}
         performance={{ min: 0.5 }}
       >
-        <FoggyScene />
+        <FoggyScene isSunset={isSunset} />
       </Canvas>
     </div>
   );

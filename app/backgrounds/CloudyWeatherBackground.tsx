@@ -14,45 +14,39 @@ const noiseGLSL = /* glsl */ `
   vec3 permute(vec3 x) { return mod289(((x * 34.0) + 10.0) * x); }
 
   float snoise(vec2 v) {
-    const vec4 C = vec4(
-       0.211324865405187,   // (3.0-sqrt(3.0))/6.0
-       0.366025403784439,   // 0.5*(sqrt(3.0)-1.0)
-      -0.577350269189626,   // -1.0 + 2.0 * C.x
-       0.024390243902439);  // 1.0/41.0
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
     vec2 i  = floor(v + dot(v, C.yy));
-    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 x0 = v - i + dot(i, C.xx);
     vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
     vec4 x12 = x0.xyxy + C.xxzz;
     x12.xy -= i1;
     i = mod289(i);
     vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
                              + i.x + vec3(0.0, i1.x, 1.0));
-    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
-                             dot(x12.zw,x12.zw)), 0.0);
-    m = m * m;
-    m = m * m;
+    vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
+                             dot(x12.zw, x12.zw)), 0.0);
+    m = m * m; m = m * m;
     vec3 x_ = 2.0 * fract(p * C.www) - 1.0;
     vec3 h  = abs(x_) - 0.5;
     vec3 ox = floor(x_ + 0.5);
     vec3 a0 = x_ - ox;
-    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
     vec3 g;
-    g.x = a0.x * x0.x  + h.x * x0.y;
+    g.x  = a0.x * x0.x + h.x * x0.y;
     g.yz = a0.yz * x12.xz + h.yz * x12.yw;
     return 130.0 * dot(m, g);
   }
 
-  float fbm(vec2 p, int octaves) {
-    float value = 0.0;
-    float amp   = 0.5;
-    float freq  = 1.0;
-    for (int i = 0; i < 8; i++) {
-      if (i >= octaves) break;
-      value += amp * snoise(p * freq);
-      freq  *= 2.0;
-      amp   *= 0.5;
-    }
-    return value;
+  float fbm2(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0);
+  }
+  float fbm3(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0) + 0.125 * snoise(p * 4.0);
+  }
+  float fbm4(vec2 p) {
+    return 0.5 * snoise(p) + 0.25 * snoise(p * 2.0)
+         + 0.125 * snoise(p * 4.0) + 0.0625 * snoise(p * 8.0);
   }
 `;
 
@@ -68,7 +62,8 @@ const vertexShader = /* glsl */ `
 `;
 
 // ---------------------------------------------------------------------------
-// Fragment shader – procedural volumetric clouds
+// Fragment shader – procedural volumetric clouds (optimised)
+// Total: 12 snoise per pixel (was 26)
 // ---------------------------------------------------------------------------
 const fragmentShader = /* glsl */ `
   ${noiseGLSL}
@@ -81,48 +76,45 @@ const fragmentShader = /* glsl */ `
   uniform float uOpacity;
   uniform float uCoverage;
   uniform float uSoftness;
+  uniform float uWarpStrength;
+  uniform float uAspect;
   uniform vec2  uWindDir;
 
   varying vec2 vUv;
 
   void main() {
     vec2 uv = vUv;
-
-    // Drift with time
+    vec2 asp = vec2(uAspect, 1.0);
     vec2 drift = uWindDir * uTime * uSpeed;
-    vec2 p = uv * uScale + drift;
+    vec2 p = uv * asp * uScale + drift;
 
-    // Primary cloud shape (5 octaves)
-    float n = fbm(p, 5);
+    // Base cloud shape – 4 octaves
+    float base = fbm4(p);
 
-    // Warp the domain for more organic shapes
+    // Single-level domain warp – 2 octaves each (was double warp with 4 oct)
     vec2 q = vec2(
-      fbm(p + vec2(0.0, 0.0), 4),
-      fbm(p + vec2(5.2, 1.3), 4)
+      fbm2(p + vec2(0.0, 0.0)),
+      fbm2(p + vec2(5.2, 1.3))
     );
-    vec2 r = vec2(
-      fbm(p + 4.0 * q + vec2(1.7, 9.2) + 0.15 * uTime * uSpeed, 4),
-      fbm(p + 4.0 * q + vec2(8.3, 2.8) + 0.12 * uTime * uSpeed, 4)
-    );
-    float f = fbm(p + 4.0 * r, 5);
 
-    // Blend primary noise with warped noise
-    float cloud = mix(n, f, 0.6);
-    // Remap to [0,1] and apply coverage threshold
-    cloud = smoothstep(uCoverage - uSoftness, uCoverage + uSoftness, cloud * 0.5 + 0.5);
+    // Warped cloud with temporal drift – 3 octaves
+    float warped = fbm3(p + uWarpStrength * q + 0.1 * uTime * uSpeed);
 
-    // Lighting variation: use the warp vectors to fake illumination
-    float light = dot(normalize(q), vec2(0.4, 0.7)) * 0.5 + 0.5;
-    vec3 col = mix(uShadowColor, uCloudColor, light * 0.6 + cloud * 0.4);
+    // Blend base + warped
+    float cloud = mix(base, warped, 0.4);
+    cloud = cloud * 0.5 + 0.5;
+    cloud = smoothstep(uCoverage, uCoverage + uSoftness, cloud);
 
-    // Edge vignette so the plane fades smoothly rather than hard-cutting
-    float edgeFade = 1.0;
-    edgeFade *= smoothstep(0.0, 0.18, uv.x) * smoothstep(1.0, 0.82, uv.x);
-    edgeFade *= smoothstep(0.0, 0.22, uv.y) * smoothstep(1.0, 0.78, uv.y);
+    // Lighting from vertical gradient + cheap detail
+    float lightGrad = smoothstep(0.0, 1.0, uv.y) * 0.3 + 0.7;
+    float detail = snoise(p * 1.5 + drift * 0.5) * 0.12;
+    vec3 col = mix(uShadowColor, uCloudColor, clamp((lightGrad + detail) * cloud, 0.0, 1.0));
 
-    float alpha = cloud * uOpacity * edgeFade;
+    // Edge vignette
+    float edgeFade = smoothstep(0.0, 0.15, uv.x) * smoothstep(1.0, 0.85, uv.x)
+                   * smoothstep(0.0, 0.18, uv.y) * smoothstep(1.0, 0.82, uv.y);
 
-    gl_FragColor = vec4(col, alpha);
+    gl_FragColor = vec4(col, cloud * uOpacity * edgeFade);
   }
 `;
 
@@ -209,54 +201,58 @@ function CloudyScene({ isSunset }: { isSunset?: boolean }) {
       return [
         {
           zDepth: -10,
-          speed: 0.012,
-          scale: 3.2,
-          opacity: 0.45,
-          coverage: 0.32,
-          softness: 0.28,
-          cloudColor: new THREE.Color(0.55, 0.50, 0.52),
+          speed: 0.05,
+          scale: 2.5,
+          opacity: 0.65,
+          coverage: 0.42,
+          softness: 0.18,
+          warpStrength: 1.6,
+          cloudColor: new THREE.Color(0.62, 0.56, 0.58),
           shadowColor: new THREE.Color(0.32, 0.28, 0.32),
-          windDir: [1.0, 0.2] as [number, number],
-          planeSize: [50, 30] as [number, number],
-          yOffset: 2,
+          windDir: [1.0, 0.12] as [number, number],
+          planeSize: [55, 32] as [number, number],
+          yOffset: 1,
         },
         {
-          zDepth: -6,
-          speed: 0.02,
-          scale: 2.2,
-          opacity: 0.58,
-          coverage: 0.30,
-          softness: 0.25,
-          cloudColor: new THREE.Color(0.52, 0.45, 0.48),
+          zDepth: -5,
+          speed: 0.07,
+          scale: 1.8,
+          opacity: 0.75,
+          coverage: 0.45,
+          softness: 0.15,
+          warpStrength: 1.3,
+          cloudColor: new THREE.Color(0.55, 0.48, 0.52),
           shadowColor: new THREE.Color(0.28, 0.24, 0.28),
-          windDir: [1.0, 0.35] as [number, number],
-          planeSize: [48, 28] as [number, number],
+          windDir: [1.0, 0.20] as [number, number],
+          planeSize: [52, 30] as [number, number],
           yOffset: 0,
         },
         {
-          zDepth: -3,
-          speed: 0.032,
-          scale: 1.4,
-          opacity: 0.68,
-          coverage: 0.28,
-          softness: 0.22,
-          cloudColor: new THREE.Color(0.45, 0.38, 0.42),
+          zDepth: -2,
+          speed: 0.10,
+          scale: 1.3,
+          opacity: 0.80,
+          coverage: 0.48,
+          softness: 0.14,
+          warpStrength: 1.0,
+          cloudColor: new THREE.Color(0.48, 0.42, 0.46),
           shadowColor: new THREE.Color(0.22, 0.18, 0.22),
-          windDir: [1.0, 0.15] as [number, number],
-          planeSize: [50, 28] as [number, number],
+          windDir: [1.0, 0.08] as [number, number],
+          planeSize: [55, 30] as [number, number],
           yOffset: -1,
         },
         {
           zDepth: -0.5,
-          speed: 0.045,
-          scale: 0.9,
-          opacity: 0.35,
-          coverage: 0.38,
-          softness: 0.2,
-          cloudColor: new THREE.Color(0.38, 0.32, 0.36),
-          shadowColor: new THREE.Color(0.18, 0.14, 0.18),
-          windDir: [1.0, 0.4] as [number, number],
-          planeSize: [52, 26] as [number, number],
+          speed: 0.14,
+          scale: 2.0,
+          opacity: 0.45,
+          coverage: 0.52,
+          softness: 0.16,
+          warpStrength: 0.7,
+          cloudColor: new THREE.Color(0.42, 0.36, 0.40),
+          shadowColor: new THREE.Color(0.20, 0.16, 0.20),
+          windDir: [1.0, 0.15] as [number, number],
+          planeSize: [58, 28] as [number, number],
           yOffset: -2,
         },
       ];
@@ -265,54 +261,58 @@ function CloudyScene({ isSunset }: { isSunset?: boolean }) {
     return [
       {
         zDepth: -10,
-        speed: 0.01,
-        scale: 3.0,
-        opacity: 0.5,
-        coverage: 0.30,
-        softness: 0.28,
-        cloudColor: new THREE.Color(0.72, 0.73, 0.76),
-        shadowColor: new THREE.Color(0.48, 0.50, 0.54),
-        windDir: [1.0, 0.2] as [number, number],
-        planeSize: [50, 30] as [number, number],
-        yOffset: 2,
+        speed: 0.05,
+        scale: 2.5,
+        opacity: 0.70,
+        coverage: 0.42,
+        softness: 0.18,
+        warpStrength: 1.6,
+        cloudColor: new THREE.Color(0.78, 0.80, 0.84),
+        shadowColor: new THREE.Color(0.42, 0.44, 0.50),
+        windDir: [1.0, 0.12] as [number, number],
+        planeSize: [55, 32] as [number, number],
+        yOffset: 1,
       },
       {
-        zDepth: -6,
-        speed: 0.018,
-        scale: 2.0,
-        opacity: 0.62,
-        coverage: 0.28,
-        softness: 0.25,
-        cloudColor: new THREE.Color(0.60, 0.62, 0.66),
-        shadowColor: new THREE.Color(0.38, 0.40, 0.44),
-        windDir: [1.0, 0.35] as [number, number],
-        planeSize: [48, 28] as [number, number],
+        zDepth: -5,
+        speed: 0.07,
+        scale: 1.8,
+        opacity: 0.80,
+        coverage: 0.45,
+        softness: 0.15,
+        warpStrength: 1.3,
+        cloudColor: new THREE.Color(0.68, 0.70, 0.74),
+        shadowColor: new THREE.Color(0.34, 0.36, 0.42),
+        windDir: [1.0, 0.20] as [number, number],
+        planeSize: [52, 30] as [number, number],
         yOffset: 0,
       },
       {
-        zDepth: -3,
-        speed: 0.028,
-        scale: 1.2,
-        opacity: 0.72,
-        coverage: 0.26,
-        softness: 0.22,
-        cloudColor: new THREE.Color(0.50, 0.52, 0.56),
-        shadowColor: new THREE.Color(0.30, 0.32, 0.36),
-        windDir: [1.0, 0.15] as [number, number],
-        planeSize: [50, 28] as [number, number],
+        zDepth: -2,
+        speed: 0.10,
+        scale: 1.3,
+        opacity: 0.85,
+        coverage: 0.48,
+        softness: 0.14,
+        warpStrength: 1.0,
+        cloudColor: new THREE.Color(0.55, 0.57, 0.62),
+        shadowColor: new THREE.Color(0.25, 0.27, 0.32),
+        windDir: [1.0, 0.08] as [number, number],
+        planeSize: [55, 30] as [number, number],
         yOffset: -1,
       },
       {
         zDepth: -0.5,
-        speed: 0.04,
-        scale: 0.8,
-        opacity: 0.38,
-        coverage: 0.35,
-        softness: 0.2,
-        cloudColor: new THREE.Color(0.40, 0.42, 0.46),
-        shadowColor: new THREE.Color(0.22, 0.24, 0.28),
-        windDir: [1.0, 0.4] as [number, number],
-        planeSize: [52, 26] as [number, number],
+        speed: 0.14,
+        scale: 2.0,
+        opacity: 0.50,
+        coverage: 0.52,
+        softness: 0.16,
+        warpStrength: 0.7,
+        cloudColor: new THREE.Color(0.48, 0.50, 0.55),
+        shadowColor: new THREE.Color(0.22, 0.24, 0.30),
+        windDir: [1.0, 0.15] as [number, number],
+        planeSize: [58, 28] as [number, number],
         yOffset: -2,
       },
     ];
@@ -393,8 +393,8 @@ export default function CloudyWeatherBackground({
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: true }}
-        dpr={[1, 1.5]}
+        gl={{ alpha: true, antialias: false }}
+        dpr={[1, 1]}
         performance={{ min: 0.5 }}
       >
         <CloudyScene isSunset={isSunset} />
