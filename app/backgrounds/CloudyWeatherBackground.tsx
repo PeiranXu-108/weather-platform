@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import CloudLayer from './CloudLayer';
 import type { CloudLayerProps } from './CloudLayer';
 import NightSkyEffects from './NightSky';
+import SunEffect from './SunEffect';
 
 // ---------------------------------------------------------------------------
 // Overcast layer presets (grey sky, full dense coverage)
@@ -62,8 +63,11 @@ function buildPartlyCloudyLayers(
   }));
 }
 
+const PC_DAY_SUN    = new THREE.Color(1.0, 0.96, 0.82);
+const PC_SUNSET_SUN = new THREE.Color(1.0, 0.72, 0.42);
+
 // ---------------------------------------------------------------------------
-// CloudyScene – compose multiple cloud layers
+// CloudyScene – compose multiple cloud layers + sky effects
 // ---------------------------------------------------------------------------
 function CloudyScene({
   timeState,
@@ -82,6 +86,7 @@ function CloudyScene({
   }, [timeState, cloudAmount, isPartlyCloudy]);
 
   const showNightSky = isPartlyCloudy && timeState === 'night';
+  const showSun      = isPartlyCloudy && timeState !== 'night';
 
   return (
     <>
@@ -91,6 +96,14 @@ function CloudyScene({
           <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
           <NightSkyEffects />
         </>
+      )}
+      {showSun && (
+        <SunEffect
+          sunPos={timeState === 'sunset' ? [0.15, 0.38] : [0.20, 0.94]}
+          sunColor={timeState === 'sunset' ? PC_SUNSET_SUN : PC_DAY_SUN}
+          intensity={timeState === 'sunset' ? 0.75 : 0.90}
+          zDepth={-14}
+        />
       )}
       {layers.map((cfg, i) => (
         <CloudLayer key={i} {...cfg} />

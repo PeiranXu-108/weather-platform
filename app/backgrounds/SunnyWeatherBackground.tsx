@@ -1,91 +1,23 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useMemo } from 'react';
+import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import NightSkyEffects from './NightSky';
+import SunEffect from './SunEffect';
 
-// 太阳组件
-function Sun({ position }: { position: [number, number, number] }) {
-  const sunRef = useRef<THREE.Group>(null);
-  
-  // 创建太阳（核心 + 光晕）
-  const sunGroup = useMemo(() => {
-    const group = new THREE.Group();
-    
-    // 太阳核心 - 明亮的黄色/白色（使用 MeshStandardMaterial 支持自发光）
-    const coreGeometry = new THREE.SphereGeometry(2, 32, 32);
-    const coreMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffaa,
-      emissive: 0xffffaa,
-      emissiveIntensity: 2.5,
-    });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    group.add(core);
-    
-    // 外层光晕 - 更大的半透明球体
-    const glowGeometry = new THREE.SphereGeometry(3.5, 32, 32);
-    const glowMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffcc,
-      transparent: true,
-      opacity: 0.7,
-      emissive: 0xffffcc,
-      emissiveIntensity: 2,
-    });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    group.add(glow);
-    
-    // 最外层光晕 - 更大的半透明球体
-    const outerGlowGeometry = new THREE.SphereGeometry(5.5, 32, 32);
-    const outerGlowMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffdd,
-      transparent: true,
-      opacity: 0.4,
-      emissive: 0xffffdd,
-      emissiveIntensity: 1.5,
-    });
-    const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
-    group.add(outerGlow);
-    
-    return group;
-  }, []);
-  
-  return (
-    <group ref={sunRef} position={position}>
-      <primitive object={sunGroup} />
-    </group>
-  );
-}
+// Daytime / sunset sun colours
+const DAY_SUN_COLOR = new THREE.Color(1.0, 0.96, 0.82);
+const SUNSET_SUN_COLOR = new THREE.Color(1.0, 0.72, 0.42);
 
-// 场景组件
+// Scene component – renders the shader-based sun with optical effects
 function SunnyWeatherScene({ isSunset }: { isSunset?: boolean }) {
-  // 太阳位置：右上角
-  const sunPosition: [number, number, number] = [12, 10, -20];
-  
   return (
-    <>
-      {/* 环境光 */}
-      <ambientLight intensity={isSunset ? 0.6 : 0.8} />
-      {/* 主光源（模拟太阳光） */}
-      <directionalLight 
-        position={sunPosition} 
-        intensity={isSunset ? 1.2 : 1.5} 
-        color={isSunset ? 0xffaa66 : 0xffffff}
-      />
-      {/* 补充光源 */}
-      <directionalLight position={[-5, 5, -5]} intensity={isSunset ? 0.3 : 0.4} />
-      {/* 点光源（从太阳位置发出强光） */}
-      <pointLight 
-        position={sunPosition} 
-        intensity={isSunset ? 2.5 : 3} 
-        color={isSunset ? 0xff8844 : 0xffffaa} 
-        distance={60} 
-        decay={2} 
-      />
-      
-      {/* 雾效果，增强深度感和真实感 */}
-      <fog attach="fog" args={isSunset ? [0x4a5568, 8, 25] : [0x87ceeb, 10, 30]} />
-    </>
+    <SunEffect
+      sunPos={isSunset ? [-0.06, 0.42] : [0.20, 0.94]}
+      sunColor={isSunset ? SUNSET_SUN_COLOR : DAY_SUN_COLOR}
+      intensity={isSunset ? 0.85 : 1.0}
+    />
   );
 }
 
@@ -109,12 +41,12 @@ interface SunnyWeatherBackgroundProps {
   isDay?: number; // API 提供的 is_day 字段：1=白天，0=黑夜
 }
 
-export default function SunnyWeatherBackground({ 
-  className = '', 
+export default function SunnyWeatherBackground({
+  className = '',
   sunsetTime,
   sunriseTime,
   currentTime,
-  isDay 
+  isDay
 }: SunnyWeatherBackgroundProps) {
   // 判断时间状态：日落时段、黑夜、正常白天
   // 优先使用 API 的 is_day 字段，避免时区问题
@@ -137,7 +69,7 @@ export default function SunnyWeatherBackground({
           sunriseDate.setHours(sunriseHours24, sunriseMinutes, 0, 0);
           const oneHourBeforeSunrise = new Date(sunriseDate.getTime() - 60 * 60 * 1000);
           const oneHourAfterSunrise = new Date(sunriseDate.getTime() + 60 * 60 * 1000);
-          
+
           // 如果在日出时段，不算黑夜
           if (currentDate >= oneHourBeforeSunrise && currentDate <= oneHourAfterSunrise) {
             return 'day';
@@ -148,15 +80,15 @@ export default function SunnyWeatherBackground({
       }
       return 'night';
     }
-    
+
     // 如果是白天，检查是否在日落时段
     if (!sunsetTime || !currentTime) {
       return 'day';
     }
-    
+
     try {
       const currentDate = new Date(currentTime.replace(' ', 'T'));
-      
+
       // 解析日落时间
       const [sunsetTimePart, sunsetPeriod] = sunsetTime.split(' ');
       const [sunsetHours, sunsetMinutes] = sunsetTimePart.split(':').map(Number);
@@ -168,15 +100,15 @@ export default function SunnyWeatherBackground({
       }
       const sunsetDate = new Date(currentDate);
       sunsetDate.setHours(sunsetHours24, sunsetMinutes, 0, 0);
-      
+
       const oneHourBeforeSunset = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
       const oneHourAfterSunset = new Date(sunsetDate.getTime() + 60 * 60 * 1000);
-      
+
       // 判断是否在日落前后一小时（日落时段）
       if (currentDate >= oneHourBeforeSunset && currentDate <= oneHourAfterSunset) {
         return 'sunset';
       }
-      
+
       return 'day';
     } catch {
       return 'day';
@@ -188,7 +120,7 @@ export default function SunnyWeatherBackground({
       {/* 根据时间状态显示不同的渐变背景 */}
       {timeState === 'sunset' ? (
         // 日落渐变：深蓝 -> 蓝 -> 紫 -> 橙 -> 深橙（多级渐变）
-        <div 
+        <div
           className="absolute inset-0"
           style={{
             background: 'linear-gradient(to bottom,rgb(69, 89, 142) 0%,rgb(95, 114, 177) 10%,rgb(108, 160, 244) 40%,rgb(196, 174, 247) 60%,rgb(242, 194, 159) 85%,rgb(234, 163, 124) 100%)'
@@ -196,7 +128,7 @@ export default function SunnyWeatherBackground({
         />
       ) : timeState === 'night' ? (
         // 黑夜渐变：深蓝色和黑色渐变
-        <div 
+        <div
           className="absolute inset-0"
           style={{
             background: 'linear-gradient(to bottom, rgb(10, 15, 30) 0%, rgb(5, 10, 25) 30%, rgb(0, 5, 20) 60%, rgb(0, 0, 15) 100%)'
@@ -210,7 +142,7 @@ export default function SunnyWeatherBackground({
           }}
         />
       )}
-      
+
       {/* Three.js Canvas */}
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
