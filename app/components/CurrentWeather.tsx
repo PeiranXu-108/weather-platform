@@ -1,12 +1,15 @@
+'use client';
+
 import React from 'react';
 import type { Location, Current } from '@/app/types/weather';
 import Image from 'next/image';
-import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
-import { translateLocation } from '@/app/utils/locationTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useTranslatedTexts } from '@/app/hooks/useTranslatedText';
+import { translateLocationName } from '@/app/utils/locationTranslations';
+import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 
 interface CurrentWeatherProps {
   location: Location;
@@ -19,7 +22,27 @@ interface CurrentWeatherProps {
 }
 
 export default function CurrentWeather({ location, current, textColorTheme, cityQuery, isFavorite, onToggleFavorite, opacity = 100 }: CurrentWeatherProps) {
-  const translatedLocation = translateLocation(location);
+  const originals = [
+    location.name ?? '',
+    location.region ?? '',
+    location.country ?? '',
+    current.condition.text ?? '',
+  ];
+  const geo = {
+    country: location.country ?? undefined,
+    region: location.region ?? undefined,
+    city: location.name ?? undefined,
+  };
+  const translated = useTranslatedTexts(originals, geo);
+  // 优先用静态映射（如 China→中国），避免翻译 API 未就绪时仍显示英文
+  const staticName = translateLocationName(originals[0], 'city');
+  const staticRegion = translateLocationName(originals[1], 'region');
+  const staticCountry = translateLocationName(originals[2], 'country');
+  const staticCondition = translateWeatherCondition(current.condition);
+  const displayName = staticName !== originals[0] ? staticName : translated[0];
+  const displayRegion = staticRegion !== originals[1] ? staticRegion : translated[1];
+  const displayCountry = staticCountry !== originals[2] ? staticCountry : translated[2];
+  const displayCondition = staticCondition !== originals[3] ? staticCondition : translated[3];
 
   // Format local time from location.localtime
   const formatTime = (timeString: string) => {
@@ -45,7 +68,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       {cityQuery && onToggleFavorite && (
         <button
           type="button"
-          onClick={() => onToggleFavorite(cityQuery, translatedLocation.name)}
+          onClick={() => onToggleFavorite(cityQuery, displayName)}
           className={`absolute top-2 right-2 z-10 rounded-full p-2 transition-all active:scale-95 ${
             textColorTheme.backgroundType === 'dark'
               ? 'hover:bg-white/10'
@@ -64,10 +87,10 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       <div className="flex flex-col flex-1 justify-between">
         <div>
           <h1 className={`text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
-            {translatedLocation.name}
+            {displayName}
           </h1>
           <p className={`text-xl ${textColorTheme.textColor.secondary} mb-4`}>
-            {translatedLocation.country} {translateLocation({ name: translatedLocation.region, region: translatedLocation.region, country: translatedLocation.country }).name??translatedLocation.region}
+            {displayCountry} {displayRegion}
           </p>
 
 
@@ -75,7 +98,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
             <div className="flex items-center">
               <Image
                 src={`https:${current.condition.icon}`}
-                alt={translateWeatherCondition(current.condition)}
+                alt={displayCondition}
                 width={60}
                 height={60}
                 className="w-12 h-12"
@@ -85,7 +108,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
                   {current.temp_c.toFixed(1)}°C
                 </p>
                 <p className={`text-x ${textColorTheme.textColor.secondary}`}>
-                  {translateWeatherCondition(current.condition)}
+                  {displayCondition}
                 </p>
               </div>
             </div>

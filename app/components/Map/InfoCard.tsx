@@ -1,6 +1,8 @@
+'use client';
+
 import { Current, Location } from "@/app/types/weather";
 import { TextColorTheme } from "@/app/utils/textColorTheme";
-import { translateLocationName } from "@/app/utils/locationTranslations";
+import { useTranslatedText } from "@/app/hooks/useTranslatedText";
 
 /** 天气卡片内容（与 InfoCard 气泡样式一致，供右下角 InfoCard 与地图点击气泡复用） */
 export function WeatherCardContent({
@@ -12,7 +14,16 @@ export function WeatherCardContent({
   current: Current;
   textColorTheme: TextColorTheme;
 }) {
-  const displayLocationName = translateLocationName(location?.name ?? "", "city");
+  const rawName = location?.name ?? "";
+  const rawCondition = current.condition.text ?? "";
+  const geo = {
+    country: location?.country,
+    region: location?.region,
+    city: location?.name,
+  };
+  const displayLocationName = useTranslatedText(rawName, geo);
+  const displayCondition = useTranslatedText(rawCondition, geo);
+
   return (
     <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10">
       <div className="flex items-center justify-between mb-2">
@@ -21,14 +32,14 @@ export function WeatherCardContent({
           <div className="flex items-center gap-2">
             <img
               src={`https:${current.condition.icon}`}
-              alt={current.condition.text}
+              alt={rawCondition}
               className="w-8 h-8"
             />
             <div>
               <p className="text-xl font-bold text-gray-900">
                 {current.temp_c.toFixed(1)}°
               </p>
-              <p className="text-xs text-gray-600">{current.condition.text}</p>
+              <p className="text-xs text-gray-600">{displayCondition}</p>
             </div>
           </div>
         </div>
