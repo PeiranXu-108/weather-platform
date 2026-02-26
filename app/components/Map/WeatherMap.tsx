@@ -1415,34 +1415,50 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
             <div className="flex flex-col">
               {temperatureLayerLoading && (
-                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
                   <div
-                    className="h-full bg-sky-500 transition-[width] duration-200 ease-out"
-                    style={{ width: `${temperatureLayerProgress}%` }}
+                    className="h-full rounded-full transition-[width] duration-200 ease-out"
+                    style={{
+                      width: `${temperatureLayerProgress}%`,
+                      background: 'linear-gradient(90deg, #0ea5e9 0%, #06b6d4 50%, #22d3ee 100%)',
+                      boxShadow: '0 0 12px rgba(14, 165, 233, 0.5)',
+                    }}
                   />
                 </div>
               )}
               {windLayerLoading && (
-                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
                   <div
-                    className="h-full bg-emerald-500 transition-[width] duration-200 ease-out"
-                    style={{ width: `${windLayerProgress}%` }}
+                    className="h-full rounded-full transition-[width] duration-200 ease-out"
+                    style={{
+                      width: `${windLayerProgress}%`,
+                      background: 'linear-gradient(90deg, #059669 0%, #10b981 50%, #34d399 100%)',
+                      boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)',
+                    }}
                   />
                 </div>
               )}
               {cloudLayerLoading && (
-                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
                   <div
-                    className="h-full bg-slate-500 transition-[width] duration-200 ease-out"
-                    style={{ width: `${cloudLayerProgress}%` }}
+                    className="h-full rounded-full transition-[width] duration-200 ease-out"
+                    style={{
+                      width: `${cloudLayerProgress}%`,
+                      background: 'linear-gradient(90deg, #475569 0%, #64748b 50%, #94a3b8 100%)',
+                      boxShadow: '0 0 12px rgba(100, 116, 139, 0.5)',
+                    }}
                   />
                 </div>
               )}
               {precipLayerLoading && (
-                <div className="h-1 w-full bg-white/50 backdrop-blur-sm">
+                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
                   <div
-                    className="h-full bg-indigo-500 transition-[width] duration-200 ease-out"
-                    style={{ width: `${precipLayerProgress}%` }}
+                    className="h-full rounded-full transition-[width] duration-200 ease-out"
+                    style={{
+                      width: `${precipLayerProgress}%`,
+                      background: 'linear-gradient(90deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%)',
+                      boxShadow: '0 0 12px rgba(99, 102, 241, 0.5)',
+                    }}
                   />
                 </div>
               )}
