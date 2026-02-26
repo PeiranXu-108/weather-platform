@@ -6,6 +6,7 @@ import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
+import { ICONS } from '@/app/utils/icons';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
@@ -157,10 +158,23 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
     return next24Hours.map(dataTypeConfigs[selectedDataType].extractor);
   }, [next24Hours, selectedDataType]);
 
-  // Prepare dropdown options
+  const dataTypeIcons: Record<DataType, string> = {
+    temperature: ICONS.temperature,
+    humidity: ICONS.humidity,
+    wind: ICONS.wind,
+    pressure: ICONS.pressure,
+    precipitation: ICONS.precipitation,
+    visibility: ICONS.visibility,
+    cloud: ICONS.cloudAmount,
+    uv: ICONS.uv,
+    gust: ICONS.wind,
+    dewpoint: ICONS.humidity,
+  };
+
   const dropdownOptions = Object.entries(dataTypeConfigs).map(([key, config]) => ({
     value: key,
     label: config.label,
+    icon: dataTypeIcons[key as DataType],
   }));
   
   const option = useMemo(() => {

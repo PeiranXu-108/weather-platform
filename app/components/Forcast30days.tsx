@@ -617,10 +617,10 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           },
         }}
         dropdownOptions={[
-          { value: 'bar', label: '柱状图' },
-          { value: 'line', label: '折线图' },
-          { value: 'scatter', label: '散点图' },
-          { value: 'pie', label: '饼状图' },
+          { value: 'bar', label: '柱状图', icon: ICONS.chartBar },
+          { value: 'line', label: '折线图', icon: ICONS.chartLine },
+          { value: 'scatter', label: '散点图', icon: ICONS.chartScatter },
+          { value: 'pie', label: '饼状图', icon: ICONS.chartPie },
         ]}
         otherButtons={[
           {

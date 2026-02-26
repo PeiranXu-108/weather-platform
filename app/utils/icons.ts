@@ -24,6 +24,13 @@ export const ICONS = {
   precipitation: '/icons/precipitation.svg',
   cloudRain: '/icons/cloud-rain.svg',
   cloudAmount: '/icons/cloud-amount.svg',
+  temperature: '/icons/temperature.svg',
+
+  // Chart types (SegmentedDropdown)
+  chartBar: '/icons/chart-bar.svg',
+  chartLine: '/icons/chart-line.svg',
+  chartScatter: '/icons/chart-scatter.svg',
+  chartPie: '/icons/chart-pie.svg',
 } as const;
 
 
