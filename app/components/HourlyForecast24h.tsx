@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type { Hour } from '@/app/types/weather';
+import type { Hour, Astro } from '@/app/types/weather';
 import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
@@ -15,9 +15,13 @@ interface HourlyForecast24hProps {
   currentTimeEpoch?: number; // Optional: current time epoch (more accurate)
   textColorTheme: TextColorTheme;
   opacity?: number;
+  /** Today's astro (sunrise/sunset) for the same day as the 24h strip */
+  astro?: Astro | null;
+  /** Next day's astro; used for the sunrise card when today's sunrise is before the strip (e.g. afternoon view) */
+  astroNextDay?: Astro | null;
 }
 
-export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, opacity = 100 }: HourlyForecast24hProps) {
+export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, opacity = 100, astro, astroNextDay }: HourlyForecast24hProps) {
   const [selectedHour, setSelectedHour] = useState<Hour | null>(null);
   // Parse current time correctly (format: "YYYY-MM-DD HH:mm")
   // Use provided epoch if available (more accurate), otherwise parse from string
@@ -69,6 +73,62 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   
   // Calculate which index in displayHours is the current hour
   const currentDisplayIndex = currentHourIndex - startIndex;
+
+  // Parse astro time "06:52 AM" / "05:36 PM" to (hour24, minute); API times are in location's local time.
+  const parseAstroTimeToMinutes = (timeStr: string): number | null => {
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return null;
+    let hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    if (match[3].toUpperCase() === 'PM' && hour !== 12) hour += 12;
+    if (match[3].toUpperCase() === 'AM' && hour === 12) hour = 0;
+    return hour * 60 + minute;
+  };
+
+  // Compute epoch for astro time on a given date using a same-day hour from API (location timezone).
+  const astroTimeToEpoch = (dateStr: string, timeStr: string, refHour: Hour): number => {
+    const mins = parseAstroTimeToMinutes(timeStr);
+    if (mins == null) return 0;
+    const refDateStr = refHour.time.slice(0, 10);
+    if (refDateStr !== dateStr) return 0;
+    const [refH, refM] = [parseInt(refHour.time.slice(11, 13), 10), parseInt(refHour.time.slice(14, 16), 10)];
+    const refMinutes = refH * 60 + refM;
+    const deltaSeconds = (mins - refMinutes) * 60;
+    return refHour.time_epoch + deltaSeconds;
+  };
+
+  const todayStr = currentTime.slice(0, 10);
+  const todayRefHour = displayHours.find((h) => h.time.slice(0, 10) === todayStr);
+  const sunriseEpoch = astro && todayRefHour ? astroTimeToEpoch(todayStr, astro.sunrise, todayRefHour) : 0;
+  const sunsetEpoch = astro && todayRefHour ? astroTimeToEpoch(todayStr, astro.sunset, todayRefHour) : 0;
+
+  const tomorrowStr = displayHours.find((h) => h.time.slice(0, 10) !== todayStr)?.time.slice(0, 10);
+  const tomorrowRefHour = tomorrowStr ? displayHours.find((h) => h.time.slice(0, 10) === tomorrowStr) : undefined;
+  const tomorrowSunriseEpoch = tomorrowStr && astroNextDay && tomorrowRefHour ? astroTimeToEpoch(tomorrowStr, astroNextDay.sunrise, tomorrowRefHour) : 0;
+
+  // Merge display hours with sunrise/sunset cards at the correct hour slots (today or tomorrow)
+  type StripItem =
+    | { type: 'hour'; data: Hour; isCurrent: boolean }
+    | { type: 'sunrise'; time: string }
+    | { type: 'sunset'; time: string };
+  const stripItems: StripItem[] = [];
+  displayHours.forEach((hour, index) => {
+    const hourDateStr = hour.time.slice(0, 10);
+    const isSameDay = hourDateStr === todayStr;
+    const isNextDay = hourDateStr === tomorrowStr;
+    stripItems.push({ type: 'hour', data: hour, isCurrent: index === currentDisplayIndex });
+    if (astro && isSameDay) {
+      if (sunriseEpoch >= hour.time_epoch && sunriseEpoch < hour.time_epoch + 3600) {
+        stripItems.push({ type: 'sunrise', time: astro.sunrise });
+      }
+      if (sunsetEpoch >= hour.time_epoch && sunsetEpoch < hour.time_epoch + 3600) {
+        stripItems.push({ type: 'sunset', time: astro.sunset });
+      }
+    }
+    if (astroNextDay && isNextDay && tomorrowSunriseEpoch > 0 && tomorrowSunriseEpoch >= hour.time_epoch && tomorrowSunriseEpoch < hour.time_epoch + 3600) {
+      stripItems.push({ type: 'sunrise', time: astroNextDay.sunrise });
+    }
+  });
 
   // Format time to Chinese format (e.g., "下午4时", "上午10时")
   // timeString is in local time format "YYYY-MM-DD HH:mm"
@@ -138,52 +198,91 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedHour]);
 
+  const cardBaseClass = `flex-shrink-0 w-20 text-center flex flex-col items-center rounded-xl px-2 py-2 shadow-sm`;
+  const cardInteractiveClass = isDarkTheme
+    ? 'hover:bg-white/10 focus-visible:ring-white/60 focus-visible:ring-offset-gray-900/60'
+    : 'hover:bg-white/30 focus-visible:ring-sky-200 focus-visible:ring-offset-white/60';
+
   return (
     <div className={`rounded-2xl shadow-xl p-4 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`}>未来24小时</h2>
       <div className="overflow-x-auto flex-1">
         <div className="flex gap-3 min-w-max pb-2 pr-1">
-          {displayHours.map((hour, index) => {
-            const isCurrentHour = index === currentDisplayIndex;
-            
-            return (
-              <button
-                type="button"
-                onClick={() => setSelectedHour(hour)}
-                key={`${hour.time_epoch}-${index}`}
-                className={`group flex-shrink-0 w-20 text-center flex flex-col items-center rounded-xl px-2 py-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
-                  isCurrentHour
-                    ? `${textColorTheme.backgroundType === 'dark' ? 'ring-2 ring-blue-300/70' : 'ring-2 ring-sky-400/80'}`
-                    : ''
-                } ${isDarkTheme ? 'hover:bg-white/10 focus-visible:ring-white/60 focus-visible:ring-offset-gray-900/60' : 'hover:bg-white/30 focus-visible:ring-sky-200 focus-visible:ring-offset-white/60'} shadow-sm`}
-                aria-label={`查看${formatTime(hour.time)}天气详情`}
-              >
-                <p className={`text-xs mb-1 whitespace-nowrap ${
-                  isCurrentHour ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
-                }`}>
-                  {isCurrentHour ? '现在' : formatTime(hour.time)}
-                </p>
-                <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>
-                  {getDayOfWeek(hour.time)}
-                </p>
-                <div className="flex justify-center mb-2">
-                  <Image
-                    src={`https:${hour.condition.icon}`}
-                    alt={translateWeatherCondition(hour.condition)}
-                    width={40}
-                    height={40}
-                    className="w-10 h-10 transition-transform duration-200 group-hover:scale-110"
-                  />
+          {stripItems.map((item, index) => {
+            if (item.type === 'hour') {
+              const { data: hour, isCurrent } = item;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setSelectedHour(hour)}
+                  key={`hour-${hour.time_epoch}-${index}`}
+                  className={`group ${cardBaseClass} transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                    isCurrent
+                      ? `${textColorTheme.backgroundType === 'dark' ? 'ring-2 ring-blue-300/70' : 'ring-2 ring-sky-400/80'}`
+                      : ''
+                  } ${cardInteractiveClass}`}
+                  aria-label={`查看${formatTime(hour.time)}天气详情`}
+                >
+                  <p className={`text-xs mb-1 whitespace-nowrap ${
+                    isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
+                  }`}>
+                    {isCurrent ? '现在' : formatTime(hour.time)}
+                  </p>
+                  <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>
+                    {getDayOfWeek(hour.time)}
+                  </p>
+                  <div className="flex justify-center mb-2">
+                    <Image
+                      src={`https:${hour.condition.icon}`}
+                      alt={translateWeatherCondition(hour.condition)}
+                      width={40}
+                      height={40}
+                      className="w-10 h-10 transition-transform duration-200 group-hover:scale-110"
+                    />
+                  </div>
+                  <p className={`text-sm font-semibold ${
+                    isCurrent ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
+                  }`}>
+                    {hour.temp_c.toFixed(1)}°C
+                  </p>
+                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>
+                    体感 {hour.feelslike_c.toFixed(1)}°C
+                  </p>
+                </button>
+              );
+            }
+            if (item.type === 'sunrise') {
+              return (
+                <div
+                  key={`sunrise-${index}`}
+                  className={`${cardBaseClass} ${isDarkTheme ? 'bg-white/5' : 'bg-white/70 border border-white/60'}`}
+                  aria-label={`日出 ${item.time}`}
+                >
+                  <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日出</p>
+                  <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>—</p>
+                  <div className="flex justify-center mb-2">
+                    <Icon src={ICONS.sunrise} className="w-10 h-10 text-amber-500" title="日出" />
+                  </div>
+                  <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`}>{item.time}</p>
+                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>—</p>
                 </div>
-                <p className={`text-sm font-semibold ${
-                  isCurrentHour ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
-                }`}>
-                  {hour.temp_c.toFixed(1)}°C
-                </p>
-                <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>
-                  体感 {hour.feelslike_c.toFixed(1)}°C
-                </p>
-              </button>
+              );
+            }
+            // item.type === 'sunset'
+            return (
+              <div
+                key={`sunset-${index}`}
+                className={`${cardBaseClass} ${isDarkTheme ? 'bg-white/5' : 'bg-white/70 border border-white/60'}`}
+                aria-label={`日落 ${item.time}`}
+              >
+                <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日落</p>
+                <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>—</p>
+                <div className="flex justify-center mb-2">
+                  <Icon src={ICONS.sunset} className="w-10 h-10 text-orange-500" title="日落" />
+                </div>
+                <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`}>{item.time}</p>
+                <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>—</p>
+              </div>
             );
           })}
         </div>

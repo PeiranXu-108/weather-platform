@@ -482,6 +482,8 @@ export default function Home() {
                     currentTimeEpoch={weatherData.location.localtime_epoch}
                     textColorTheme={textColorTheme}
                     opacity={opacity}
+                    astro={weatherData.forecast.forecastday[0]?.astro ?? null}
+                    astroNextDay={weatherData.forecast.forecastday[1]?.astro ?? null}
                   />
                 </div>
               </div>
