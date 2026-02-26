@@ -18,12 +18,15 @@ export default function MapTimelinePlayback({
   onTogglePlay,
 }: MapTimelinePlaybackProps) {
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-[min(680px,90%)] rounded-2xl bg-white/70 backdrop-blur-sm border border-white/50 shadow-xl px-4 py-3">
+    <div
+      className="absolute left-1/2 -translate-x-1/2 z-10 w-[min(680px,90%)] rounded-2xl bg-white/70 backdrop-blur-sm border border-white/50 shadow-xl px-4 py-3"
+      style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={onTogglePlay}
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-white/90 border border-white/70 text-slate-700 hover:bg-white transition-colors"
+          className="flex items-center justify-center w-9 h-9 min-w-[44px] min-h-[44px] rounded-full bg-white/90 border border-white/70 text-slate-700 hover:bg-white transition-colors"
           title={isPlaying ? '暂停播放' : '播放动画'}
           aria-label={isPlaying ? '暂停播放' : '播放动画'}
         >

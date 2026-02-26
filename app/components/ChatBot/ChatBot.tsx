@@ -46,14 +46,15 @@ export default function ChatBot({ textColorTheme }: ChatBotProps) {
       {/* 对话面板 */}
       <div
         ref={panelRef}
-        className={`fixed bottom-24 right-4 md:right-6 z-[90] transition-all duration-300 ease-out ${
+        className={`fixed right-4 md:right-6 z-[90] transition-all duration-300 ease-out ${
           isOpen
             ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
             : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
         }`}
         style={{
           width: 'min(380px, calc(100vw - 2rem))',
-          height: 'min(520px, calc(100vh - 10rem))',
+          height: 'min(520px, calc(100vh - 2rem))',
+          bottom: 'max(6rem, calc(env(safe-area-inset-bottom, 0px) + 4rem))',
         }}
       >
         <ChatPanel isDark={isDark} onClose={() => setIsOpen(false)} />
@@ -63,7 +64,7 @@ export default function ChatBot({ textColorTheme }: ChatBotProps) {
       <button
         ref={buttonRef}
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`fixed bottom-6 right-4 md:right-6 z-[90] w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-xl ${
+        className={`fixed right-4 md:right-6 z-[90] w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-xl ${
           isOpen
             ? isDark
               ? 'bg-white/20 hover:bg-white/30 text-white shadow-black/20 ring-1 ring-white/20'
@@ -72,6 +73,7 @@ export default function ChatBot({ textColorTheme }: ChatBotProps) {
               ? 'bg-sky-500/80 hover:bg-sky-500 text-white shadow-sky-500/30 hover:shadow-sky-500/50'
               : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-300/50 hover:shadow-sky-300/70'
         }`}
+        style={{ bottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}
         title={isOpen ? '关闭天气助手' : '打开天气助手'}
       >
         {isOpen ? (

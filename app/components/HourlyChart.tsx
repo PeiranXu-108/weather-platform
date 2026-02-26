@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
@@ -37,6 +37,14 @@ interface DataTypeConfig {
 
 export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 }: HourlyChartProps) {
   const [selectedDataType, setSelectedDataType] = useState<DataType>('temperature');
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    setIsMobile(mq.matches);
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   // Get next 24 hours from current time
   const next24Hours = hourlyData.slice(0, 24);
@@ -157,12 +165,14 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
   
   const option = useMemo(() => {
     const config = dataTypeConfigs[selectedDataType];
+    const titleFontSize = isMobile ? 14 : 18;
+    const axisFontSize = isMobile ? 10 : 12;
     return {
       title: {
         text: `24小时${config.label}预报`,
         left: 'center',
         textStyle: {
-          fontSize: 18,
+          fontSize: titleFontSize,
           fontWeight: 'bold',
           color: titleColor
         }
@@ -184,13 +194,14 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         data: [config.label],
         bottom: 10,
         textStyle: {
-          color: axisColor
+          color: axisColor,
+          fontSize: axisFontSize
         }
       },
       grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '15%',
+        left: isMobile ? '6%' : '3%',
+        right: isMobile ? '6%' : '4%',
+        bottom: isMobile ? '22%' : '15%',
         containLabel: true
       },
       dataZoom: [
@@ -213,7 +224,8 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         axisLabel: {
           rotate: 45,
           interval: 2,
-          color: axisColor
+          color: axisColor,
+          fontSize: axisFontSize
         },
         axisLine: {
           lineStyle: {
@@ -229,7 +241,8 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         },
         axisLabel: {
           formatter: (value: number) => config.formatter(value),
-          color: axisColor
+          color: axisColor,
+          fontSize: axisFontSize
         },
         axisLine: {
           lineStyle: {
@@ -272,10 +285,10 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         }
       ]
     };
-  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark]);
+  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark, isMobile]);
 
   return (
-    <div className={`rounded-2xl shadow-xl p-6 relative`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 relative min-h-[240px] sm:min-h-[280px]`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* Dropdown selector in top right */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
@@ -289,7 +302,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
 
       <ReactECharts 
         option={option} 
-        style={{ height: '400px', width: '100%' }}
+        style={{ height: isMobile ? '280px' : '400px', width: '100%' }}
         opts={{ renderer: 'svg' }}
       />
     </div>

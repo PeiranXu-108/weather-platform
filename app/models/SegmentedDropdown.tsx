@@ -98,7 +98,7 @@ export default function SegmentedDropdown({
             <button
               type="button"
               onClick={handleMainButtonClick}
-              className={`flex items-center gap-1 px-3 py-1 text-xs rounded transition-all ${
+              className={`flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs rounded transition-all ${
                 isDark
                   ? 'bg-white/20 text-white'
                   : 'bg-sky-100/60 text-sky-700'
@@ -125,7 +125,7 @@ export default function SegmentedDropdown({
                     key={option.value}
                     type="button"
                     onClick={() => handleOptionClick(option.value)}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                    className={`w-full text-left px-3 py-2.5 min-h-[44px] flex items-center text-xs transition-colors ${
                       mainButton.value === option.value
                         ? isDark
                           ? 'bg-white/15 text-white'
@@ -150,7 +150,7 @@ export default function SegmentedDropdown({
                 button.onClick?.();
                 setIsDropdownOpen(false);
               }}
-              className={`px-3 py-1 text-xs rounded transition-all ${
+              className={`px-3 py-2 min-h-[44px] flex items-center text-xs rounded transition-all ${
                 isDark
                   ? 'bg-white/20 text-white'
                   : 'bg-sky-100/60 text-sky-700'

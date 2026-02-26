@@ -32,7 +32,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
   const isDark = textColorTheme.backgroundType === 'dark';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 max-h-[100dvh] overflow-y-auto">
       {/* Overlay */}
       <div 
         className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
@@ -40,7 +40,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
       />
       
       {/* Modal Content */}
-      <div className={`relative w-full max-w-md p-8 rounded-3xl shadow-2xl border ${isDark ? 'border-white/20 bg-gray-900/80' : 'border-white/50 bg-white/80'} backdrop-blur-xl animate-in fade-in zoom-in duration-300`}>
+      <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 md:p-8 rounded-3xl shadow-2xl border ${isDark ? 'border-white/20 bg-gray-900/80' : 'border-white/50 bg-white/80'} backdrop-blur-xl animate-in fade-in zoom-in duration-300`}>
         {title && (
           <h3 className={`text-xl font-bold mb-4 ${textColorTheme.textColor.primary}`}>
             {title}
@@ -59,7 +59,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
 
         <button
           onClick={onClose}
-          className={`w-full py-4 rounded-2xl font-bold text-lg transition-all active:scale-95 ${
+          className={`w-full min-h-[44px] py-4 rounded-2xl font-bold text-lg transition-all active:scale-95 ${
             isDark 
               ? 'bg-white/10 hover:bg-white/20 text-white border border-white/20' 
               : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-200'

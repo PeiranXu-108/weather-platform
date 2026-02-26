@@ -190,19 +190,19 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
       </div>
 
       {selectedHour && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 max-h-[100dvh] overflow-y-auto">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setSelectedHour(null)}
           />
-          <div className={`relative w-full max-w-3xl overflow-hidden rounded-3xl border shadow-2xl ${isDarkTheme ? 'bg-gray-900/85 border-white/10 backdrop-blur-xl' : 'bg-white/90 border-white/50 backdrop-blur-xl'}`}>
+          <div className={`relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl border shadow-2xl flex flex-col ${isDarkTheme ? 'bg-gray-900/85 border-white/10 backdrop-blur-xl' : 'bg-white/90 border-white/50 backdrop-blur-xl'}`}>
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-x-10 top-0 h-32 bg-gradient-to-b from-white/10 to-transparent blur-3xl" />
             </div>
 
-            <div className="relative flex flex-col gap-4 p-6 md:p-8">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
+            <div className="relative flex flex-col gap-4 p-4 sm:p-6 md:p-8 overflow-y-auto min-w-0">
+              <div className="flex items-start justify-between gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className={`p-3 rounded-2xl ${isDarkTheme ? 'bg-white/5' : 'bg-sky-50'} shadow-inner`}>
                     <Image
                       src={`https:${selectedHour.condition.icon}`}
@@ -212,14 +212,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                       className="w-14 h-14"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className={`text-sm ${textColorTheme.textColor.secondary}`}>
                       {formatFullDateTime(selectedHour.time)}
                     </p>
-                    <p className={`text-3xl font-bold ${textColorTheme.textColor.primary}`}>
+                    <p className={`text-2xl sm:text-3xl font-bold truncate ${textColorTheme.textColor.primary}`}>
                       {selectedHour.temp_c.toFixed(1)}°C
                     </p>
-                    <p className={`text-base ${textColorTheme.textColor.muted}`}>
+                    <p className={`text-sm sm:text-base truncate ${textColorTheme.textColor.muted}`}>
                       {translateWeatherCondition(selectedHour.condition)}
                     </p>
                   </div>
@@ -227,14 +227,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                 <button
                   type="button"
                   onClick={() => setSelectedHour(null)}
-                  className={`rounded-full p-2 transition hover:rotate-90 ${isDarkTheme ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                  className={`rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 transition hover:rotate-90 ${isDarkTheme ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
                   aria-label="关闭天气详情"
                 >
                   <Icon src={ICONS.close} className="w-6 h-6" title="关闭" />
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 min-w-0">
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
                   {selectedHour.is_day === 1 ? '白天时段' : '夜间时段'}
                 </span>

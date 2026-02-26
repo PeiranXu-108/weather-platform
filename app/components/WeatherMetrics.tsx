@@ -46,16 +46,16 @@ export default function WeatherMetrics({ current, textColorTheme, opacity = 100 
   ];
 
   return (
-    <div className={`rounded-2xl shadow-xl p-6 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
+    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+      <h2 className={`text-lg sm:text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
         天气指标
       </h2>
       <div className="flex-1 flex flex-col justify-between">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {metrics.map((metric, index) => (
             <div
               key={index}
-              className={`${getCardStyle(textColorTheme.backgroundType)} rounded-xl p-4 transition-all hover:scale-105 hover:shadow-md`}
+              className={`${getCardStyle(textColorTheme.backgroundType)} rounded-xl p-3 sm:p-4 transition-all hover:scale-105 hover:shadow-md`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="flex items-center justify-center p-2 rounded-full">
@@ -65,7 +65,7 @@ export default function WeatherMetrics({ current, textColorTheme, opacity = 100 
                   {metric.label}
                 </p>
               </div>
-              <p className={`text-2xl font-bold ${textColorTheme.textColor.primary} text-right`}>
+              <p className={`text-lg sm:text-2xl font-bold ${textColorTheme.textColor.primary} text-right`}>
                 {metric.value}
               </p>
             </div>

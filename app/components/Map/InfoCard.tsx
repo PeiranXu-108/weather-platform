@@ -25,7 +25,7 @@ export function WeatherCardContent({
   const displayCondition = useTranslatedText(rawCondition, geo);
 
   return (
-    <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10">
+    <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[90px] border border-white/10">
       <div className="flex items-center justify-between mb-2">
         <div>
           <p className="text-xs text-gray-600 mb-1">{displayLocationName}</p>
@@ -36,7 +36,7 @@ export function WeatherCardContent({
               className="w-8 h-8"
             />
             <div>
-              <p className="text-xl font-bold text-gray-900">
+              <p className="text-lg sm:text-xl font-bold text-gray-900">
                 {current.temp_c.toFixed(1)}°
               </p>
               <p className="text-xs text-gray-600">{displayCondition}</p>
@@ -63,7 +63,7 @@ export default function FloatingWeatherInfo({
   if (!current && !loading) return null;
 
   return (
-    <div className="absolute bottom-4 right-4 z-10">
+    <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 z-10">
       {loading ? null : current ? (
         <WeatherCardContent location={location} current={current} textColorTheme={textColorTheme} />
       ) : null}

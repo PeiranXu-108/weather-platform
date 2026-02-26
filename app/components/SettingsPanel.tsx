@@ -173,7 +173,7 @@ export default function SettingsPanel({
       <button
         ref={buttonRef}
         onClick={() => setShowTooltip(!showTooltip)}
-        className={`p-2 rounded-full transition-all active:scale-95 ${
+        className={`p-2 rounded-full transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
           isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
         }`}
         aria-label="打开设置"

@@ -423,7 +423,7 @@ export default function Home() {
   }, [] as Hour[]) || [];
 
   return (
-    <main className="min-h-screen p-4 md:p-8 relative">
+    <main className="min-h-screen p-4 md:p-8 pb-20 relative" style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}>
       {/* Favorites Drawer */}
       <FavoritesDrawer
         textColorTheme={textColorTheme}
@@ -463,7 +463,7 @@ export default function Home() {
           ) : (
             <div className="space-y-6 animate-in fade-in duration-500">
               {/* Current Weather and 24h Forecast */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div className="lg:col-span-1">
                   <CurrentWeather
                     location={weatherData.location}
@@ -487,7 +487,7 @@ export default function Home() {
               </div>
 
               {/* Temperature Chart and Metrics Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 <div className="lg:col-span-2">
                   <TemperatureChart
                     location={{

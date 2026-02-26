@@ -174,7 +174,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
   };
 
   return (
-    <header className="mb-8 relative">
+    <header className="mb-8 relative pl-16 pr-[7rem] lg:pr-0">
       <div className="absolute top-0 right-0 flex items-center gap-3">
         {opacity !== undefined && onOpacityChange !== undefined && showBackground !== undefined && onShowBackgroundChange !== undefined && (
           <SettingsPanel
@@ -193,7 +193,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
             <button
               type="button"
               onClick={() => setProfileOpen(true)}
-              className={`p-2 rounded-full transition-all active:scale-95 ${
+              className={`p-2 rounded-full transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
                 theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
               }`}
               title="个人中心"
@@ -209,7 +209,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
           <button
             type="button"
             onClick={() => setAuthOpen(true)}
-            className={`p-2 rounded-full transition-all active:scale-95 ${
+            className={`p-2 rounded-full transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
               theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
             }`}
           >
@@ -230,7 +230,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
         session={session}
       />
 
-      {/* Search Bar */}
+      {/* Search Bar - pr on header reserves space for right-aligned buttons on mobile */}
       <div className="max-w-2xl mx-auto relative">
         <form onSubmit={handleSubmit} className="relative">
           <div className="relative">
@@ -246,7 +246,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 }
               }}
               placeholder="搜索城市"
-              className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-40' : 'pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
+              className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-12 sm:pr-20 md:pr-40' : 'pr-12 sm:pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <Icon
@@ -260,7 +260,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 type="button"
                 onClick={handleLocationClick}
                 disabled={locating || isLocating}
-                className={`p-2 rounded-lg transition-all ${locating || isLocating
+                className={`p-2 rounded-lg transition-all min-w-[44px] min-h-[44px] flex items-center justify-center ${locating || isLocating
                     ? 'border-sky-300 bg-sky-100/60 cursor-not-allowed'
                     : 'border-sky-200 bg-white/10 hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
                   }`}

@@ -63,13 +63,13 @@ export default function CurrentWeather({ location, current, textColorTheme, city
   const formattedLocalTime = formatTime(location.localtime);
   
   return (
-    <div className={`rounded-2xl shadow-xl p-4 h-full relative overflow-hidden flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+    <div className={`rounded-2xl shadow-xl p-3 sm:p-4 h-full relative overflow-hidden flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* Favorite button */}
       {cityQuery && onToggleFavorite && (
         <button
           type="button"
           onClick={() => onToggleFavorite(cityQuery, displayName)}
-          className={`absolute top-2 right-2 z-10 rounded-full p-2 transition-all active:scale-95 ${
+          className={`absolute top-2 right-2 z-10 rounded-full p-2 transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
             textColorTheme.backgroundType === 'dark'
               ? 'hover:bg-white/10'
               : 'hover:bg-black/5'
@@ -86,10 +86,10 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       )}
       <div className="flex flex-col flex-1 justify-between">
         <div>
-          <h1 className={`text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
+          <h1 className={`text-3xl sm:text-5xl lg:text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
             {displayName}
           </h1>
-          <p className={`text-xl ${textColorTheme.textColor.secondary} mb-4`}>
+          <p className={`text-base sm:text-xl ${textColorTheme.textColor.secondary} mb-4`}>
             {displayCountry} {displayRegion}
           </p>
 
@@ -104,7 +104,7 @@ export default function CurrentWeather({ location, current, textColorTheme, city
                 className="w-12 h-12"
               />
               <div className="ml-2">
-                <p className={`text-4xl font-bold ${textColorTheme.textColor.primary}`}>
+                <p className={`text-3xl sm:text-4xl font-bold ${textColorTheme.textColor.primary}`}>
                   {current.temp_c.toFixed(1)}°C
                 </p>
                 <p className={`text-x ${textColorTheme.textColor.secondary}`}>

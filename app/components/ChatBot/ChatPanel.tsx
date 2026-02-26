@@ -264,7 +264,7 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
         </div>
         <button
           onClick={onClose}
-          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all active:scale-95 ${
+          className={`w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
             isDark
               ? 'hover:bg-white/10 text-gray-400 hover:text-white'
               : 'hover:bg-black/5 text-gray-500 hover:text-gray-700'

@@ -1382,11 +1382,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           地图位置
         </h2>
       </div>
-      <div className="flex-1 rounded-lg overflow-hidden relative" style={{ minHeight: '800px' }} ref={fullscreenContainerRef}>
+      <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
         <div
           ref={mapContainerRef}
-          className="w-full h-full"
-          style={{ minHeight: '800px', position: 'relative', zIndex: 0 }}
+          className="w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]"
+          style={{ position: 'relative', zIndex: 0 }}
         />
         {/* 单击地图产生的天气气泡（与 InfoCard 样式一致；拖动地图时消失；z-30 位于最上层） */}
         {clickBubblePosition && (
@@ -1451,18 +1451,18 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         )}
         {/* 左上角：图例（降水在上，温度在下） */}
         {(precipLayerEnabled || temperatureLayerEnabled) && (
-          <div className="absolute top-4 left-4 z-10 flex flex-col gap-3">
+          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 flex flex-col gap-3">
             {precipLayerEnabled && <PrecipLegend />}
             {temperatureLayerEnabled && <TemperatureLegend />}
           </div>
         )}
         {/* 右上角：图层按钮和全屏按钮（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
           <div ref={layerDropdownRef}>
             <button
               type="button"
               onClick={() => setLayerDropdownOpen((v) => !v)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+              className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
               aria-expanded={layerDropdownOpen}
               aria-haspopup="true"
               title={anyLayerEnabled ? '图层：已开启' : '图层选项'}
@@ -1474,7 +1474,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
               </svg>
             </button>
           {layerDropdownOpen && (
-            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[140px] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
+            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[120px] max-w-[50vw] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
               <button
                 type="button"
                 onClick={() => {
@@ -1569,7 +1569,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="flex items-center justify-center w-10 h-10 rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+            className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
             title={isFullscreen ? '退出全屏' : '全屏'}
             aria-label={isFullscreen ? '退出全屏' : '全屏'}
           >
@@ -1587,11 +1587,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           </button>
         </div>
         {/* 上方正中间：缩放按钮（左右排布） */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-row gap-px">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10 flex flex-row gap-px">
           <button
             type="button"
             onClick={handleZoomOut}
-            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
             title="缩小"
             aria-label="缩小"
           >
@@ -1600,7 +1600,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           <button
             type="button"
             onClick={handleZoomIn}
-            className="w-9 h-9 flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+            className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
             title="放大"
             aria-label="放大"
           >

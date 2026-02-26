@@ -32,9 +32,12 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
   };
 
   return (
-    <div className={`flex items-end gap-2 p-3 border-t ${
-      isDark ? 'border-white/10' : 'border-gray-200/50'
-    }`}>
+    <div
+      className={`flex items-end gap-2 p-3 border-t ${
+        isDark ? 'border-white/10' : 'border-gray-200/50'
+      }`}
+      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+    >
       <textarea
         ref={textareaRef}
         value={value}
@@ -53,7 +56,7 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
       <button
         onClick={onSend}
         disabled={isLoading || !value.trim()}
-        className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-95 ${
+        className={`flex-shrink-0 w-10 h-10 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
           isLoading || !value.trim()
             ? isDark
               ? 'bg-white/5 text-gray-500 cursor-not-allowed'

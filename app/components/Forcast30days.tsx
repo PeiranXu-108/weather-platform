@@ -56,6 +56,14 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DailyForecast | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    setIsMobile(mq.matches);
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -286,6 +294,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
   }, [selectedDay]);
 
   const option = useMemo(() => {
+    const titleFontSize = isMobile ? 14 : 18;
+    const axisFontSize = isMobile ? 10 : 12;
     if (isPieChart) {
       return {
         title: {
@@ -293,7 +303,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           left: 'center',
           top: 10,
           textStyle: {
-            fontSize: 18,
+            fontSize: titleFontSize,
             fontWeight: 'bold',
             color: titleColor
           }
@@ -331,7 +341,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
               show: true,
               formatter: '{b}: {c}天',
               color: axisColor,
-              fontSize: 12
+              fontSize: axisFontSize
             },
             emphasis: {
               label: {
@@ -363,7 +373,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         text: '30日天气预报',
         left: 'center',
         textStyle: {
-          fontSize: 18,
+          fontSize: titleFontSize,
           fontWeight: 'bold',
           color: titleColor
         }
@@ -406,9 +416,9 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         }
       },
       grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '15%',
+        left: isMobile ? '6%' : '3%',
+        right: isMobile ? '6%' : '4%',
+        bottom: isMobile ? '22%' : '15%',
         containLabel: true
       },
       dataZoom: [
@@ -440,7 +450,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         data: dates,
         axisLabel: {
           color: axisColor,
-          rotate: 45
+          rotate: 45,
+          fontSize: axisFontSize
         },
         axisLine: {
           lineStyle: {
@@ -456,7 +467,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         },
         axisLabel: {
           formatter: (value: number) => `${value.toFixed(0)}°C`,
-          color: axisColor
+          color: axisColor,
+          fontSize: axisFontSize
         },
         axisLine: {
           lineStyle: {
@@ -573,7 +585,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         }
       ]
     };
-  }, [isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan]);
+  }, [isMobile, isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan]);
 
   if (error) {
     return (
@@ -776,12 +788,12 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setSelectedDay(null)}
           />
-          <div className={`relative w-full max-w-3xl overflow-hidden rounded-3xl border shadow-2xl ${isDarkTheme ? 'bg-gray-900/85 border-white/10 backdrop-blur-xl' : 'bg-white/90 border-white/50 backdrop-blur-xl'}`}>
+          <div className={`relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl border shadow-2xl flex flex-col ${isDarkTheme ? 'bg-gray-900/85 border-white/10 backdrop-blur-xl' : 'bg-white/90 border-white/50 backdrop-blur-xl'}`}>
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-x-10 top-0 h-32 bg-gradient-to-b from-white/10 to-transparent blur-3xl" />
             </div>
 
-            <div className="relative flex flex-col gap-4 p-6 md:p-8">
+            <div className="relative flex flex-col gap-4 p-4 sm:p-6 md:p-8 overflow-y-auto">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div>

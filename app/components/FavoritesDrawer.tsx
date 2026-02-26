@@ -188,9 +188,10 @@ export default function FavoritesDrawer({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`fixed top-4 left-4 z-[85] rounded-xl p-2 transition-all active:scale-95 ${
+          className={`fixed z-[85] rounded-xl p-2 transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
             isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
           }`}
+          style={{ top: 'max(1rem, env(safe-area-inset-top, 0px))', left: 'max(1rem, env(safe-area-inset-left, 0px))' }}
           aria-label="打开收藏城市抽屉"
           title="收藏城市"
         >
@@ -211,7 +212,7 @@ export default function FavoritesDrawer({
         />
 
         <aside
-          className={`absolute left-0 top-0 h-full w-[40vw] max-w-xs md:max-w-sm transition-transform duration-300 ease-out ${
+          className={`absolute left-0 top-0 h-full w-[85vw] max-w-[320px] sm:w-[40vw] sm:max-w-xs md:max-w-sm transition-transform duration-300 ease-out ${
             open ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -223,7 +224,7 @@ export default function FavoritesDrawer({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className={`rounded-xl p-2 transition ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
+                className={`rounded-xl p-2 min-w-[44px] min-h-[44px] flex items-center justify-center transition ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
                 aria-label="收起收藏抽屉"
               >
                 <Icon src={ICONS.sidebar} className={`w-6 h-6 ${textColorTheme.textColor.secondary}`} title="收起" />
@@ -251,7 +252,7 @@ export default function FavoritesDrawer({
                     return (
                       <div
                         key={fav.query}
-                        className={`group relative h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
+                        className={`group relative min-h-[100px] sm:min-h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
                           isDark ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-white/60 bg-white/30 hover:bg-white/50'
                         }`}
                       >

@@ -46,18 +46,18 @@ export default function AuthModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 max-h-[100dvh] overflow-y-auto">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className={`relative w-full max-w-md p-8 rounded-3xl shadow-2xl border ${
+        className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 md:p-8 rounded-3xl shadow-2xl border ${
           isDark ? 'border-white/20 bg-gray-900/80' : 'border-white/50 bg-white/80'
         } backdrop-blur-xl`}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/5 transition-colors"
+          className="absolute top-4 right-4 p-2 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-black/5 transition-colors"
         >
           <Icon src={ICONS.close} className={`w-5 h-5 ${textColorTheme.textColor.muted}`} title="关闭" />
         </button>
@@ -74,7 +74,7 @@ export default function AuthModal({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all ${
+              className={`w-full min-h-[44px] px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all ${
                 isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'
               }`}
               placeholder="your@email.com"
@@ -87,7 +87,7 @@ export default function AuthModal({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className={`w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all ${
+              className={`w-full min-h-[44px] px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all ${
                 isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900'
               }`}
               placeholder="••••••••"
