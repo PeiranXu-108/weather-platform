@@ -5,6 +5,8 @@ import type { WeatherResponse } from '@/app/types/weather';
 import { authOptions } from '@/app/lib/auth';
 import { recordApiUsage } from '@/app/lib/apiUsage';
 
+export const dynamic = 'force-dynamic';
+
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL;
 

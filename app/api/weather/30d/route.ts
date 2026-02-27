@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 import { recordApiUsage } from '@/app/lib/apiUsage';
 
+export const dynamic = 'force-dynamic';
+
 // 和风天气30日预报API的响应类型
 export interface QWeather30DayDaily {
   fxDate: string;
