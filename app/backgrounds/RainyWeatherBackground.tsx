@@ -320,7 +320,7 @@ export default function RainyWeatherBackground({
     })());
 
   return (
-    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
       {/* 深灰色渐变背景 */}
       {isSunset ? (
         // 日落时的深灰蓝渐变

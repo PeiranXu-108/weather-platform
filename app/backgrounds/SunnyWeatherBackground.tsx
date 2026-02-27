@@ -28,7 +28,7 @@ function NightScene({ moonPhase, moonIllumination }: { moonPhase?: string; moonI
     <>
       <ambientLight intensity={0.1} />
       <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
-      <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} />
+      <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
       <NightSkyEffects />
       <fog attach="fog" args={[0x0a0a1a, 10, 30]} />
     </>
@@ -122,7 +122,7 @@ export default function SunnyWeatherBackground({
   }, [sunsetTime, sunriseTime, currentTime, isDay]);
 
   return (
-    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`} aria-hidden>
       {/* 根据时间状态显示不同的渐变背景 */}
       {timeState === 'sunset' ? (
         // 日落渐变：深蓝 -> 蓝 -> 紫 -> 橙 -> 深橙（多级渐变）

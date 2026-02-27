@@ -398,7 +398,7 @@ export default function FoggyWeatherBackground({
   }, [sunsetTime, currentTime]);
 
   return (
-    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
       {isSunset ? (
         <div
           className="absolute inset-0"

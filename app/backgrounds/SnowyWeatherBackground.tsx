@@ -466,7 +466,7 @@ export default function SnowyWeatherBackground({
     })());
 
   return (
-    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
       <div className="absolute inset-0">
         <div 
           className="absolute inset-0"

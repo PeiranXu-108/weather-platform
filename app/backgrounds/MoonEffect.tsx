@@ -70,9 +70,10 @@ const fragmentShader = /* glsl */ `
       float termGlow = exp(-termDist * termDist * 12.0) * 0.04 * lit;
       vec3 termCol = vec3(0.95, 0.70, 0.40) * termGlow;
 
-      // Final surface colour
+      // Final surface colour（提高整体亮度）
       vec3 moonCol = surface * (lit + earthshine * (1.0 - lit)) * limb;
       moonCol += termCol;
+      moonCol *= 1.55;
 
       // Edge anti-aliasing
       float edge = 1.0 - smoothstep(1.0 - 0.025, 1.0, sqrt(r2));
@@ -81,24 +82,29 @@ const fragmentShader = /* glsl */ `
     }
 
     // ================================================================
-    // Atmospheric glow (multi-layer)
+    // 光晕：多层大气辉光 + 外圈柔光（参考图：月缘亮、蓝白晕向外消散）
     // ================================================================
     float glowNorm = dist / moonR;
 
-    float g1 = exp(-glowNorm * glowNorm * 1.0)  * 0.10;
-    float g2 = exp(-glowNorm * glowNorm * 0.18) * 0.04;
-    float g3 = exp(-glowNorm * glowNorm * 0.04) * 0.012;
-
-    vec3  glowCol   = vec3(0.72, 0.78, 0.88);
-    float glowScale = 0.3 + 0.7 * uIllumination;
-
-    float breathe = 0.97 + 0.03 * sin(uTime * 0.25);
+    // 内层：紧贴月缘的亮晕（蓝白）
+    float g1 = exp(-glowNorm * glowNorm * 1.0)   * 0.18;
+    float g2 = exp(-glowNorm * glowNorm * 0.35)  * 0.10;
+    float g3 = exp(-glowNorm * glowNorm * 0.12)  * 0.03;
+    vec3  glowCol   = vec3(0.82, 0.88, 0.98);
+    float glowScale = 0.4 + 0.6 * uIllumination;
+    float breathe   = 0.97 + 0.03 * sin(uTime * 0.25);
     col += glowCol * (g1 + g2 + g3) * glowScale * breathe;
 
-    float haze = exp(-glowNorm * glowNorm * 0.012) * 0.006;
-    col += vec3(0.50, 0.55, 0.65) * haze * uIllumination;
+    // 外层：大范围柔光，向夜空消散
+    float haloWide = exp(-glowNorm * glowNorm * 0.04) * 0.08;
+    col += vec3(0.62, 0.72, 0.88) * haloWide * uIllumination;
 
-    gl_FragColor = vec4(col, 0.0);
+    float haze = exp(-glowNorm * glowNorm * 0.012) * 0.018;
+    col += vec3(0.55, 0.62, 0.78) * haze * uIllumination;
+
+    // 与 SunEffect 一致：输出非零 alpha，便于混合与合成（太阳用 a = clamp(a, 0, 1)）
+    float a = clamp(length(col), 0.0, 1.0);
+    gl_FragColor = vec4(col, a);
   }
 `;
 
@@ -143,7 +149,7 @@ export default function MoonEffect({
   moonSize = 0.09,
   moonPhase = 'Full Moon',
   moonIllumination = 100,
-  zDepth = -17,
+  zDepth = -20,
   planeSize = [70, 40],
 }: MoonEffectProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
@@ -212,11 +218,7 @@ export default function MoonEffect({
         uniforms={uniforms}
         transparent
         depthWrite={false}
-        blending={THREE.CustomBlending}
-        blendSrc={THREE.OneFactor}
-        blendDst={THREE.OneFactor}
-        blendSrcAlpha={THREE.ZeroFactor}
-        blendDstAlpha={THREE.OneFactor}
+        blending={THREE.AdditiveBlending}
         side={THREE.DoubleSide}
       />
     </mesh>

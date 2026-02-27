@@ -99,7 +99,7 @@ function CloudyScene({
         <>
           <ambientLight intensity={0.1} />
           <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
-          <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} />
+          <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
           <NightSkyEffects />
         </>
       )}
@@ -215,7 +215,7 @@ export default function CloudyWeatherBackground({
   const bgGradient = gradientSet[timeState];
 
   return (
-    <div data-weather-bg className={`fixed inset-0 -z-10 ${className}`}>
+    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
       <div className="absolute inset-0" style={{ background: bgGradient }} />
 
       <Canvas

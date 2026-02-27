@@ -441,11 +441,11 @@ export default function Home() {
       {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
-      {!weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
-      {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
-      {!showBackground && <div className="fixed inset-0 -z-10 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {!weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
+      {!showBackground && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
 
-      <div className={`max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
+      <div className={`relative z-10 max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
         {/* Header with Search - Always visible */}
         <Header
           onCitySelect={handleCitySelect}
