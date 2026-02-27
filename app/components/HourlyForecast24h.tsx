@@ -27,24 +27,24 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   // Use provided epoch if available (more accurate), otherwise parse from string
   const currentTimeEpoch = providedEpoch ?? new Date(currentTime.replace(' ', 'T')).getTime() / 1000;
   const isDarkTheme = textColorTheme.backgroundType === 'dark';
-  
+
   // Find the index of the current hour in hourlyData
   // The hourly data contains hourly forecasts, we need to find the hour that contains the current time
   let currentHourIndex = -1;
-  
+
   // Find the hour that contains the current time
   // Each hour in hourlyData represents the start of that hour (e.g., 06:00 represents 06:00-06:59)
   for (let i = 0; i < hourlyData.length; i++) {
     const hourTimeEpoch = hourlyData[i].time_epoch;
     const nextHourTimeEpoch = i < hourlyData.length - 1 ? hourlyData[i + 1].time_epoch : hourTimeEpoch + 3600;
-    
+
     // Check if current time falls within this hour (hour start <= current time < next hour start)
     if (currentTimeEpoch >= hourTimeEpoch && currentTimeEpoch < nextHourTimeEpoch) {
       currentHourIndex = i;
       break;
     }
   }
-  
+
   // If we couldn't find the current hour, use the closest hour
   if (currentHourIndex === -1) {
     // Find the hour that's closest to current time
@@ -56,7 +56,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
         currentHourIndex = i;
       }
     }
-    
+
     // Fallback: if still not found, use the first hour that's >= current time
     if (currentHourIndex === -1) {
       currentHourIndex = hourlyData.findIndex(hour => hour.time_epoch >= currentTimeEpoch);
@@ -65,12 +65,12 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
       }
     }
   }
-  
+
   // Start from 1 hour before current hour (if available)
   const startIndex = Math.max(0, currentHourIndex - 1);
   // Get 1 hour before, current, and 24 hours after (total 26 hours)
   const displayHours = hourlyData.slice(startIndex, startIndex + 26);
-  
+
   // Calculate which index in displayHours is the current hour
   const currentDisplayIndex = currentHourIndex - startIndex;
 
@@ -137,10 +137,10 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
     const date = new Date(timeString.replace(' ', 'T'));
     const hour = date.getHours();
     const minute = date.getMinutes();
-    
+
     let period = '';
     let displayHour = hour;
-    
+
     if (hour >= 0 && hour < 6) {
       period = '凌晨';
     } else if (hour >= 6 && hour < 12) {
@@ -153,7 +153,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
       period = '晚上';
       displayHour = hour - 12;
     }
-    
+
     return `${period}${displayHour}时`;
   };
 
@@ -216,16 +216,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                   type="button"
                   onClick={() => setSelectedHour(hour)}
                   key={`hour-${hour.time_epoch}-${index}`}
-                  className={`group ${cardBaseClass} transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
-                    isCurrent
+                  className={`group ${cardBaseClass} transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${isCurrent
                       ? `${textColorTheme.backgroundType === 'dark' ? 'ring-2 ring-blue-300/70' : 'ring-2 ring-sky-400/80'}`
                       : ''
-                  } ${cardInteractiveClass}`}
+                    } ${cardInteractiveClass}`}
                   aria-label={`查看${formatTime(hour.time)}天气详情`}
                 >
-                  <p className={`text-xs mb-1 whitespace-nowrap ${
-                    isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
-                  }`}>
+                  <p className={`text-xs mb-1 whitespace-nowrap ${isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
+                    }`}>
                     {isCurrent ? '现在' : formatTime(hour.time)}
                   </p>
                   <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>
@@ -240,9 +238,8 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                       className="w-10 h-10 transition-transform duration-200 group-hover:scale-110"
                     />
                   </div>
-                  <p className={`text-sm font-semibold ${
-                    isCurrent ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
-                  }`}>
+                  <p className={`text-sm font-semibold ${isCurrent ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
+                    }`}>
                     {hour.temp_c.toFixed(1)}°C
                   </p>
                   <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>
@@ -255,7 +252,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
               return (
                 <div
                   key={`sunrise-${index}`}
-                  className={`${cardBaseClass} ${isDarkTheme ? 'bg-white/5' : 'bg-white/70 border border-white/60'}`}
+                  className={cardBaseClass}
                   aria-label={`日出 ${item.time}`}
                 >
                   <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日出</p>
@@ -272,7 +269,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
             return (
               <div
                 key={`sunset-${index}`}
-                className={`${cardBaseClass} ${isDarkTheme ? 'bg-white/5' : 'bg-white/70 border border-white/60'}`}
+                className={cardBaseClass}
                 aria-label={`日落 ${item.time}`}
               >
                 <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日落</p>

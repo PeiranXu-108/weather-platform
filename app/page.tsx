@@ -64,7 +64,7 @@ function isDomesticCity(location: { country?: string; region?: string; name?: st
   if (country === '中国') {
     return true;
   }
-  if (country === 'china' || country === 'hongkong' || country === 'macau' || country === 'macao' || country === 'taiwan') {
+  if (country === 'china' || country === 'hong kong' || country === 'macau' || country === 'macao' || country === 'taiwan') {
     return true;
   }
 
@@ -518,11 +518,13 @@ export default function Home() {
                 opacity={opacity}
               />
 
-              <WeatherMap
-                location={weatherData.location}
-                textColorTheme={textColorTheme}
-                opacity={opacity}
-              />
+              {isDomesticCity(weatherData.location) && (
+                <WeatherMap
+                  location={weatherData.location}
+                  textColorTheme={textColorTheme}
+                  opacity={opacity}
+                />
+              )}
 
               {/* Footer */}
               <footer className="text-center pt-8 pb-4">

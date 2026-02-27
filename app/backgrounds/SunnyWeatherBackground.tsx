@@ -15,7 +15,7 @@ const SUNSET_SUN_COLOR = new THREE.Color(1.0, 0.72, 0.42);
 function SunnyWeatherScene({ isSunset }: { isSunset?: boolean }) {
   return (
     <SunEffect
-      sunPos={isSunset ? [-0.06, 0.42] : [0.20, 0.94]}
+      sunPos={isSunset ? [0.15, 0.38] : [0.20, 0.94]}
       sunColor={isSunset ? SUNSET_SUN_COLOR : DAY_SUN_COLOR}
       intensity={isSunset ? 0.85 : 1.0}
     />
