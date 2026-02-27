@@ -7,6 +7,7 @@ import CloudLayer from './CloudLayer';
 import type { CloudLayerProps } from './CloudLayer';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
+import MoonEffect from './MoonEffect';
 
 // ---------------------------------------------------------------------------
 // Overcast layer presets (grey sky, full dense coverage)
@@ -73,10 +74,14 @@ function CloudyScene({
   timeState,
   cloudAmount,
   isPartlyCloudy,
+  moonPhase,
+  moonIllumination,
 }: {
   timeState: 'day' | 'sunset' | 'night';
   cloudAmount: number;
   isPartlyCloudy: boolean;
+  moonPhase?: string;
+  moonIllumination?: number;
 }) {
   const layers = useMemo(() => {
     if (isPartlyCloudy) {
@@ -94,6 +99,7 @@ function CloudyScene({
         <>
           <ambientLight intensity={0.1} />
           <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
+          <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} />
           <NightSkyEffects />
         </>
       )}
@@ -184,6 +190,8 @@ interface CloudyWeatherBackgroundProps {
   mode?: 'overcast' | 'partly-cloudy';
   cloudAmount?: number;
   isDay?: number;
+  moonPhase?: string;
+  moonIllumination?: number;
 }
 
 export default function CloudyWeatherBackground({
@@ -194,6 +202,8 @@ export default function CloudyWeatherBackground({
   mode = 'overcast',
   cloudAmount = 100,
   isDay,
+  moonPhase,
+  moonIllumination,
 }: CloudyWeatherBackgroundProps) {
   const timeState = useMemo(
     () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
@@ -219,6 +229,8 @@ export default function CloudyWeatherBackground({
           timeState={timeState}
           cloudAmount={cloudAmount}
           isPartlyCloudy={isPartlyCloudy}
+          moonPhase={moonPhase}
+          moonIllumination={moonIllumination}
         />
       </Canvas>
     </div>

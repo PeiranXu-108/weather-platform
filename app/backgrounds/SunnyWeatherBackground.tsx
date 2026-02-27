@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
+import MoonEffect from './MoonEffect';
 
 // Daytime / sunset sun colours
 const DAY_SUN_COLOR = new THREE.Color(1.0, 0.96, 0.82);
@@ -22,11 +23,12 @@ function SunnyWeatherScene({ isSunset }: { isSunset?: boolean }) {
 }
 
 // 黑夜场景组件
-function NightScene() {
+function NightScene({ moonPhase, moonIllumination }: { moonPhase?: string; moonIllumination?: number }) {
   return (
     <>
       <ambientLight intensity={0.1} />
       <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
+      <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} />
       <NightSkyEffects />
       <fog attach="fog" args={[0x0a0a1a, 10, 30]} />
     </>
@@ -38,7 +40,9 @@ interface SunnyWeatherBackgroundProps {
   sunsetTime?: string;
   sunriseTime?: string;
   currentTime?: string;
-  isDay?: number; // API 提供的 is_day 字段：1=白天，0=黑夜
+  isDay?: number;
+  moonPhase?: string;
+  moonIllumination?: number;
 }
 
 export default function SunnyWeatherBackground({
@@ -46,7 +50,9 @@ export default function SunnyWeatherBackground({
   sunsetTime,
   sunriseTime,
   currentTime,
-  isDay
+  isDay,
+  moonPhase,
+  moonIllumination,
 }: SunnyWeatherBackgroundProps) {
   // 判断时间状态：日落时段、黑夜、正常白天
   // 优先使用 API 的 is_day 字段，避免时区问题
@@ -150,7 +156,7 @@ export default function SunnyWeatherBackground({
         gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
       >
         {timeState === 'night' ? (
-          <NightScene />
+          <NightScene moonPhase={moonPhase} moonIllumination={moonIllumination} />
         ) : (
           <SunnyWeatherScene isSunset={timeState === 'sunset'} />
         )}
