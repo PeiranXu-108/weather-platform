@@ -131,17 +131,20 @@ export interface MoonEffectProps {
   planeSize?: [number, number];
 }
 
-// Placeholder 1x1 texture so shader has a valid sampler until CDN texture loads
-function createPlaceholderMoonTexture(): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#888';
-  ctx.fillRect(0, 0, 1, 1);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
+// 模块级占位纹理，避免多次创建
+let placeholderMoonTexture: THREE.Texture | null = null;
+function getPlaceholderMoonTexture(): THREE.Texture {
+  if (!placeholderMoonTexture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#888';
+    ctx.fillRect(0, 0, 1, 1);
+    placeholderMoonTexture = new THREE.CanvasTexture(canvas);
+    placeholderMoonTexture.needsUpdate = true;
+  }
+  return placeholderMoonTexture;
 }
 
 export default function MoonEffect({
@@ -156,7 +159,7 @@ export default function MoonEffect({
   const loadedTexRef = useRef<THREE.Texture | null>(null);
   const [moonTexture, setMoonTexture] = useState<THREE.Texture | null>(null);
 
-  const placeholderTex = useMemo(() => createPlaceholderMoonTexture(), []);
+  const placeholderTex = getPlaceholderMoonTexture();
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
@@ -180,10 +183,14 @@ export default function MoonEffect({
         loadedTexRef.current = null;
       }
     };
-  }, [placeholderTex]);
+  }, []);
 
   const phaseDir = useMemo(() => getPhaseDir(moonPhase), [moonPhase]);
   const illum = Math.max(0, Math.min(100, moonIllumination)) / 100;
+
+  const lastIllumRef = useRef<number>(illum);
+  const lastPhaseDirRef = useRef<number>(phaseDir);
+  const lastMoonTexRef = useRef<THREE.Texture | null>(null);
 
   const uniforms = useMemo(
     () => ({
@@ -200,11 +207,21 @@ export default function MoonEffect({
   );
 
   useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.elapsedTime;
-      matRef.current.uniforms.uIllumination.value = illum;
-      matRef.current.uniforms.uPhaseDir.value = phaseDir;
-      matRef.current.uniforms.uMoonTex.value = moonTexture ?? placeholderTex;
+    if (!matRef.current) return;
+    const u = matRef.current.uniforms;
+    u.uTime.value = clock.elapsedTime;
+    if (lastIllumRef.current !== illum) {
+      lastIllumRef.current = illum;
+      u.uIllumination.value = illum;
+    }
+    if (lastPhaseDirRef.current !== phaseDir) {
+      lastPhaseDirRef.current = phaseDir;
+      u.uPhaseDir.value = phaseDir;
+    }
+    const currentTex = moonTexture ?? placeholderTex;
+    if (lastMoonTexRef.current !== currentTex) {
+      lastMoonTexRef.current = currentTex;
+      u.uMoonTex.value = currentTex;
     }
   });
 

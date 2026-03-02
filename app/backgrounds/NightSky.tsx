@@ -4,6 +4,10 @@ import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
+// 共享几何体：最大半径 0.07，用 scale 表示不同大小
+const STAR_MAX_SIZE = 0.07;
+const sharedStarGeometry = new THREE.SphereGeometry(STAR_MAX_SIZE, 8, 8);
+
 // ---------------------------------------------------------------------------
 // Star – single twinkling star with emissive material
 // ---------------------------------------------------------------------------
@@ -17,8 +21,7 @@ export function Star({
   seed: number;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-
-  const geometry = useMemo(() => new THREE.SphereGeometry(size, 8, 8), [size]);
+  const scale = size / STAR_MAX_SIZE;
 
   const material = useMemo(
     () =>
@@ -36,11 +39,13 @@ export function Star({
       const twinkleAmount = 0.3 + Math.sin(state.clock.elapsedTime * twinkleSpeed + seed) * 0.2;
       const intensity = 0.8 + twinkleAmount;
       (material as THREE.MeshStandardMaterial).emissiveIntensity = intensity;
-      meshRef.current.scale.setScalar(0.8 + twinkleAmount * 0.4);
+      meshRef.current.scale.setScalar(scale * (0.8 + twinkleAmount * 0.4));
     }
   });
 
-  return <mesh ref={meshRef} position={position} geometry={geometry} material={material} />;
+  return (
+    <mesh ref={meshRef} position={position} geometry={sharedStarGeometry} material={material} />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +232,7 @@ export default function NightSkyEffects() {
   const detailedStars = useMemo(() => {
     const detailed: Array<{ position: [number, number, number]; size: number; seed: number }> = [];
 
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 30; i++) {
       const seed = i * 0.1;
       const random = (offset: number) => {
         const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;

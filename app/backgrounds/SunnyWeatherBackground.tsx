@@ -149,11 +149,19 @@ export default function SunnyWeatherBackground({
         />
       )}
 
-      {/* Three.js Canvas */}
+      {/* Three.js Canvas - 性能优化配置 */}
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
+        gl={{
+          alpha: true,
+          antialias: true,
+          preserveDrawingBuffer: true,
+          powerPreference: 'high-performance',
+          stencil: false,
+        }}
+        dpr={[1, 2]}
+        performance={{ min: 0.5 }}
       >
         {timeState === 'night' ? (
           <NightScene moonPhase={moonPhase} moonIllumination={moonIllumination} />

@@ -117,6 +117,7 @@ function Snowflake({
     });
     
     const mergedGeometry = mergeGeometries(geometries, false);
+    geometries.forEach((g) => g.dispose());
     mergedGeometry?.computeBoundingSphere();
     const snowflakeMesh = new THREE.Mesh(mergedGeometry ?? new THREE.BufferGeometry(), branchMaterial);
     group.add(snowflakeMesh);
@@ -126,6 +127,21 @@ function Snowflake({
     
     return group;
   }, [size, seed]);
+
+  useEffect(() => {
+    return () => {
+      snowflakeGroup.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose());
+          } else {
+            obj.material?.dispose();
+          }
+        }
+      });
+    };
+  }, [snowflakeGroup]);
   
   // 初始位置和速度
   const initialY = useMemo(() => position[1], [position[1]]);
@@ -342,7 +358,7 @@ function SnowyScene() {
       seed: number;
     }> = [];
     
-    const detailedCount = 50;
+    const detailedCount = 25;
     const totalCount = 1000;
     
     // 生成精致雪花数据
@@ -482,7 +498,7 @@ export default function SnowyWeatherBackground({
         style={{ width: '100%', height: '100%' }}
         gl={{ 
           alpha: true, 
-          antialias: true,
+          antialias: false,
           preserveDrawingBuffer: true,
           powerPreference: "high-performance",
           stencil: false,

@@ -420,7 +420,12 @@ export default function FoggyWeatherBackground({
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ alpha: true, antialias: false }}
+        gl={{
+          alpha: true,
+          antialias: false,
+          powerPreference: 'high-performance',
+          stencil: false,
+        }}
         dpr={[1, 1]}
         performance={{ min: 0.5 }}
       >

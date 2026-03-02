@@ -5,62 +5,55 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import CloudLayer from './CloudLayer';
 
-// 单个雨滴组件 - 细长型
-function Raindrop({ 
-  position, 
-  length, 
-  speed, 
-  seed 
-}: { 
-  position: [number, number, number]; 
+// 共享几何体与材质，减少 150 份重复创建
+const RAINDROP_BASE_LENGTH = 0.5;
+const sharedRaindropGeometry = new THREE.CylinderGeometry(0.01, 0.01, RAINDROP_BASE_LENGTH, 4);
+const sharedRaindropMaterial = new THREE.MeshStandardMaterial({
+  color: 0xeaf0ff,
+  transparent: true,
+  opacity: 0.6,
+  emissive: 0xfffff,
+  emissiveIntensity: 0.2,
+});
+
+// 单个雨滴组件 - 细长型，使用共享 geometry/material，scale.y 表示长度
+function Raindrop({
+  position,
+  length,
+  speed,
+  seed,
+}: {
+  position: [number, number, number];
   length: number;
   speed: number;
   seed: number;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  
-  // 创建细长的雨滴几何体
-  const geometry = useMemo(() => {
-    // 使用细长的圆柱体或平面来表示雨滴
-    return new THREE.CylinderGeometry(0.01, 0.01, length, 4);
-  }, [length]);
-  
-  const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: 0xeaf0ff,
-      transparent: true,
-      opacity: 0.6,
-      emissive: 0xfffff,
-      emissiveIntensity: 0.2,
-    });
-  }, []);
-  
-  // 初始位置
+  const scaleY = length / RAINDROP_BASE_LENGTH;
+
   const initialY = useMemo(() => position[1], [position[1]]);
   const initialX = useMemo(() => position[0], [position[0]]);
-  
+
   useFrame((state) => {
     if (meshRef.current) {
-      // 快速垂直下落
       meshRef.current.position.y -= speed * 0.02;
-      
-      // 轻微的左右倾斜（模拟风的效果）
       const windOffset = Math.sin(state.clock.elapsedTime * 2 + seed) * 0.1;
       meshRef.current.position.x = initialX + windOffset;
-      
-      // 轻微的旋转（模拟雨滴下落时的倾斜）
-    //   meshRef.current.rotation.z = 0.1;
-      
-      // 循环：当雨滴落到底部时，重新从顶部开始
       if (meshRef.current.position.y < -15) {
         meshRef.current.position.y = initialY + 30;
         meshRef.current.position.x = initialX;
       }
     }
   });
-  
+
   return (
-    <mesh ref={meshRef} position={position} geometry={geometry} material={material} />
+    <mesh
+      ref={meshRef}
+      position={position}
+      geometry={sharedRaindropGeometry}
+      material={sharedRaindropMaterial}
+      scale={[1, scaleY, 1]}
+    />
   );
 }
 
@@ -196,8 +189,8 @@ function RainyScene() {
       seed: number;
     }> = [];
     
-    const detailedCount = 150; // 前30个使用独立组件（更精致）
-    const totalCount = 5000; // 总雨滴数量
+    const detailedCount = 60;
+    const totalCount = 5000;
     
     // 生成精致雨滴数据
     for (let i = 0; i < detailedCount; i++) {
@@ -346,7 +339,7 @@ export default function RainyWeatherBackground({
         style={{ width: '100%', height: '100%' }}
         gl={{ 
           alpha: true, 
-          antialias: true,
+          antialias: false,
           preserveDrawingBuffer: true,
           powerPreference: "high-performance",
           stencil: false,
