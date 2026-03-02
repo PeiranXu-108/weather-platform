@@ -471,6 +471,7 @@ export class WindFieldRenderer {
     this.canvas = document.createElement('canvas');
     this.canvas.width = size?.width || 1;
     this.canvas.height = size?.height || 1;
+    this.canvas.style.pointerEvents = 'none'; // 点击穿透，不阻挡地图点击天气卡片
     this.ctx = this.canvas.getContext('2d');
 
     if (!this.ctx) {
@@ -494,6 +495,16 @@ export class WindFieldRenderer {
     } else if (this.canvasLayer.setMap) {
       this.canvasLayer.setMap(this.amap);
     }
+    // 确保图层包装容器也点击穿透（高德可能把 canvas 包在 div 里）
+    const ensurePointerEventsNone = () => {
+      if (this.canvas) {
+        this.canvas.style.pointerEvents = 'none';
+        const parent = this.canvas.parentElement;
+        if (parent) parent.style.pointerEvents = 'none';
+      }
+    };
+    requestAnimationFrame(ensurePointerEventsNone);
+    setTimeout(ensurePointerEventsNone, 100);
   }
 
   private updateCanvasSize(): void {

@@ -100,6 +100,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
   const debouncedRenderPrecipLayerRef = useRef<((enabled?: boolean, targetEpoch?: number) => void) | null>(null);
   const targetTimelineEpochRef = useRef(0);
   const playbackFrameRenderingRef = useRef(false);
+  const mapContainerClickCaptureRef = useRef<((e: MouseEvent) => void) | null>(null);
 
   const timelineBaseEpoch = useMemo(() => {
     const sourceEpoch =
@@ -1132,15 +1133,9 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
       mapInstanceRef.current.on('moveend', handleMoveEnd);
       mapInstanceRef.current.on('zoomend', handleZoomEnd);
 
-      // 单击地图：在点击位置显示该点天气气泡（与 InfoCard 样式一致）
-      const handleMapClick = (e: any) => {
-        const map = mapInstanceRef.current;
-        if (!map) return;
-        const lnglat = e.lnglat;
-        const pixel = map.lngLatToContainer(lnglat);
-        const lat = lnglat.getLat();
-        const lon = lnglat.getLng();
-        setClickBubblePosition({ x: pixel.x, y: pixel.y });
+      // 单击地图：在点击位置显示该点天气气泡。使用容器捕获阶段监听，这样即便点击在气温/降水等图层上也能触发（图层会拦截冒泡，但捕获阶段先于目标）
+      const showWeatherBubbleAt = (pixelX: number, pixelY: number, lat: number, lon: number) => {
+        setClickBubblePosition({ x: pixelX, y: pixelY });
         setClickBubbleLoading(true);
         setClickBubbleWeather(null);
         fetchWeatherByCoords(lat, lon)
@@ -1151,13 +1146,31 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
           })
           .catch(() => setClickBubbleLoading(false));
       };
+      const handleContainerClickCapture = (e: MouseEvent) => {
+        const map = mapInstanceRef.current;
+        const container = mapContainerRef.current;
+        if (!map || !container) return;
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const Pixel = window.AMap?.Pixel;
+        const lnglat = Pixel != null
+          ? map.containerToLngLat(new window.AMap.Pixel(x, y))
+          : (map.containerToLngLat as ((p: { x: number; y: number }) => any))?.({ x, y });
+        if (!lnglat) return;
+        const lat = typeof lnglat.getLat === 'function' ? lnglat.getLat() : lnglat.lat;
+        const lon = typeof lnglat.getLng === 'function' ? lnglat.getLng() : lnglat.lng;
+        showWeatherBubbleAt(x, y, lat, lon);
+      };
+      mapContainerClickCaptureRef.current = handleContainerClickCapture;
+      mapContainerRef.current.addEventListener('click', handleContainerClickCapture, true);
+
       // 拖动地图时气泡消失
       const handleMapMoveStart = () => {
         setClickBubblePosition(null);
         setClickBubbleWeather(null);
         setClickBubbleLoading(false);
       };
-      mapInstanceRef.current.on('click', handleMapClick);
       mapInstanceRef.current.on('movestart', handleMapMoveStart);
 
       // 初始化时：标记用 location 天气，InfoCard 用视口中心天气（初始时与 location 一致）
@@ -1278,6 +1291,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
     document.head.appendChild(script);
 
     return () => {
+      // 移除容器捕获点击（与图层点击穿透配合，保证有图层时也能点出天气卡片）
+      if (mapContainerRef.current && mapContainerClickCaptureRef.current) {
+        mapContainerRef.current.removeEventListener('click', mapContainerClickCaptureRef.current, true);
+        mapContainerClickCaptureRef.current = null;
+      }
       // 清理地图实例和定时器
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);

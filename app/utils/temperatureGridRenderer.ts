@@ -720,6 +720,7 @@ export class TemperatureGridRenderer {
     const cellBounds = new window.AMap.Bounds(sw, ne);
 
     // 创建 Rectangle 对象，不直接设置 map（稍后通过 add 方法添加）
+    // clickable: false 使点击穿透到地图，不阻挡地图点击弹出天气卡片
     const rectangle = new window.AMap.Rectangle({
       bounds: cellBounds,
       strokeColor: cell.color,
@@ -728,6 +729,7 @@ export class TemperatureGridRenderer {
       fillOpacity: 0.6, // 60% 透明度
       zIndex: 60, // 保持在底图之上，但低于地名标注
       cursor: 'default', // 设置鼠标样式
+      clickable: false, // 不响应点击，事件穿透到地图
     });
 
     return rectangle;
@@ -913,6 +915,9 @@ export class TemperatureGridRenderer {
               if (rectangle.show && typeof rectangle.show === 'function') {
                 rectangle.show();
               }
+              // 覆盖物 DOM 点击穿透，避免阻挡地图 click
+              const container = typeof rectangle.getContainer === 'function' ? rectangle.getContainer() : null;
+              if (container && container.style) container.style.pointerEvents = 'none';
               this.rectangles.push(rectangle);
               renderedCells.set(cellKey, true);
               successCount++;
@@ -922,6 +927,8 @@ export class TemperatureGridRenderer {
               if (rectangle.show && typeof rectangle.show === 'function') {
                 rectangle.show();
               }
+              const container = typeof rectangle.getContainer === 'function' ? rectangle.getContainer() : null;
+              if (container && container.style) container.style.pointerEvents = 'none';
               this.rectangles.push(rectangle);
               renderedCells.set(cellKey, true);
               successCount++;
