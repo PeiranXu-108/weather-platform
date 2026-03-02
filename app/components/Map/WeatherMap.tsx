@@ -23,6 +23,8 @@ interface WeatherMapProps {
   location: Location;
   textColorTheme: TextColorTheme;
   opacity?: number;
+  /** 点击卡片「查看详情」时，切换到该坐标的天气主页并刷新 */
+  onGoToLocation?: (lat: number, lon: number) => void;
 }
 
 declare global {
@@ -36,7 +38,7 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
-export default function WeatherMap({ location, textColorTheme, opacity = 100 }: WeatherMapProps) {
+export default function WeatherMap({ location, textColorTheme, opacity = 100, onGoToLocation }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -1391,7 +1393,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         {/* 单击地图产生的天气气泡（与 InfoCard 样式一致；拖动地图时消失；z-30 位于最上层） */}
         {clickBubblePosition && (
           <div
-            className="absolute z-30 pointer-events-none"
+            className="absolute z-30"
             style={{
               left: clickBubblePosition.x,
               top: clickBubblePosition.y,
@@ -1399,15 +1401,32 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
             }}
           >
             {clickBubbleLoading ? (
-              <div className="backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10 flex items-center justify-center text-xs text-gray-500">
+              <div className="pointer-events-none backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10 flex items-center justify-center text-xs text-gray-500">
                 加载中...
               </div>
             ) : clickBubbleWeather?.current && clickBubbleWeather?.location ? (
-              <WeatherCardContent
-                location={clickBubbleWeather.location}
-                current={clickBubbleWeather.current}
-                textColorTheme={textColorTheme}
-              />
+              <div className="relative pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const loc = clickBubbleWeather!.location;
+                    setClickBubblePosition(null);
+                    setClickBubbleWeather(null);
+                    setClickBubbleLoading(false);
+                    onGoToLocation?.(loc.lat, loc.lon);
+                  }}
+                  className="absolute -top-1 -right-1 z-10 w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-900 text-xs font-medium"
+                  title="查看该位置天气详情"
+                  aria-label="查看该位置天气详情"
+                >
+                  »
+                </button>
+                <WeatherCardContent
+                  location={clickBubbleWeather.location}
+                  current={clickBubbleWeather.current}
+                  textColorTheme={textColorTheme}
+                />
+              </div>
             ) : null}
           </div>
         )}

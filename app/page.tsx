@@ -523,6 +523,7 @@ export default function Home() {
                   location={weatherData.location}
                   textColorTheme={textColorTheme}
                   opacity={opacity}
+                  onGoToLocation={handleLocationSelect}
                 />
               )}
 
