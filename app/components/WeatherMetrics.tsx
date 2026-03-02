@@ -13,80 +13,41 @@ interface WeatherMetricsProps {
 
 export default function WeatherMetrics({ current, textColorTheme, opacity = 100 }: WeatherMetricsProps) {
   const metrics = [
-    {
-      label: '湿度',
-      value: `${current.humidity}%`,
-      icon: <Icon src={ICONS.humidity} className="w-8 h-8 text-blue-500" title="湿度" />,
-    },
-    {
-      label: '风速',
-      value: `${Math.round(current.wind_kph)} km/h`,
-      icon: <Icon src={ICONS.wind} className="w-8 h-8 text-emerald-500" title="风速" />,
-    },
-    {
-      label: '气压',
-      value: `${current.pressure_mb} mb`,
-      icon: <Icon src={ICONS.pressure} className="w-8 h-8 text-violet-500" title="气压" />,
-    },
-    {
-      label: '紫外线',
-      value: current.uv.toString(),
-      icon: <Icon src={ICONS.uv} className="w-8 h-8 text-amber-500" title="紫外线" />,
-    },
-    {
-      label: '能见度',
-      value: `${current.vis_km} km`,
-      icon: <Icon src={ICONS.visibility} className="w-8 h-8 text-indigo-500" title="能见度" />,
-    },
-    {
-      label: '降水量',
-      value: `${current.precip_mm} mm`,
-      icon: <Icon src={ICONS.precipitation} className="w-8 h-8 text-cyan-500" title="降水量" />,
-    }
+    { label: '湿度', value: `${current.humidity}%`, icon: ICONS.humidity, iconColor: 'text-blue-500' },
+    { label: '风速', value: `${Math.round(current.wind_kph)} km/h`, icon: ICONS.wind, iconColor: 'text-emerald-500' },
+    { label: '气压', value: `${current.pressure_mb} mb`, icon: ICONS.pressure, iconColor: 'text-violet-500' },
+    { label: '紫外线', value: current.uv.toString(), icon: ICONS.uv, iconColor: 'text-amber-500' },
+    { label: '能见度', value: `${current.vis_km} km`, icon: ICONS.visibility, iconColor: 'text-indigo-500' },
+    { label: '降水量', value: `${current.precip_mm} mm`, icon: ICONS.precipitation, iconColor: 'text-cyan-500' },
+    { label: '风向', value: `${current.wind_dir} (${current.wind_degree}°)`, icon: ICONS.windDirection, iconColor: 'text-sky-500' },
+    { label: '云量', value: `${current.cloud}%`, icon: ICONS.cloudAmount, iconColor: 'text-slate-400' },
   ];
 
   return (
-    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <h2 className={`text-lg sm:text-xl font-bold ${textColorTheme.textColor.primary} mb-4`}>
+    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-full flex flex-col min-h-0`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+      <h2 className={`text-base sm:text-lg font-bold ${textColorTheme.textColor.primary} mb-3 sm:mb-4`}>
         天气指标
       </h2>
-      <div className="flex-1 flex flex-col justify-between">
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="grid grid-cols-2 grid-rows-4 gap-3 sm:gap-4 flex-1 min-h-0">
           {metrics.map((metric, index) => (
             <div
-              key={index}
-              className={`${getCardStyle(textColorTheme.backgroundType)} rounded-xl p-3 sm:p-4 transition-all hover:scale-105 hover:shadow-md`}
+              key={`${metric.label}-${index}`}
+              className={`${getCardStyle(textColorTheme.backgroundType)} rounded-lg p-3 sm:p-4 transition-all hover:scale-[1.02] hover:shadow-md flex items-center gap-2 sm:gap-3 min-h-0`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center justify-center p-2 rounded-full">
-                  {metric.icon}
-                </span>
-                <p className={`text-xl font-medium ${textColorTheme.textColor.secondary}`}>
+              <span className="flex shrink-0 items-center justify-center">
+                <Icon src={metric.icon} className={`w-7 h-7 sm:w-8 sm:h-8 ${metric.iconColor}`} title={metric.label} />
+              </span>
+              <div className="min-w-0 flex-1 flex flex-col justify-center text-left">
+                <p className={`text-xl sm:text-2xl font-medium ${textColorTheme.textColor.secondary} truncate`}>
                   {metric.label}
                 </p>
+                <p className={`text-sm sm:text-base font-bold ${textColorTheme.textColor.primary} truncate`}>
+                  {metric.value}
+                </p>
               </div>
-              <p className={`text-lg sm:text-2xl font-bold ${textColorTheme.textColor.primary} text-right`}>
-                {metric.value}
-              </p>
             </div>
           ))}
-        </div>
-
-        <div className="mt-4 pt-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className={textColorTheme.textColor.secondary}>风向</p>
-              <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
-                {current.wind_dir} ({current.wind_degree}°)
-              </p>
-            </div>
-            <div>
-              <p className={textColorTheme.textColor.secondary}>云量</p>
-              <p className={`font-semibold ${textColorTheme.textColor.primary}`}>
-                {current.cloud}%
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
