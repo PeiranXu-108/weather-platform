@@ -73,6 +73,11 @@ const fragmentShader = /* glsl */ `
     return smoothstep(size, size * 0.08, d);
   }
 
+  // Wrapped angular distance in [0, PI]
+  float angleDelta(float a, float b) {
+    return abs(atan(sin(a - b), cos(a - b)));
+  }
+
   void main() {
     vec2 uv = vUv;
 
@@ -121,30 +126,43 @@ const fragmentShader = /* glsl */ `
     //    Inner edge red → outer edge violet
     // ==================================================================
 
-    // --- Primary halo (22° equivalent) ---
-    float haloR = 0.38;
-    float haloW = 0.05;
-    float ringDist = abs(dist - haloR);
-    float ring = exp(-ringDist * ringDist / (2.0 * haloW * haloW * 0.08));
+    // --- Primary arc halo: center widest, sides taper ---
+    float haloR = 0.40;
+    float ringSigned = dist - haloR;
 
-    float haloPos = clamp((dist - (haloR - haloW)) / (haloW * 2.0), 0.0, 1.0);
-    float hue     = mix(0.0, 0.82, haloPos);
-    vec3  rainbow = hsv2rgb(vec3(hue, 0.85, 1.0));
+    float arcCenter = -1.57;
+    float arcDiff   = angleDelta(angle, arcCenter);
+    float arcMask   = 1.0 - smoothstep(0.66, 1.24, arcDiff);
+    float arcMid    = pow(max(0.0, 1.0 - arcDiff / 1.05), 1.45);
 
-    float angVar  = 0.90 + 0.10 * sin(angle * 3.0 + uTime * 0.18);
-    float breathe = 0.94 + 0.06 * sin(uTime * 0.4);
-    col += rainbow * ring * 0.38 * angVar * breathe;
-    a   += ring * 0.25 * angVar * breathe;
+    // Width grows at arc center and shrinks at both sides
+    float haloW     = mix(0.026, 0.094, arcMid);
+    float ringCore  = exp(-(ringSigned * ringSigned) / (2.0 * haloW * haloW));
+    float ringGlow  = exp(-(ringSigned * ringSigned) / (2.0 * (haloW * 1.9) * (haloW * 1.9)));
 
-    // --- Secondary outer halo (46° equivalent) ---
-    float halo2R = 0.64;
-    float halo2W = 0.035;
-    float ring2Dist = abs(dist - halo2R);
-    float ring2 = exp(-ring2Dist * ring2Dist / (2.0 * halo2W * halo2W * 0.10));
-    float hue2  = mix(0.0, 0.82, clamp((dist - (halo2R - halo2W)) / (halo2W * 2.0), 0.0, 1.0));
-    vec3  rb2   = hsv2rgb(vec3(hue2, 0.50, 1.0));
-    col += rb2 * ring2 * 0.18 * angVar;
-    a   += ring2 * 0.12 * angVar;
+    float haloPos = clamp(ringSigned / (haloW * 1.75) * 0.5 + 0.5, 0.0, 1.0);
+    float hue     = mix(0.02, 0.82, haloPos);
+    vec3  rainbow = hsv2rgb(vec3(hue, 0.76, 1.0));
+    vec3  pastelRainbow = mix(rainbow, vec3(1.0), 0.24);
+
+    float angVar  = 0.92 + 0.08 * sin(angle * 2.8 + uTime * 0.18);
+    float breathe = 0.95 + 0.05 * sin(uTime * 0.38);
+    float arcRing = (ringCore * 0.95 + ringGlow * 0.45) * arcMask;
+    col += pastelRainbow * arcRing * 0.46 * angVar * breathe;
+    a   += arcRing * 0.068 * angVar * breathe;
+
+    // --- Secondary outer rainbow haze ---
+    float halo2R = 0.63;
+    float halo2W = 0.060;
+    float ring2Signed = dist - halo2R;
+    float ring2 = exp(-(ring2Signed * ring2Signed) / (2.0 * halo2W * halo2W));
+    float ring2HaloPos = clamp(ring2Signed / (halo2W * 1.9) * 0.5 + 0.5, 0.0, 1.0);
+    float hue2  = mix(0.03, 0.80, ring2HaloPos);
+    vec3  rb2   = hsv2rgb(vec3(hue2, 0.42, 1.0));
+    vec3  pastelRb2 = mix(rb2, vec3(1.0), 0.38);
+    float ring2Arc = mix(0.55, 1.0, arcMask);
+    col += pastelRb2 * ring2 * 0.20 * ring2Arc;
+    a   += ring2 * 0.027 * ring2Arc;
 
     // ==================================================================
     // 4. God rays – delicate radial streaks
@@ -191,6 +209,22 @@ const fragmentShader = /* glsl */ `
     col += vec3(1.0, 0.84, 0.60) * g5 * 0.05;
     a   += g5 * 0.035;
 
+    // Circular halo orbs (Apple-style translucent circles)
+    float o1 = flareGhost(p, sunP + fDir * fLen * 0.64 + vec2(0.018, -0.010), 0.070);
+    float o2 = flareGhost(p, sunP + fDir * fLen * 0.82 + vec2(-0.020, 0.014), 0.048);
+    float o3 = flareGhost(p, sunP + fDir * fLen * 0.52 + vec2(-0.016, 0.006), 0.032);
+    col += vec3(0.76, 0.86, 1.0) * o1 * 0.08;
+    col += vec3(0.88, 0.82, 1.0) * o2 * 0.06;
+    col += vec3(0.86, 0.94, 1.0) * o3 * 0.05;
+    a   += o1 * 0.026 + o2 * 0.020 + o3 * 0.016;
+
+    // Soft concentric circular halo around the sun
+    float circleR1 = exp(-pow((dist - 0.52) / 0.12, 2.0));
+    float circleR2 = exp(-pow((dist - 0.34) / 0.09, 2.0));
+    col += vec3(0.80, 0.90, 1.0) * circleR1 * 0.05 * (0.65 + 0.35 * arcMask);
+    col += vec3(0.90, 0.94, 1.0) * circleR2 * 0.04 * (0.60 + 0.40 * arcMask);
+    a   += circleR1 * 0.014 + circleR2 * 0.011;
+
     // ==================================================================
     // 6. Atmospheric scintillation / shimmer
     // ==================================================================
@@ -203,7 +237,11 @@ const fragmentShader = /* glsl */ `
     // ==================================================================
     col *= uIntensity;
     a   *= uIntensity;
-    a    = clamp(a, 0.0, 1.0);
+
+    // Keep alpha energy aligned with color energy to avoid dark fringe on transparent canvas compositing.
+    float lum = max(max(col.r, col.g), col.b);
+    a = min(a, lum * 0.80 + 0.015);
+    a = clamp(a, 0.0, 1.0);
 
     gl_FragColor = vec4(col, a);
   }
