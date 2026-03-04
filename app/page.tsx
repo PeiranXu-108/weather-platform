@@ -119,10 +119,24 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [opacity, setOpacity] = useState(0);
   const [showBackground, setShowBackground] = useState(true);
+  const [uiHidden, setUiHidden] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
     isOpen: false,
     message: '',
   });
+
+  // Ctrl+Shift+H: toggle UI visibility (show only background)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'h') {
+        event.preventDefault();
+        event.stopPropagation();
+        setUiHidden((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const fetchWeatherData = async (city: string = 'hangzhou') => {
     try {
@@ -426,14 +440,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen p-4 md:p-8 pb-20 relative" style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}>
-      {/* Favorites Drawer */}
-      <FavoritesDrawer
-        textColorTheme={textColorTheme}
-        currentCityQuery={currentCityQuery}
-        favorites={favorites}
-        onChangeFavorites={setFavorites}
-        onSelectCity={handleSelectFavorite}
-      />
       {/* Backgrounds */}
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
@@ -445,6 +451,14 @@ export default function Home() {
       {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {!showBackground && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
 
+      <div className={uiHidden ? 'invisible pointer-events-none' : ''}>
+        <FavoritesDrawer
+          textColorTheme={textColorTheme}
+          currentCityQuery={currentCityQuery}
+          favorites={favorites}
+          onChangeFavorites={setFavorites}
+          onSelectCity={handleSelectFavorite}
+        />
       <div className={`relative z-10 max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
         {/* Header with Search - Always visible */}
         <Header
@@ -538,16 +552,17 @@ export default function Home() {
         </Suspense>
       </div>
 
-      {/* Custom Modal */}
-      <Modal
-        isOpen={modalConfig.isOpen}
-        onClose={handleCloseModal}
-        message={modalConfig.message}
-        textColorTheme={textColorTheme}
-      />
+        {/* Custom Modal */}
+        <Modal
+          isOpen={modalConfig.isOpen}
+          onClose={handleCloseModal}
+          message={modalConfig.message}
+          textColorTheme={textColorTheme}
+        />
 
-      {/* AI 天气助手 ChatBot */}
-      <ChatBot textColorTheme={textColorTheme} />
+        {/* AI 天气助手 ChatBot */}
+        <ChatBot textColorTheme={textColorTheme} />
+      </div>
     </main>
   );
 }
