@@ -24,7 +24,7 @@ export default function WeatherMetrics({ current, textColorTheme, opacity = 100 
   ];
 
   return (
-    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-full flex flex-col min-h-0`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+    <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-[400px] sm:h-[520px] flex flex-col min-h-0`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <h2 className={`text-base sm:text-lg font-bold ${textColorTheme.textColor.primary} mb-3 sm:mb-4`}>
         天气指标
       </h2>

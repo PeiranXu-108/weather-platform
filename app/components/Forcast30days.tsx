@@ -600,7 +600,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
   return (
-    <div className={`rounded-2xl shadow-xl p-6 h-full min-h-[320px] sm:min-h-[380px] relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
+    <div className={`rounded-2xl shadow-xl p-6 h-[400px] sm:h-[520px] relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* View Type Selector */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
