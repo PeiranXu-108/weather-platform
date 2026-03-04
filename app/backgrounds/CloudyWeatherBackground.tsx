@@ -8,6 +8,7 @@ import type { CloudLayerProps } from './CloudLayer';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
 import MoonEffect from './MoonEffect';
+import FireworksEffect from './FireworksEffect';
 
 // ---------------------------------------------------------------------------
 // Overcast layer presets (grey sky, full dense coverage)
@@ -76,12 +77,14 @@ function CloudyScene({
   isPartlyCloudy,
   moonPhase,
   moonIllumination,
+  fireworksTrigger,
 }: {
   timeState: 'day' | 'sunset' | 'night';
   cloudAmount: number;
   isPartlyCloudy: boolean;
   moonPhase?: string;
   moonIllumination?: number;
+  fireworksTrigger?: number;
 }) {
   const layers = useMemo(() => {
     if (isPartlyCloudy) {
@@ -114,6 +117,9 @@ function CloudyScene({
       {layers.map((cfg, i) => (
         <CloudLayer key={i} {...cfg} />
       ))}
+      {showNightSky && (
+        <FireworksEffect trigger={fireworksTrigger} intensity={1.14} zDepth={0} renderOrder={9999} />
+      )}
     </>
   );
 }
@@ -192,6 +198,7 @@ interface CloudyWeatherBackgroundProps {
   isDay?: number;
   moonPhase?: string;
   moonIllumination?: number;
+  fireworksTrigger?: number;
 }
 
 export default function CloudyWeatherBackground({
@@ -204,6 +211,7 @@ export default function CloudyWeatherBackground({
   isDay,
   moonPhase,
   moonIllumination,
+  fireworksTrigger,
 }: CloudyWeatherBackgroundProps) {
   const timeState = useMemo(
     () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
@@ -236,6 +244,7 @@ export default function CloudyWeatherBackground({
           isPartlyCloudy={isPartlyCloudy}
           moonPhase={moonPhase}
           moonIllumination={moonIllumination}
+          fireworksTrigger={fireworksTrigger}
         />
       </Canvas>
     </div>

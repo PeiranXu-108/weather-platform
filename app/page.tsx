@@ -119,6 +119,7 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [opacity, setOpacity] = useState(0);
   const [showBackground, setShowBackground] = useState(true);
+  const [fireworksTrigger, setFireworksTrigger] = useState(0);
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
     isOpen: false,
     message: '',
@@ -405,6 +406,11 @@ export default function Home() {
     }
   })();
 
+  const canLaunchFireworks = isNight && (isSunny || isPartlyCloudy);
+  const handleLaunchFireworks = () => {
+    setFireworksTrigger((prev) => prev + 1);
+  };
+
   const textColorTheme = !showBackground
     ? {
       backgroundType: 'light' as const,
@@ -437,10 +443,10 @@ export default function Home() {
       {/* Backgrounds */}
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
+      {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} fireworksTrigger={fireworksTrigger} />}
       {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
+      {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} moonPhase={moonPhase} moonIllumination={moonIllumination} fireworksTrigger={fireworksTrigger} />}
       {!weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {!showBackground && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
@@ -457,6 +463,8 @@ export default function Home() {
           onOpacityChange={setOpacity}
           showBackground={showBackground}
           onShowBackgroundChange={setShowBackground}
+          canLaunchFireworks={canLaunchFireworks}
+          onLaunchFireworks={handleLaunchFireworks}
         />
 
         <Suspense fallback={<WeatherSkeleton />}>
@@ -551,4 +559,3 @@ export default function Home() {
     </main>
   );
 }
-

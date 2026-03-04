@@ -83,6 +83,8 @@ interface SettingsPanelProps {
   onOpacityChange: (opacity: number) => void;
   showBackground: boolean;
   onShowBackgroundChange: (show: boolean) => void;
+  canLaunchFireworks?: boolean;
+  onLaunchFireworks?: () => void;
 }
 
 export default function SettingsPanel({
@@ -91,10 +93,13 @@ export default function SettingsPanel({
   onOpacityChange,
   showBackground,
   onShowBackgroundChange,
+  canLaunchFireworks = false,
+  onLaunchFireworks,
 }: SettingsPanelProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureStatus, setCaptureStatus] = useState<'success' | 'error' | null>(null);
+  const [fireworksStatus, setFireworksStatus] = useState<'launched' | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -143,6 +148,13 @@ export default function SettingsPanel({
       setTimeout(() => setCaptureStatus(null), 2000);
     }
   }, []);
+
+  const handleLaunchFireworks = useCallback(() => {
+    if (!showBackground || !canLaunchFireworks || !onLaunchFireworks) return;
+    onLaunchFireworks();
+    setFireworksStatus('launched');
+    setTimeout(() => setFireworksStatus(null), 1800);
+  }, [showBackground, canLaunchFireworks, onLaunchFireworks]);
 
   // Handle click outside to close tooltip
   useEffect(() => {
@@ -249,6 +261,41 @@ export default function SettingsPanel({
               />
             </button>
           </div>
+
+          {/* Fireworks Button: only for sunny/cloudy night backgrounds */}
+          {canLaunchFireworks && (
+            <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/10' : 'border-black/5'}`}>
+              <button
+                onClick={handleLaunchFireworks}
+                disabled={!showBackground}
+                className={`w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  !showBackground
+                    ? isDark
+                      ? 'bg-white/5 text-white/30 cursor-not-allowed'
+                      : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                    : fireworksStatus === 'launched'
+                      ? isDark
+                        ? 'bg-fuchsia-500/20 text-fuchsia-200'
+                        : 'bg-fuchsia-100/80 text-fuchsia-700'
+                      : isDark
+                        ? 'bg-gradient-to-r from-fuchsia-400/25 via-orange-300/25 to-sky-400/25 hover:from-fuchsia-400/35 hover:via-orange-300/35 hover:to-sky-400/35 text-white active:scale-[0.98]'
+                        : 'bg-gradient-to-r from-fuchsia-500/15 via-orange-400/15 to-sky-500/15 hover:from-fuchsia-500/25 hover:via-orange-400/25 hover:to-sky-500/25 text-slate-700 active:scale-[0.98]'
+                }`}
+              >
+                {fireworksStatus === 'launched' ? (
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 2a1 1 0 011 1v2.26a1 1 0 11-2 0V3a1 1 0 011-1zm0 12.74a1 1 0 011 1V18a1 1 0 11-2 0v-2.26a1 1 0 011-1zM3 9a1 1 0 100 2h2.26a1 1 0 100-2H3zm11.74 0a1 1 0 100 2H17a1 1 0 100-2h-2.26zM5.05 5.05a1 1 0 011.42 0l1.6 1.6a1 1 0 11-1.42 1.42l-1.6-1.6a1 1 0 010-1.42zm8.48 8.48a1 1 0 011.42 0l1.6 1.6a1 1 0 01-1.42 1.42l-1.6-1.6a1 1 0 010-1.42zm2.02-8.48a1 1 0 010 1.42l-1.6 1.6a1 1 0 01-1.42-1.42l1.6-1.6a1 1 0 011.42 0zM6.47 13.53a1 1 0 010 1.42l-1.6 1.6a1 1 0 01-1.42-1.42l1.6-1.6a1 1 0 011.42 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+                    <circle cx="12" cy="12" r="3.5" />
+                  </svg>
+                )}
+                {fireworksStatus === 'launched' ? '烟花绽放中' : '放烟花'}
+              </button>
+            </div>
+          )}
 
           {/* Capture Background Button */}
           <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/10' : 'border-black/5'}`}>

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
 import MoonEffect from './MoonEffect';
+import FireworksEffect from './FireworksEffect';
 
 // Daytime / sunset sun colours
 const DAY_SUN_COLOR = new THREE.Color(1.0, 0.96, 0.82);
@@ -23,13 +24,22 @@ function SunnyWeatherScene({ isSunset }: { isSunset?: boolean }) {
 }
 
 // 黑夜场景组件
-function NightScene({ moonPhase, moonIllumination }: { moonPhase?: string; moonIllumination?: number }) {
+function NightScene({
+  moonPhase,
+  moonIllumination,
+  fireworksTrigger,
+}: {
+  moonPhase?: string;
+  moonIllumination?: number;
+  fireworksTrigger?: number;
+}) {
   return (
     <>
       <ambientLight intensity={0.1} />
       <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
       <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
       <NightSkyEffects />
+      <FireworksEffect trigger={fireworksTrigger} intensity={1.18} zDepth={0} renderOrder={9999} />
       <fog attach="fog" args={[0x0a0a1a, 10, 30]} />
     </>
   );
@@ -43,6 +53,7 @@ interface SunnyWeatherBackgroundProps {
   isDay?: number;
   moonPhase?: string;
   moonIllumination?: number;
+  fireworksTrigger?: number;
 }
 
 export default function SunnyWeatherBackground({
@@ -53,6 +64,7 @@ export default function SunnyWeatherBackground({
   isDay,
   moonPhase,
   moonIllumination,
+  fireworksTrigger,
 }: SunnyWeatherBackgroundProps) {
   // 判断时间状态：日落时段、黑夜、正常白天
   // 优先使用 API 的 is_day 字段，避免时区问题
@@ -164,7 +176,11 @@ export default function SunnyWeatherBackground({
         performance={{ min: 0.5 }}
       >
         {timeState === 'night' ? (
-          <NightScene moonPhase={moonPhase} moonIllumination={moonIllumination} />
+          <NightScene
+            moonPhase={moonPhase}
+            moonIllumination={moonIllumination}
+            fireworksTrigger={fireworksTrigger}
+          />
         ) : (
           <SunnyWeatherScene isSunset={timeState === 'sunset'} />
         )}
