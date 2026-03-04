@@ -260,9 +260,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 type="button"
                 onClick={handleLocationClick}
                 disabled={locating || isLocating}
-                className={`p-2 rounded-lg transition-all min-w-[44px] min-h-[44px] flex items-center justify-center ${locating || isLocating
-                    ? 'border-sky-300 bg-sky-100/60 cursor-not-allowed'
-                    : 'border-sky-200 bg-white/10 hover:border-sky-400 hover:bg-sky-50/60 active:bg-sky-100/60'
+                className={`p-2 rounded-lg transition-all min-w-[44px] min-h-[44px] flex items-center justify-center  ${locating || isLocating
                   }`}
                 title="获取当前位置"
               >
