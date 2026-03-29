@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "weather-mobile",
+    "slug": "weather-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "scheme": "weathermobile",
+    "plugins": [
+      "expo-router",
+      "expo-location"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.weatherdemo.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to fetch local weather data."
+      }
+    },
+    "android": {
+      "package": "com.weatherdemo.mobile",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

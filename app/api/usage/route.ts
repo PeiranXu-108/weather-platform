@@ -1,13 +1,12 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 
-import { authOptions } from '@/app/lib/auth';
 import dbConnect from '@/app/lib/mongodb';
 import { ApiUsageModel } from '@/app/lib/models/ApiUsage';
+import { getAuthUserFromRequest } from '@/app/lib/serverAuth';
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string })?.id;
+export async function GET(req: NextRequest) {
+  const user = await getAuthUserFromRequest(req);
+  const userId = user?.id;
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

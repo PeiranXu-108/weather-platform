@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { WeatherResponse } from '@/app/types/weather';
 
-import { authOptions } from '@/app/lib/auth';
 import { recordApiUsage } from '@/app/lib/apiUsage';
+import { getAuthUserFromRequest } from '@/app/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,8 +41,8 @@ export async function GET(request: NextRequest) {
 
     const data: WeatherResponse = await response.json();
 
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as { id?: string })?.id;
+    const authUser = await getAuthUserFromRequest(request);
+    const userId = authUser?.id;
     if (userId) {
       await recordApiUsage(userId);
     }
