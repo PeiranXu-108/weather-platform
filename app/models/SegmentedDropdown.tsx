@@ -24,6 +24,8 @@ interface SegmentedDropdownProps {
   mainButton: {
     value: string;
     label: string;
+    /** 左侧图标路径，如 /icons/xxx.svg，可选 */
+    icon?: string;
     showChevron?: boolean; // 是否显示箭头图标
     onClick?: () => void; // 自定义点击处理（用于特殊场景）
   };
@@ -108,6 +110,12 @@ export default function SegmentedDropdown({
               onClick={handleMainButtonClick}
               className={`flex items-center gap-1 px-3 py-2 text-xs rounded-lg transition-all min-h-[32px] ${segmentActiveClass}`}
             >
+              {mainButton.icon && (
+                <Icon
+                  src={mainButton.icon}
+                  className="w-4 h-4 flex-shrink-0 opacity-80"
+                />
+              )}
               <span>{mainButton.label}</span>
               {mainButton.showChevron !== false && (
                 <Icon

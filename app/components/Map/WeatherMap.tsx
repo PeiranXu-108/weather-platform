@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
-import FloatingWeatherInfo, { WeatherCardContent } from './InfoCard';
+import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import PrecipLegend from './PrecipLegend';
 import MapTimelinePlayback, { TIMELINE_TOTAL_STEPS } from './MapTimelinePlayback';
@@ -18,6 +18,8 @@ import {
   buildCenterMarkerContent
 } from './centerMarker';
 import { fetchWeatherByCoords } from '@/app/lib/api';
+import Globe3D from './Globe3D';
+import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 
 interface WeatherMapProps {
   location: Location;
@@ -38,7 +40,7 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
-export default function WeatherMap({ location, textColorTheme, opacity = 100, onGoToLocation }: WeatherMapProps) {
+export default function WeatherMap({ location, textColorTheme, opacity = 100 }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -52,9 +54,6 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [viewportCenterWeather, setViewportCenterWeather] = useState<WeatherResponse | null>(null);
   const [viewportCenterLoading, setViewportCenterLoading] = useState(false);
-  const [clickBubblePosition, setClickBubblePosition] = useState<{ x: number; y: number } | null>(null);
-  const [clickBubbleWeather, setClickBubbleWeather] = useState<WeatherResponse | null>(null);
-  const [clickBubbleLoading, setClickBubbleLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const viewportDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
@@ -88,6 +87,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
   const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
+  const [mapRenderMode, setMapRenderMode] = useState<'2d' | '3d'>('2d');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const [timelineStep, setTimelineStep] = useState(0);
@@ -124,6 +124,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
   }, [targetTimelineEpoch]);
 
   const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
+  const is3DMode = mapRenderMode === '3d';
   const showLayerProgress =
     (temperatureLayerEnabled && temperatureLayerLoading) ||
     (windLayerEnabled && windLayerLoading) ||
@@ -390,6 +391,58 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
       fetchViewportCenterWeather(lat, lon);
     }, 500);
   }, [fetchViewportCenterWeather]);
+
+  const clearLayerState = useCallback(() => {
+    temperatureLayerEnabledRef.current = false;
+    windLayerEnabledRef.current = false;
+    cloudLayerEnabledRef.current = false;
+    precipLayerEnabledRef.current = false;
+    setTemperatureLayerEnabled(false);
+    setWindLayerEnabled(false);
+    setCloudLayerEnabled(false);
+    setPrecipLayerEnabled(false);
+    setTemperatureLayerLoading(false);
+    setWindLayerLoading(false);
+    setCloudLayerLoading(false);
+    setPrecipLayerLoading(false);
+    setTemperatureLayerProgress(0);
+    setWindLayerProgress(0);
+    setCloudLayerProgress(0);
+    setPrecipLayerProgress(0);
+    setIsTimelinePlaying(false);
+    setTimelineStep(0);
+
+    if (temperatureLayerRef.current) temperatureLayerRef.current.clear();
+    if (windLayerRef.current) windLayerRef.current.clear();
+    if (cloudLayerRef.current) cloudLayerRef.current.clear();
+    if (precipLayerRef.current) precipLayerRef.current.clear();
+
+    if (temperatureProgressHideTimerRef.current) clearTimeout(temperatureProgressHideTimerRef.current);
+    if (windProgressHideTimerRef.current) clearTimeout(windProgressHideTimerRef.current);
+    if (cloudProgressHideTimerRef.current) clearTimeout(cloudProgressHideTimerRef.current);
+    if (precipProgressHideTimerRef.current) clearTimeout(precipProgressHideTimerRef.current);
+
+    temperatureProgressHideTimerRef.current = null;
+    windProgressHideTimerRef.current = null;
+    cloudProgressHideTimerRef.current = null;
+    precipProgressHideTimerRef.current = null;
+
+    syncMapTextLayer(false);
+  }, [syncMapTextLayer]);
+
+  const handleGlobePick = useCallback(async (lat: number, lon: number) => {
+    try {
+      setViewportCenterLoading(true);
+      const response = await fetchWeatherByCoords(lat, lon);
+      if (!response.ok) throw new Error('Failed to fetch weather data');
+      const data = await response.json();
+      setViewportCenterWeather(data);
+    } catch (error) {
+      console.error('Error fetching picked globe weather:', error);
+    } finally {
+      setViewportCenterLoading(false);
+    }
+  }, []);
 
   // 获取地图边界信息用于温度网格渲染
   const renderTemperatureLayer = useCallback(async (
@@ -740,6 +793,12 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
   }, [targetTimelineEpoch]);
 
   useEffect(() => {
+    if (!is3DMode) return;
+    clearLayerState();
+    debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
+  }, [clearLayerState, is3DMode, location.lat, location.lon]);
+
+  useEffect(() => {
     const enabledTasks: Array<Promise<void>> = [];
     if (temperatureLayerEnabledRef.current) {
       const task = isTimelinePlaying
@@ -983,6 +1042,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
 
   useEffect(() => {
     // 如果地图已经初始化，更新中心点
+    if (is3DMode) return;
     if (mapInstanceRef.current && location.lat && location.lon) {
       mapInstanceRef.current.setCenter([location.lon, location.lat]);
       if (centerMarkerRef.current) {
@@ -993,9 +1053,10 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
       // InfoCard 用：视口中心即新 location，同步拉取
       debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
     }
-  }, [location.lat, location.lon, fetchCenterWeather]);
+  }, [fetchCenterWeather, is3DMode, location.lat, location.lon]);
 
   useEffect(() => {
+    if (is3DMode) return;
     if (!mapContainerRef.current) return;
 
     const initMap = () => {
@@ -1133,19 +1194,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
       mapInstanceRef.current.on('moveend', handleMoveEnd);
       mapInstanceRef.current.on('zoomend', handleZoomEnd);
 
-      // 单击地图：在点击位置显示该点天气气泡。使用容器捕获阶段监听，这样即便点击在气温/降水等图层上也能触发（图层会拦截冒泡，但捕获阶段先于目标）
-      const showWeatherBubbleAt = (pixelX: number, pixelY: number, lat: number, lon: number) => {
-        setClickBubblePosition({ x: pixelX, y: pixelY });
-        setClickBubbleLoading(true);
-        setClickBubbleWeather(null);
-        fetchWeatherByCoords(lat, lon)
-          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Failed to fetch'))))
-          .then((data: WeatherResponse) => {
-            setClickBubbleWeather(data);
-            setClickBubbleLoading(false);
-          })
-          .catch(() => setClickBubbleLoading(false));
-      };
+      // 单击地图：把点击位置天气同步到右下角 InfoCard
       const handleContainerClickCapture = (e: MouseEvent) => {
         const map = mapInstanceRef.current;
         const container = mapContainerRef.current;
@@ -1160,18 +1209,10 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
         if (!lnglat) return;
         const lat = typeof lnglat.getLat === 'function' ? lnglat.getLat() : lnglat.lat;
         const lon = typeof lnglat.getLng === 'function' ? lnglat.getLng() : lnglat.lng;
-        showWeatherBubbleAt(x, y, lat, lon);
+        void fetchViewportCenterWeather(lat, lon);
       };
       mapContainerClickCaptureRef.current = handleContainerClickCapture;
       mapContainerRef.current.addEventListener('click', handleContainerClickCapture, true);
-
-      // 拖动地图时气泡消失
-      const handleMapMoveStart = () => {
-        setClickBubblePosition(null);
-        setClickBubbleWeather(null);
-        setClickBubbleLoading(false);
-      };
-      mapInstanceRef.current.on('movestart', handleMapMoveStart);
 
       // 初始化时：标记用 location 天气，InfoCard 用视口中心天气（初始时与 location 一致）
       setTimeout(() => {
@@ -1358,7 +1399,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
       mapLabelLayerDomZIndexRef.current = null;
       centerMarkerRef.current = null;
     };
-  }, [location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer]);
+  }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -1397,58 +1438,42 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
 
   return (
     <div className="rounded-2xl shadow-xl p-4 h-full flex flex-col relative" style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <div className="flex items-center mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
           地图位置
         </h2>
+        <SegmentedDropdown
+          textColorTheme={textColorTheme}
+          positionClassName="relative z-20"
+          mainButton={{
+            value: mapRenderMode,
+            label: mapRenderMode === '3d' ? '地球视图' : '地图视图',
+            icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
+          }}
+          dropdownOptions={[
+            { value: '2d', label: '地图视图', icon: '/icons/地图.svg' },
+            { value: '3d', label: '地球视图', icon: '/icons/地球.svg' },
+          ]}
+          onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
+        />
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
-        <div
-          ref={mapContainerRef}
-          className="w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]"
-          style={{ position: 'relative', zIndex: 0 }}
-        />
-        {/* 单击地图产生的天气气泡（与 InfoCard 样式一致；拖动地图时消失；z-30 位于最上层） */}
-        {clickBubblePosition && (
-          <div
-            className="absolute z-30"
-            style={{
-              left: clickBubblePosition.x,
-              top: clickBubblePosition.y,
-              transform: 'translate(-50%, calc(-100% - 8px))',
-            }}
-          >
-            {clickBubbleLoading ? (
-              <div className="pointer-events-none backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[100px] border border-white/10 flex items-center justify-center text-xs text-gray-500">
-                加载中...
-              </div>
-            ) : clickBubbleWeather?.current && clickBubbleWeather?.location ? (
-              <div className="relative pointer-events-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const loc = clickBubbleWeather!.location;
-                    setClickBubblePosition(null);
-                    setClickBubbleWeather(null);
-                    setClickBubbleLoading(false);
-                    onGoToLocation?.(loc.lat, loc.lon);
-                  }}
-                  className="absolute -top-1 -right-1 z-10 w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-900 text-xs font-medium"
-                  title="查看该位置天气详情"
-                  aria-label="查看该位置天气详情"
-                >
-                  »
-                </button>
-                <WeatherCardContent
-                  location={clickBubbleWeather.location}
-                  current={clickBubbleWeather.current}
-                  textColorTheme={textColorTheme}
-                />
-              </div>
-            ) : null}
+        {is3DMode ? (
+          <div className="absolute inset-0 z-0">
+            <Globe3D
+              location={location}
+              onGlobePick={handleGlobePick}
+              className="w-full h-full"
+            />
           </div>
+        ) : (
+          <div
+            ref={mapContainerRef}
+            className="w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]"
+            style={{ position: 'relative', zIndex: 0 }}
+          />
         )}
-        {showLayerProgress && (
+        {!is3DMode && showLayerProgress && (
           <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
             <div className="flex flex-col">
               {temperatureLayerLoading && (
@@ -1502,123 +1527,85 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
             </div>
           </div>
         )}
-        {/* 左上角：图例（降水在上，温度在下） */}
-        {(precipLayerEnabled || temperatureLayerEnabled) && (
+        {!is3DMode && (precipLayerEnabled || temperatureLayerEnabled) && (
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 flex flex-col gap-3">
             {precipLayerEnabled && <PrecipLegend />}
             {temperatureLayerEnabled && <TemperatureLegend />}
           </div>
         )}
-        {/* 右上角：图层按钮和全屏按钮（苹果天气风格：浅色模糊 + 图层 icon + 选项为胶囊按钮） */}
-        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
-          <div ref={layerDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setLayerDropdownOpen((v) => !v)}
-              className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
-              aria-expanded={layerDropdownOpen}
-              aria-haspopup="true"
-              title={anyLayerEnabled ? '图层：已开启' : '图层选项'}
-            >
-              {/* 苹果天气风格：两层叠放图标 */}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <rect x="3" y="7" width="14" height="14" rx="2" />
-                <rect x="7" y="3" width="14" height="14" rx="2" />
-              </svg>
-            </button>
-          {layerDropdownOpen && (
-            <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[120px] max-w-[50vw] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 flex items-center gap-2">
+          {!is3DMode && (
+            <div ref={layerDropdownRef} className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  handleTemperatureLayerChange(!temperatureLayerEnabled);
-                }}
-                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
+                onClick={() => setLayerDropdownOpen((v) => !v)}
+                className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
+                aria-expanded={layerDropdownOpen}
+                aria-haspopup="true"
+                title={anyLayerEnabled ? '图层：已开启' : '图层选项'}
               >
-                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                  {temperatureLayerEnabled ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
-                  )}
-                </span>
-                <span>气温</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <rect x="3" y="7" width="14" height="14" rx="2" />
+                  <rect x="7" y="3" width="14" height="14" rx="2" />
+                </svg>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleWindLayerChange(!windLayerEnabled);
-                }}
-                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${windLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                  {windLayerEnabled ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                      <path d="M3 8h8a3 3 0 1 0-3-3" />
-                      <path d="M3 14h13a3 3 0 1 1-3 3" />
-                    </svg>
-                  )}
-                </span>
-                <span>风力</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleCloudLayerChange(!cloudLayerEnabled);
-                }}
-                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${cloudLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                  {cloudLayerEnabled ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                      <path d="M5 18h11a4 4 0 0 0 .4-7.98A5 5 0 0 0 6.2 9.8 3.5 3.5 0 0 0 5 18z" />
-                    </svg>
-                  )}
-                </span>
-                <span>云量</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handlePrecipLayerChange(!precipLayerEnabled);
-                }}
-                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${precipLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                  {precipLayerEnabled ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                      <path d="M8 7.5a4 4 0 0 1 8 0" />
-                      <path d="M6.5 10.5h11a3.5 3.5 0 1 1-2.8 5.6" />
-                      <path d="M9 16.5v3" />
-                      <path d="M13 17.5v3" />
-                    </svg>
-                  )}
-                </span>
-                <span>降水</span>
-              </button>
-              {/* {process.env.NODE_ENV !== 'production' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCloudRenderStyle((prev) => (prev === 'noise' ? 'soft' : 'noise'));
-                  }}
-                  className="flex items-center gap-2 w-full px-4 py-2 rounded-full text-xs text-slate-600 bg-white/50 hover:bg-white/70 transition-colors"
-                  title="云量渲染风格（开发用）"
-                >
-                  <span className="inline-flex w-2 h-2 rounded-full bg-slate-400" />
-                  <span>云量风格：{cloudRenderStyle === 'noise' ? '噪声' : '柔和'}</span>
-                </button>
-              )} */}
+              {layerDropdownOpen && (
+                <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[120px] max-w-[50vw] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
+                  <button type="button" onClick={() => handleTemperatureLayerChange(!temperatureLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
+                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                      {temperatureLayerEnabled ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
+                      )}
+                    </span>
+                    <span>气温</span>
+                  </button>
+                  <button type="button" onClick={() => handleWindLayerChange(!windLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${windLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
+                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                      {windLayerEnabled ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                          <path d="M3 8h8a3 3 0 1 0-3-3" />
+                          <path d="M3 14h13a3 3 0 1 1-3 3" />
+                        </svg>
+                      )}
+                    </span>
+                    <span>风力</span>
+                  </button>
+                  <button type="button" onClick={() => handleCloudLayerChange(!cloudLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${cloudLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
+                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                      {cloudLayerEnabled ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                          <path d="M5 18h11a4 4 0 0 0 .4-7.98A5 5 0 0 0 6.2 9.8 3.5 3.5 0 0 0 5 18z" />
+                        </svg>
+                      )}
+                    </span>
+                    <span>云量</span>
+                  </button>
+                  <button type="button" onClick={() => handlePrecipLayerChange(!precipLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${precipLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
+                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
+                      {precipLayerEnabled ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+                          <path d="M8 7.5a4 4 0 0 1 8 0" />
+                          <path d="M6.5 10.5h11a3.5 3.5 0 1 1-2.8 5.6" />
+                          <path d="M9 16.5v3" />
+                          <path d="M13 17.5v3" />
+                        </svg>
+                      )}
+                    </span>
+                    <span>降水</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
-          </div>
-          {/* 全屏按钮 */}
+
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -1627,12 +1614,10 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
             aria-label={isFullscreen ? '退出全屏' : '全屏'}
           >
             {isFullscreen ? (
-              // 退出全屏图标
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
               </svg>
             ) : (
-              // 全屏图标
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
               </svg>
@@ -1640,6 +1625,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
           </button>
         </div>
         {/* 上方正中间：缩放按钮（左右排布） */}
+        {!is3DMode && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10 flex flex-row gap-px">
           <button
             type="button"
@@ -1660,7 +1646,8 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100, on
             +
           </button>
         </div>
-        {anyLayerEnabled && (
+        )}
+        {!is3DMode && anyLayerEnabled && (
           <MapTimelinePlayback
             step={timelineStep}
             isPlaying={isTimelinePlaying}
