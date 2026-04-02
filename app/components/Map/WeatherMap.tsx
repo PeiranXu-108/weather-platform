@@ -1059,8 +1059,53 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     if (is3DMode) return;
     if (!mapContainerRef.current) return;
 
+    const mapContainerEl = mapContainerRef.current;
+    const timeoutIds: number[] = [];
+    let disposed = false;
+    let activeMap: any = null;
+    let activeMoveEndHandler: (() => void) | null = null;
+    let activeZoomEndHandler: (() => void) | null = null;
+    let activeCompleteHandler: (() => void) | null = null;
+
+    const scheduleTimeout = (callback: () => void, delay: number) => {
+      const timeoutId = window.setTimeout(() => {
+        if (!disposed) {
+          callback();
+        }
+      }, delay);
+      timeoutIds.push(timeoutId);
+    };
+
+    const destroyMapInstance = () => {
+      if (mapContainerClickCaptureRef.current) {
+        mapContainerEl.removeEventListener('click', mapContainerClickCaptureRef.current, true);
+        mapContainerClickCaptureRef.current = null;
+      }
+
+      if (activeMap?.off) {
+        if (activeMoveEndHandler) activeMap.off('moveend', activeMoveEndHandler);
+        if (activeZoomEndHandler) activeMap.off('zoomend', activeZoomEndHandler);
+        if (activeCompleteHandler) activeMap.off('complete', activeCompleteHandler);
+      }
+
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.destroy();
+        } catch (error) {
+          console.error('Error destroying map instance:', error);
+        } finally {
+          mapInstanceRef.current = null;
+        }
+      }
+
+      activeMap = null;
+      activeMoveEndHandler = null;
+      activeZoomEndHandler = null;
+      activeCompleteHandler = null;
+    };
+
     const initMap = () => {
-      if (!mapContainerRef.current || !window.AMap) return;
+      if (!window.AMap || disposed) return;
 
       // 如果地图已存在，先销毁
       if (mapInstanceRef.current) {
@@ -1077,8 +1122,13 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       if (precipLayerRef.current) {
         precipLayerRef.current.clear();
       }
-        mapInstanceRef.current.destroy();
-        mapInstanceRef.current = null;
+        try {
+          mapInstanceRef.current.destroy();
+        } catch (error) {
+          console.error('Error destroying previous map instance:', error);
+        } finally {
+          mapInstanceRef.current = null;
+        }
       }
       
       // 重置温度图层 renderer（地图重新初始化后需要重新创建）
@@ -1099,7 +1149,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       const center: [number, number] = [location.lon, location.lat];
 
       // 创建地图实例
-      mapInstanceRef.current = new window.AMap.Map(mapContainerRef.current, {
+      mapInstanceRef.current = new window.AMap.Map(mapContainerEl, {
         center: center,
         zoom: 10,
         viewMode: '3D', // 3D视图
@@ -1108,6 +1158,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         mapStyle: 'amap://styles/normal', // 标准样式
         features: ['bg', 'point', 'road', 'building'], // 显示要素
       });
+      activeMap = mapInstanceRef.current;
 
       syncMapTextLayer(
         temperatureLayerEnabledRef.current ||
@@ -1212,19 +1263,19 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         void fetchViewportCenterWeather(lat, lon);
       };
       mapContainerClickCaptureRef.current = handleContainerClickCapture;
-      mapContainerRef.current.addEventListener('click', handleContainerClickCapture, true);
+      mapContainerEl.addEventListener('click', handleContainerClickCapture, true);
 
       // 初始化时：标记用 location 天气，InfoCard 用视口中心天气（初始时与 location 一致）
-      setTimeout(() => {
+      scheduleTimeout(() => {
         debouncedFetchWeatherRef.current?.(location.lat, location.lon);
         debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
       }, 300);
 
       // 删除高德地图水印
       const removeWatermark = () => {
-        if (!mapContainerRef.current) return;
+        if (disposed) return;
         
-        // 方法1: 通过类名查找并删除
+        // 只隐藏水印节点，不直接 remove，避免与地图 SDK 自身的销毁流程冲突
         const selectors = [
           '[class*="amap-copyright"]',
           '[class*="amap-logo"]',
@@ -1234,7 +1285,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         ];
         
         selectors.forEach(selector => {
-          const elements = mapContainerRef.current!.querySelectorAll(selector);
+          const elements = mapContainerEl.querySelectorAll(selector);
           elements.forEach((el: Element) => {
             const htmlEl = el as HTMLElement;
             if (htmlEl.textContent && (
@@ -1244,100 +1295,79 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
               htmlEl.textContent.includes('GS(')
             )) {
               htmlEl.style.display = 'none';
-              htmlEl.remove();
+              htmlEl.style.pointerEvents = 'none';
+              htmlEl.style.opacity = '0';
             }
           });
         });
         
-        // 方法2: 查找所有包含水印文本的元素
-        const allElements = mapContainerRef.current.querySelectorAll('*');
+        const allElements = mapContainerEl.querySelectorAll('*');
         allElements.forEach((el: Element) => {
           const htmlEl = el as HTMLElement;
           const text = htmlEl.textContent || '';
           if (text.includes('高德地图') || text.includes('Amap')) {
-            // 检查是否是水印元素（包含版权信息）
             if (text.includes('©') || text.includes('GS(') || text.includes('Amap')) {
               htmlEl.style.display = 'none';
-              htmlEl.remove();
+              htmlEl.style.pointerEvents = 'none';
+              htmlEl.style.opacity = '0';
             }
           }
         });
       };
 
       // 延迟删除水印，确保地图已完全加载（多次尝试确保删除成功）
-      setTimeout(removeWatermark, 300);
-      setTimeout(removeWatermark, 800);
-      setTimeout(removeWatermark, 1500);
+      scheduleTimeout(removeWatermark, 300);
+      scheduleTimeout(removeWatermark, 800);
+      scheduleTimeout(removeWatermark, 1500);
       
       // 监听地图加载完成事件
-      mapInstanceRef.current.on('complete', () => {
-        setTimeout(removeWatermark, 100);
+      activeMoveEndHandler = handleMoveEnd;
+      activeZoomEndHandler = handleZoomEnd;
+      activeCompleteHandler = () => {
+        scheduleTimeout(removeWatermark, 100);
         const hasLayer =
           temperatureLayerEnabledRef.current ||
           windLayerEnabledRef.current ||
           cloudLayerEnabledRef.current ||
           precipLayerEnabledRef.current;
         syncMapTextLayer(hasLayer);
-        setTimeout(() => syncMapTextLayer(hasLayer), 300);
-        setTimeout(() => syncMapTextLayer(hasLayer), 800);
+        scheduleTimeout(() => syncMapTextLayer(hasLayer), 300);
+        scheduleTimeout(() => syncMapTextLayer(hasLayer), 800);
         // 地图加载完成后，如果启用了温度图层，渲染温度图层
         if (temperatureLayerEnabledRef.current) {
-          setTimeout(() => {
+          scheduleTimeout(() => {
             debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (windLayerEnabledRef.current) {
-          setTimeout(() => {
+          scheduleTimeout(() => {
             debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (cloudLayerEnabledRef.current) {
-          setTimeout(() => {
+          scheduleTimeout(() => {
             debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
         if (precipLayerEnabledRef.current) {
-          setTimeout(() => {
+          scheduleTimeout(() => {
             debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
           }, 500);
         }
-      });
-    };
-
-    // 检查是否已经加载了高德地图脚本
-    if (window.AMap) {
-      scriptLoadedRef.current = true;
-      initMap();
-      return;
-    }
-
-    // 如果脚本正在加载，不重复加载
-    if (scriptLoadedRef.current) return;
-
-    // 设置安全密钥（JS API 2.0 必须在加载脚本前设置）
-    if (SecurityJsCode) {
-      (window as any)._AMapSecurityConfig = {
-        securityJsCode: SecurityJsCode,
       };
-    }
 
-    // 加载高德地图脚本
-    const script = document.createElement('script');
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${Key}`;
-    script.async = true;
-    script.onload = () => {
-      scriptLoadedRef.current = true;
-      initMap();
+      activeMap.on('moveend', activeMoveEndHandler);
+      activeMap.on('zoomend', activeZoomEndHandler);
+      activeMap.on('complete', activeCompleteHandler);
     };
-    document.head.appendChild(script);
 
-    return () => {
-      // 移除容器捕获点击（与图层点击穿透配合，保证有图层时也能点出天气卡片）
-      if (mapContainerRef.current && mapContainerClickCaptureRef.current) {
-        mapContainerRef.current.removeEventListener('click', mapContainerClickCaptureRef.current, true);
-        mapContainerClickCaptureRef.current = null;
-      }
-      // 清理地图实例和定时器
+    const cleanup = () => {
+      disposed = true;
+
+      timeoutIds.forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -1388,10 +1418,8 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         precipLayerRef.current.clear();
         precipLayerRef.current = null;
       }
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.destroy();
-        mapInstanceRef.current = null;
-      }
+
+      destroyMapInstance();
       mapLabelLayerBoostedRef.current = false;
       mapLabelLayerRef.current = [];
       mapLabelLayerZIndexRef.current.clear();
@@ -1399,6 +1427,36 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       mapLabelLayerDomZIndexRef.current = null;
       centerMarkerRef.current = null;
     };
+
+    // 检查是否已经加载了高德地图脚本
+    if (window.AMap) {
+      scriptLoadedRef.current = true;
+      initMap();
+      return cleanup;
+    }
+
+    // 如果脚本正在加载，不重复加载
+    if (scriptLoadedRef.current) return cleanup;
+
+    // 设置安全密钥（JS API 2.0 必须在加载脚本前设置）
+    if (SecurityJsCode) {
+      (window as any)._AMapSecurityConfig = {
+        securityJsCode: SecurityJsCode,
+      };
+    }
+
+    // 加载高德地图脚本
+    const script = document.createElement('script');
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${Key}`;
+    script.async = true;
+    script.onload = () => {
+      if (disposed) return;
+      scriptLoadedRef.current = true;
+      initMap();
+    };
+    document.head.appendChild(script);
+
+    return cleanup;
   }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer]);
 
   useEffect(() => {
@@ -1458,7 +1516,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         />
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
-        {is3DMode ? (
+        {is3DMode && (
           <div className="absolute inset-0 z-0">
             <Globe3D
               location={location}
@@ -1467,13 +1525,19 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
               referenceEpoch={anyLayerEnabled ? targetTimelineEpoch : undefined}
             />
           </div>
-        ) : (
-          <div
-            ref={mapContainerRef}
-            className="w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]"
-            style={{ position: 'relative', zIndex: 0 }}
-          />
         )}
+        <div
+          ref={mapContainerRef}
+          className="w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]"
+          style={{
+            position: is3DMode ? 'absolute' : 'relative',
+            zIndex: 0,
+            visibility: is3DMode ? 'hidden' : 'visible',
+            pointerEvents: is3DMode ? 'none' : 'auto',
+            width: '100%',
+            height: '100%',
+          }}
+        />
         {!is3DMode && showLayerProgress && (
           <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
             <div className="flex flex-col">
