@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -15,6 +15,18 @@ interface Globe3DProps {
 }
 
 const textureManager = new TextureManager();
+const EARTH_DAY_MAP_URL = textureManager.earthDayMap();
+const EARTH_NORMAL_MAP_URL = textureManager.earthNormalMap();
+const EARTH_SPECULAR_MAP_URL = textureManager.earthSpecularMap();
+const EARTH_LIGHTS_MAP_URL = textureManager.earthLightsMap();
+const EARTH_CLOUDS_MAP_URL = textureManager.earthCloudsMap();
+const GLOBE_TEXTURE_URLS = [
+  EARTH_DAY_MAP_URL,
+  EARTH_NORMAL_MAP_URL,
+  EARTH_SPECULAR_MAP_URL,
+  EARTH_LIGHTS_MAP_URL,
+  EARTH_CLOUDS_MAP_URL,
+] as const;
 const GLOBE_RADIUS = 1;
 const INITIAL_CAMERA_DISTANCE = 3.85;
 const MIN_CAMERA_DISTANCE = 1.65;
@@ -22,6 +34,13 @@ const MAX_CAMERA_DISTANCE = 4.2;
 const INTRO_CAMERA_DISTANCE = 9.6;
 const INTRO_CAMERA_ANIMATION_MS = 9_800;
 const LIVE_LIGHTING_UPDATE_MS = 60_000;
+
+if (typeof window !== 'undefined') {
+  // Warm the loader cache before the user switches views so the intro can start immediately.
+  GLOBE_TEXTURE_URLS.forEach((textureUrl) => {
+    useLoader.preload(THREE.TextureLoader, textureUrl);
+  });
+}
 
 function latLonToVector3(lat: number, lon: number, radius = GLOBE_RADIUS): THREE.Vector3 {
   const phi = THREE.MathUtils.degToRad(90 - lat);
@@ -222,74 +241,70 @@ function AtmosphereGlow({ radius, sunDir }: { radius: number; sunDir: THREE.Vect
   );
 }
 
-function GlobeCameraController({ location, controlsRef }: { location: Location; controlsRef: RefObject<any> }) {
+function GlobeCameraController({
+  location,
+  controlsRef,
+  introStart,
+}: {
+  location: Location;
+  controlsRef: RefObject<any>;
+  introStart: THREE.Vector3;
+}) {
   const { camera } = useThree();
-  const hasPlayedIntroRef = useRef(false);
-  const introAnimationRef = useRef<{
-    startTime: number;
-    startPosition: THREE.Vector3;
-    endPosition: THREE.Vector3;
-  } | null>(null);
+  const introPhaseRef = useRef<'pending' | 'animating' | 'done'>('pending');
+  const introStartTimeRef = useRef(0);
+  const startPosRef = useRef(introStart.clone());
+  const endPosRef = useRef(
+    latLonToVector3(location.lat, location.lon, 1).normalize().multiplyScalar(INITIAL_CAMERA_DISTANCE)
+  );
+  const prevLocationRef = useRef({ lat: location.lat, lon: location.lon });
 
   useFrame(() => {
-    const introAnimation = introAnimationRef.current;
-    if (!introAnimation) return;
-
-    const progress = Math.min(
-      (performance.now() - introAnimation.startTime) / INTRO_CAMERA_ANIMATION_MS,
-      1
-    );
-    const easedProgress = easeOutCubic(progress);
-
-    camera.position.lerpVectors(
-      introAnimation.startPosition,
-      introAnimation.endPosition,
-      easedProgress
-    );
-    camera.lookAt(0, 0, 0);
-
-    if (controlsRef.current) {
-      controlsRef.current.target.set(0, 0, 0);
-      controlsRef.current.update();
+    if (introPhaseRef.current === 'pending') {
+      introPhaseRef.current = 'animating';
+      introStartTimeRef.current = performance.now();
+      camera.position.copy(startPosRef.current);
+      camera.lookAt(0, 0, 0);
+      if (controlsRef.current) {
+        controlsRef.current.enabled = false;
+        controlsRef.current.target.set(0, 0, 0);
+        controlsRef.current.update();
+      }
+      return;
     }
 
-    if (progress >= 1) {
-      introAnimationRef.current = null;
+    if (introPhaseRef.current === 'animating') {
+      const elapsed = performance.now() - introStartTimeRef.current;
+      const progress = Math.min(elapsed / INTRO_CAMERA_ANIMATION_MS, 1);
+      camera.position.lerpVectors(startPosRef.current, endPosRef.current, easeOutCubic(progress));
+      camera.lookAt(0, 0, 0);
       if (controlsRef.current) {
-        controlsRef.current.enabled = true;
+        controlsRef.current.target.set(0, 0, 0);
+        controlsRef.current.update();
+      }
+      if (progress >= 1) {
+        introPhaseRef.current = 'done';
+        if (controlsRef.current) controlsRef.current.enabled = true;
+      }
+      return;
+    }
+
+    if (
+      prevLocationRef.current.lat !== location.lat ||
+      prevLocationRef.current.lon !== location.lon
+    ) {
+      prevLocationRef.current = { lat: location.lat, lon: location.lon };
+      const newPos = latLonToVector3(location.lat, location.lon, 1)
+        .normalize()
+        .multiplyScalar(INITIAL_CAMERA_DISTANCE);
+      camera.position.copy(newPos);
+      camera.lookAt(0, 0, 0);
+      if (controlsRef.current) {
+        controlsRef.current.target.set(0, 0, 0);
+        controlsRef.current.update();
       }
     }
   });
-
-  useEffect(() => {
-    const cityDirection = latLonToVector3(location.lat, location.lon, 1).normalize();
-    const desiredPosition = cityDirection.multiplyScalar(INITIAL_CAMERA_DISTANCE);
-    if (!hasPlayedIntroRef.current) {
-      const introStartPosition = cityDirection.clone().multiplyScalar(INTRO_CAMERA_DISTANCE);
-      introAnimationRef.current = {
-        startTime: performance.now(),
-        startPosition: introStartPosition,
-        endPosition: desiredPosition.clone(),
-      };
-      camera.position.copy(introStartPosition);
-      hasPlayedIntroRef.current = true;
-      if (controlsRef.current) {
-        controlsRef.current.enabled = false;
-      }
-    } else {
-      introAnimationRef.current = null;
-      camera.position.copy(desiredPosition);
-      if (controlsRef.current) {
-        controlsRef.current.enabled = true;
-      }
-    }
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-    if (controlsRef.current) {
-      controlsRef.current.target.set(0, 0, 0);
-      controlsRef.current.update();
-    }
-  }, [camera, controlsRef, location.lat, location.lon]);
 
   return null;
 }
@@ -303,18 +318,12 @@ function GlobeMesh({
   onGlobePick: (lat: number, lon: number) => void;
   referenceEpoch?: number;
 }) {
-  const controlsRef = useRef<any>(null);
   const [liveEpoch, setLiveEpoch] = useState(() => Math.floor(Date.now() / 1000));
-  const earthMapRaw = useLoader(THREE.TextureLoader, textureManager.earthDayMap());
-  const earthNormalRaw = useLoader(THREE.TextureLoader, textureManager.earthNormalMap());
-  const earthSpecularRaw = useLoader(THREE.TextureLoader, textureManager.earthSpecularMap());
-  const earthLightsRaw = useLoader(THREE.TextureLoader, textureManager.earthLightsMap());
-  const earthCloudsRaw = useLoader(THREE.TextureLoader, textureManager.earthCloudsMap());
-  const earthMap = useMemo(() => earthMapRaw.clone(), [earthMapRaw]);
-  const earthNormal = useMemo(() => earthNormalRaw.clone(), [earthNormalRaw]);
-  const earthSpecular = useMemo(() => earthSpecularRaw.clone(), [earthSpecularRaw]);
-  const earthLights = useMemo(() => earthLightsRaw.clone(), [earthLightsRaw]);
-  const earthClouds = useMemo(() => earthCloudsRaw.clone(), [earthCloudsRaw]);
+  const earthMap = useLoader(THREE.TextureLoader, EARTH_DAY_MAP_URL);
+  const earthNormal = useLoader(THREE.TextureLoader, EARTH_NORMAL_MAP_URL);
+  const earthSpecular = useLoader(THREE.TextureLoader, EARTH_SPECULAR_MAP_URL);
+  const earthLights = useLoader(THREE.TextureLoader, EARTH_LIGHTS_MAP_URL);
+  const earthClouds = useLoader(THREE.TextureLoader, EARTH_CLOUDS_MAP_URL);
   const cityPosition = useMemo(
     () => latLonToVector3(location.lat, location.lon, GLOBE_RADIUS * 1.001),
     [location.lat, location.lon]
@@ -342,17 +351,14 @@ function GlobeMesh({
   );
 
   useEffect(() => {
-    earthMap.colorSpace = THREE.SRGBColorSpace;
-    earthLights.colorSpace = THREE.SRGBColorSpace;
-    earthClouds.colorSpace = THREE.SRGBColorSpace;
-    return () => {
-      earthMap.dispose();
-      earthNormal.dispose();
-      earthSpecular.dispose();
-      earthLights.dispose();
-      earthClouds.dispose();
-    };
-  }, [earthClouds, earthLights, earthMap, earthNormal, earthSpecular]);
+    const srgbTextures = [earthMap, earthLights, earthClouds];
+    srgbTextures.forEach((texture) => {
+      if (texture.colorSpace !== THREE.SRGBColorSpace) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+      }
+    });
+  }, [earthClouds, earthLights, earthMap]);
 
   return (
     <>
@@ -383,16 +389,27 @@ function GlobeMesh({
       </mesh>
       <AtmosphereGlow radius={GLOBE_RADIUS} sunDir={sunDir} />
       <PulseMarker position={cityPosition} />
-      <Stars radius={120} depth={50} count={2500} factor={3} saturation={0} fade speed={0.2} />
-      <GlobeCameraController location={location} controlsRef={controlsRef} />
-      <OrbitControls
-        ref={controlsRef}
-        enablePan={false}
-        minDistance={MIN_CAMERA_DISTANCE}
-        maxDistance={MAX_CAMERA_DISTANCE}
-        rotateSpeed={0.6}
-        zoomSpeed={0.7}
-      />
+      <Stars radius={120} depth={60} count={5000} factor={5} saturation={0.1} fade speed={0.3} />
+    </>
+  );
+}
+
+function GlobeFallback({ location }: { location: Location }) {
+  const cityPosition = useMemo(
+    () => latLonToVector3(location.lat, location.lon, GLOBE_RADIUS * 1.001),
+    [location.lat, location.lon]
+  );
+
+  return (
+    <>
+      <ambientLight intensity={0.2} />
+      <directionalLight position={[4, 2, 6]} intensity={1.2} />
+      <mesh>
+        <sphereGeometry args={[GLOBE_RADIUS, 64, 64]} />
+        <meshPhongMaterial color="#1f2937" shininess={10} />
+      </mesh>
+      <PulseMarker position={cityPosition} />
+      <Stars radius={120} depth={60} count={5000} factor={5} saturation={0.1} fade speed={0.3} />
     </>
   );
 }
@@ -403,16 +420,47 @@ export default function Globe3D({
   className,
   referenceEpoch,
 }: Globe3DProps) {
+  const controlsRef = useRef<any>(null);
+
+  const introStart = useMemo(
+    () =>
+      latLonToVector3(location.lat, location.lon, 1)
+        .normalize()
+        .multiplyScalar(INTRO_CAMERA_DISTANCE),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const introCameraPos = useMemo<[number, number, number]>(
+    () => [introStart.x, introStart.y, introStart.z],
+    [introStart]
+  );
+
   return (
     <div className={className} style={{ width: '100%', height: '100%' }}>
       <Canvas
         className="w-full h-full"
         style={{ width: '100%', height: '100%' }}
-        camera={{ position: [0, 0, INITIAL_CAMERA_DISTANCE], fov: 45 }}
+        camera={{ position: introCameraPos, fov: 45 }}
         dpr={[1, 2]}
       >
         <color attach="background" args={['#020617']} />
-        <GlobeMesh location={location} onGlobePick={onGlobePick} referenceEpoch={referenceEpoch} />
+        <GlobeCameraController
+          location={location}
+          controlsRef={controlsRef}
+          introStart={introStart}
+        />
+        <OrbitControls
+          ref={controlsRef}
+          enablePan={false}
+          minDistance={MIN_CAMERA_DISTANCE}
+          maxDistance={MAX_CAMERA_DISTANCE}
+          rotateSpeed={0.6}
+          zoomSpeed={0.7}
+        />
+        <Suspense fallback={<GlobeFallback location={location} />}>
+          <GlobeMesh location={location} onGlobePick={onGlobePick} referenceEpoch={referenceEpoch} />
+        </Suspense>
       </Canvas>
     </div>
   );
