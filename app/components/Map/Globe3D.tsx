@@ -60,26 +60,84 @@ function vector3ToLatLon(point: THREE.Vector3): { lat: number; lon: number } {
   return { lat, lon };
 }
 
+const PULSE_RIPPLE_VERTEX = `
+  varying vec3 vWorldPos;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const PULSE_RIPPLE_FRAGMENT = `
+  uniform vec3 markerDir;
+  uniform float time;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vec3 dir = normalize(vWorldPos);
+    float angDist = acos(clamp(dot(dir, markerDir), -1.0, 1.0));
+
+    float alpha = 0.0;
+    for (float i = 0.0; i < 3.0; i++) {
+      float phase = fract(time * 0.4 - i / 3.0);
+      float radius = phase * 0.30;
+      float width = 0.005 + phase * 0.016;
+      float ring = smoothstep(width, 0.0, abs(angDist - radius));
+      ring *= (1.0 - phase) * (1.0 - phase);
+      alpha += ring;
+    }
+
+    alpha = clamp(alpha, 0.0, 0.9);
+    if (alpha < 0.004) discard;
+
+    vec3 warm = vec3(1.0, 0.92, 0.23);
+    vec3 gold = vec3(1.0, 0.80, 0.0);
+    vec3 col = mix(warm, gold, alpha);
+    gl_FragColor = vec4(col, alpha * 0.8);
+  }
+`;
+
 function PulseMarker({ position }: { position: THREE.Vector3 }) {
-  const ringRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const markerDir = useMemo(() => position.clone().normalize(), [position]);
+
+  const rippleMat = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      markerDir: { value: markerDir },
+      time: { value: 0 },
+    },
+    vertexShader: PULSE_RIPPLE_VERTEX,
+    fragmentShader: PULSE_RIPPLE_FRAGMENT,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    blending: THREE.AdditiveBlending,
+  }), [markerDir]);
 
   useFrame(({ clock }) => {
-    if (!ringRef.current) return;
-    const t = clock.getElapsedTime();
-    const pulse = 1 + (Math.sin(t * 3) + 1) * 0.2;
-    ringRef.current.scale.setScalar(pulse);
-    (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.35 + (Math.sin(t * 3) + 1) * 0.2;
+    if (matRef.current) {
+      matRef.current.uniforms.time.value = clock.getElapsedTime();
+    }
   });
 
+  useEffect(() => {
+    return () => { rippleMat.dispose(); };
+  }, [rippleMat]);
+
   return (
-    <group position={position}>
-      <mesh>
-        <sphereGeometry args={[0.015, 16, 16]} />
-        <meshBasicMaterial color="#f97316" />
+    <group>
+      <mesh position={position}>
+        <sphereGeometry args={[0.013, 16, 16]} />
+        <meshBasicMaterial color="#fde047" />
       </mesh>
-      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.024, 0.038, 48]} />
-        <meshBasicMaterial color="#fb923c" transparent opacity={0.5} side={THREE.DoubleSide} />
+      <mesh position={position}>
+        <sphereGeometry args={[0.021, 16, 16]} />
+        <meshBasicMaterial color="#fbbf24" transparent opacity={0.25} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[GLOBE_RADIUS * 1.003, 128, 128]} />
+        <primitive ref={matRef} object={rippleMat} attach="material" />
       </mesh>
     </group>
   );
