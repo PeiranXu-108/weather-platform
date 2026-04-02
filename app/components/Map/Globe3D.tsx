@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
@@ -11,6 +11,7 @@ interface Globe3DProps {
   location: Location;
   onGlobePick: (lat: number, lon: number) => void;
   className?: string;
+  referenceEpoch?: number;
 }
 
 const textureManager = new TextureManager();
@@ -18,6 +19,9 @@ const GLOBE_RADIUS = 1;
 const INITIAL_CAMERA_DISTANCE = 3.85;
 const MIN_CAMERA_DISTANCE = 1.65;
 const MAX_CAMERA_DISTANCE = 4.2;
+const INTRO_CAMERA_DISTANCE = 9.6;
+const INTRO_CAMERA_ANIMATION_MS = 9_800;
+const LIVE_LIGHTING_UPDATE_MS = 60_000;
 
 function latLonToVector3(lat: number, lon: number, radius = GLOBE_RADIUS): THREE.Vector3 {
   const phi = THREE.MathUtils.degToRad(90 - lat);
@@ -103,27 +107,65 @@ const ATMO_OUTER_FRAG = `
   }
 `;
 
-function getSunDirection(): THREE.Vector3 {
-  const now = new Date();
-  const jd = now.getTime() / 86400000 + 2440587.5;
-  const n = jd - 2451545.0;
-  const L = (280.460 + 0.9856474 * n) % 360;
-  const g = THREE.MathUtils.degToRad((357.528 + 0.9856003 * n) % 360);
-  const eclipticLon = THREE.MathUtils.degToRad(
-    L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)
+function normalizeDegrees(value: number): number {
+  return ((value % 360) + 360) % 360;
+}
+
+function normalizeLongitude(value: number): number {
+  return ((value + 540) % 360) - 180;
+}
+
+function getSunSubsolarPoint(epochSeconds: number): { lat: number; lon: number } {
+  const date = new Date(epochSeconds * 1000);
+  const jd = date.getTime() / 86400000 + 2440587.5;
+  const T = (jd - 2451545.0) / 36525;
+  const meanLongitude = normalizeDegrees(280.46646 + T * (36000.76983 + T * 0.0003032));
+  const meanAnomaly = 357.52911 + T * (35999.05029 - 0.0001537 * T);
+  const eccentricity = 0.016708634 - T * (0.000042037 + 0.0000001267 * T);
+  const meanAnomalyRad = THREE.MathUtils.degToRad(meanAnomaly);
+  const equationOfCenter =
+    (1.914602 - T * (0.004817 + 0.000014 * T)) * Math.sin(meanAnomalyRad) +
+    (0.019993 - 0.000101 * T) * Math.sin(2 * meanAnomalyRad) +
+    0.000289 * Math.sin(3 * meanAnomalyRad);
+  const trueLongitude = meanLongitude + equationOfCenter;
+  const omega = 125.04 - 1934.136 * T;
+  const apparentLongitude = trueLongitude - 0.00569 - 0.00478 * Math.sin(THREE.MathUtils.degToRad(omega));
+  const meanObliquity =
+    23 +
+    (26 + (21.448 - T * (46.815 + T * (0.00059 - T * 0.001813))) / 60) / 60;
+  const correctedObliquity =
+    meanObliquity + 0.00256 * Math.cos(THREE.MathUtils.degToRad(omega));
+  const apparentLongitudeRad = THREE.MathUtils.degToRad(apparentLongitude);
+  const correctedObliquityRad = THREE.MathUtils.degToRad(correctedObliquity);
+  const solarDeclination = Math.asin(
+    Math.sin(correctedObliquityRad) * Math.sin(apparentLongitudeRad)
   );
-  const obliquity = THREE.MathUtils.degToRad(23.439 - 0.0000004 * n);
-  const ra = Math.atan2(Math.cos(obliquity) * Math.sin(eclipticLon), Math.cos(eclipticLon));
-  const dec = Math.asin(Math.sin(obliquity) * Math.sin(eclipticLon));
+  const y = Math.tan(correctedObliquityRad / 2) ** 2;
+  const meanLongitudeRad = THREE.MathUtils.degToRad(meanLongitude);
+  const equationOfTime =
+    (4 *
+      (y * Math.sin(2 * meanLongitudeRad) -
+        2 * eccentricity * Math.sin(meanAnomalyRad) +
+        4 * eccentricity * y * Math.sin(meanAnomalyRad) * Math.cos(2 * meanLongitudeRad) -
+        0.5 * y * y * Math.sin(4 * meanLongitudeRad) -
+        1.25 * eccentricity * eccentricity * Math.sin(2 * meanAnomalyRad))) /
+    THREE.MathUtils.DEG2RAD;
+  const utcMinutes =
+    date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
 
-  const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
-  const gmst = (280.46061837 + 360.98564736629 * n) % 360;
-  const ha = THREE.MathUtils.degToRad(gmst + utcHours * 0) - ra;
+  return {
+    lat: THREE.MathUtils.radToDeg(solarDeclination),
+    lon: normalizeLongitude(180 - (utcMinutes + equationOfTime) / 4),
+  };
+}
 
-  const sunLon = -THREE.MathUtils.radToDeg(ha) + (utcHours - 12) * 15;
-  const sunLat = THREE.MathUtils.radToDeg(dec);
+function getSunDirection(epochSeconds: number): THREE.Vector3 {
+  const { lat, lon } = getSunSubsolarPoint(epochSeconds);
+  return latLonToVector3(lat, lon, 10).normalize();
+}
 
-  return latLonToVector3(sunLat, sunLon, 10).normalize();
+function easeOutCubic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3);
 }
 
 function AtmosphereGlow({ radius, sunDir }: { radius: number; sunDir: THREE.Vector3 }) {
@@ -182,11 +224,65 @@ function AtmosphereGlow({ radius, sunDir }: { radius: number; sunDir: THREE.Vect
 
 function GlobeCameraController({ location, controlsRef }: { location: Location; controlsRef: RefObject<any> }) {
   const { camera } = useThree();
+  const hasPlayedIntroRef = useRef(false);
+  const introAnimationRef = useRef<{
+    startTime: number;
+    startPosition: THREE.Vector3;
+    endPosition: THREE.Vector3;
+  } | null>(null);
+
+  useFrame(() => {
+    const introAnimation = introAnimationRef.current;
+    if (!introAnimation) return;
+
+    const progress = Math.min(
+      (performance.now() - introAnimation.startTime) / INTRO_CAMERA_ANIMATION_MS,
+      1
+    );
+    const easedProgress = easeOutCubic(progress);
+
+    camera.position.lerpVectors(
+      introAnimation.startPosition,
+      introAnimation.endPosition,
+      easedProgress
+    );
+    camera.lookAt(0, 0, 0);
+
+    if (controlsRef.current) {
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+    }
+
+    if (progress >= 1) {
+      introAnimationRef.current = null;
+      if (controlsRef.current) {
+        controlsRef.current.enabled = true;
+      }
+    }
+  });
 
   useEffect(() => {
     const cityDirection = latLonToVector3(location.lat, location.lon, 1).normalize();
     const desiredPosition = cityDirection.multiplyScalar(INITIAL_CAMERA_DISTANCE);
-    camera.position.copy(desiredPosition);
+    if (!hasPlayedIntroRef.current) {
+      const introStartPosition = cityDirection.clone().multiplyScalar(INTRO_CAMERA_DISTANCE);
+      introAnimationRef.current = {
+        startTime: performance.now(),
+        startPosition: introStartPosition,
+        endPosition: desiredPosition.clone(),
+      };
+      camera.position.copy(introStartPosition);
+      hasPlayedIntroRef.current = true;
+      if (controlsRef.current) {
+        controlsRef.current.enabled = false;
+      }
+    } else {
+      introAnimationRef.current = null;
+      camera.position.copy(desiredPosition);
+      if (controlsRef.current) {
+        controlsRef.current.enabled = true;
+      }
+    }
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
     if (controlsRef.current) {
@@ -201,11 +297,14 @@ function GlobeCameraController({ location, controlsRef }: { location: Location; 
 function GlobeMesh({
   location,
   onGlobePick,
+  referenceEpoch,
 }: {
   location: Location;
   onGlobePick: (lat: number, lon: number) => void;
+  referenceEpoch?: number;
 }) {
   const controlsRef = useRef<any>(null);
+  const [liveEpoch, setLiveEpoch] = useState(() => Math.floor(Date.now() / 1000));
   const earthMapRaw = useLoader(THREE.TextureLoader, textureManager.earthDayMap());
   const earthNormalRaw = useLoader(THREE.TextureLoader, textureManager.earthNormalMap());
   const earthSpecularRaw = useLoader(THREE.TextureLoader, textureManager.earthSpecularMap());
@@ -220,8 +319,23 @@ function GlobeMesh({
     () => latLonToVector3(location.lat, location.lon, GLOBE_RADIUS * 1.001),
     [location.lat, location.lon]
   );
+  const lightingEpoch = referenceEpoch ?? liveEpoch;
 
-  const sunDir = useMemo(() => getSunDirection(), []);
+  useEffect(() => {
+    if (referenceEpoch !== undefined) {
+      return;
+    }
+
+    const updateLiveEpoch = () => {
+      setLiveEpoch(Math.floor(Date.now() / 1000));
+    };
+
+    updateLiveEpoch();
+    const intervalId = window.setInterval(updateLiveEpoch, LIVE_LIGHTING_UPDATE_MS);
+    return () => window.clearInterval(intervalId);
+  }, [referenceEpoch]);
+
+  const sunDir = useMemo(() => getSunDirection(lightingEpoch), [lightingEpoch]);
   const sunPos: [number, number, number] = useMemo(
     () => [sunDir.x * 10, sunDir.y * 10, sunDir.z * 10],
     [sunDir]
@@ -283,7 +397,12 @@ function GlobeMesh({
   );
 }
 
-export default function Globe3D({ location, onGlobePick, className }: Globe3DProps) {
+export default function Globe3D({
+  location,
+  onGlobePick,
+  className,
+  referenceEpoch,
+}: Globe3DProps) {
   return (
     <div className={className} style={{ width: '100%', height: '100%' }}>
       <Canvas
@@ -293,7 +412,7 @@ export default function Globe3D({ location, onGlobePick, className }: Globe3DPro
         dpr={[1, 2]}
       >
         <color attach="background" args={['#020617']} />
-        <GlobeMesh location={location} onGlobePick={onGlobePick} />
+        <GlobeMesh location={location} onGlobePick={onGlobePick} referenceEpoch={referenceEpoch} />
       </Canvas>
     </div>
   );

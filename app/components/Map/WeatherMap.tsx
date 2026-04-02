@@ -1464,6 +1464,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
               location={location}
               onGlobePick={handleGlobePick}
               className="w-full h-full"
+              referenceEpoch={anyLayerEnabled ? targetTimelineEpoch : undefined}
             />
           </div>
         ) : (

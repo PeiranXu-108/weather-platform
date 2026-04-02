@@ -101,7 +101,10 @@ export default function SegmentedDropdown({
     : 'bg-white/50 text-slate-600 hover:bg-white/70';
 
   return (
-    <div className={positionClassName} ref={dropdownRef}>
+    <div
+      className={`${positionClassName} ${shouldShowDropdown ? 'z-[80]' : ''}`}
+      ref={dropdownRef}
+    >
       <div className="relative">
         <div className={`flex items-center gap-px rounded-xl p-1.5 ${barClass}`}>
           <div className="relative">
@@ -127,7 +130,7 @@ export default function SegmentedDropdown({
             </button>
 
             {shouldShowDropdown && (
-              <div className="absolute left-0 mt-1.5 min-w-[120px] max-h-[300px] overflow-y-auto py-1.5 px-1 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
+              <div className="absolute left-0 z-10 mt-1.5 min-w-[120px] max-h-[300px] overflow-y-auto py-1.5 px-1 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
                 {dropdownOptions.map((option) => {
                   const isSelected = mainButton.value === option.value;
                   return (
@@ -173,4 +176,3 @@ export default function SegmentedDropdown({
     </div>
   );
 }
-
