@@ -27,8 +27,15 @@
   };
 
   export const isDomesticCity = (country: string, region: string, name: string): boolean => {
-    if (country === '中国') return true;
-    if (country === 'china' || country === 'hong kong' || country === 'macau' || country === 'macao' || country === 'taiwan') return true;
+    const c = country.toLowerCase().trim();
+    if (c === '中国' || c.includes('china') || c.includes('中华')) return true;
+    if (c === 'hong kong' || c === 'macau' || c === 'macao' || c === 'taiwan') return true;
+    if (c.includes('香港') || c.includes('澳门') || c.includes('台湾')) return true;
     const searchText = `${region} ${name}`.toLowerCase();
-    return searchText.includes('hong kong') || searchText.includes('macau') || searchText.includes('macao') || searchText.includes('taiwan') || searchText.includes('taipei') || searchText.includes('kaohsiung');
+    return (
+      searchText.includes('hong kong') || searchText.includes('macau') ||
+      searchText.includes('macao') || searchText.includes('taiwan') ||
+      searchText.includes('taipei') || searchText.includes('kaohsiung') ||
+      searchText.includes('香港') || searchText.includes('澳门') || searchText.includes('台湾')
+    );
   };
