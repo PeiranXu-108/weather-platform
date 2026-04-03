@@ -418,7 +418,7 @@ export default function Home() {
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
-      {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
       {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
       {!weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}

@@ -3,6 +3,7 @@
 import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { InstancedStars } from './NightSky';
 
 // ---------------------------------------------------------------------------
 // GLSL: simplex noise + FBM
@@ -122,6 +123,89 @@ const fragmentShader = /* glsl */ `
 `;
 
 // ---------------------------------------------------------------------------
+// Fragment shader – diffuse moon corona for foggy nights
+// ---------------------------------------------------------------------------
+const moonGlowFragmentShader = /* glsl */ `
+  uniform vec3  uGlowColor;
+  uniform float uIntensity;
+  uniform vec2  uCenter;
+  uniform float uAspect;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 c = vUv - uCenter;
+    c.x *= uAspect;
+    float d = length(c);
+    float inner = exp(-d * d * 22.0) * 0.65;
+    float mid   = exp(-d * d * 5.5)  * 0.30;
+    float outer = exp(-d * d * 1.4)  * 0.10;
+    gl_FragColor = vec4(uGlowColor, (inner + mid + outer) * uIntensity);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Fragment shader – warm city-light scatter rising from below
+// ---------------------------------------------------------------------------
+const ambientGlowFragmentShader = /* glsl */ `
+  uniform vec3  uColor;
+  uniform float uIntensity;
+  varying vec2 vUv;
+
+  void main() {
+    float glow = smoothstep(0.55, 0.0, vUv.y);
+    glow = glow * glow;
+    float hSpread = smoothstep(0.0, 0.20, vUv.x) * smoothstep(1.0, 0.80, vUv.x);
+    float hVar = 0.75 + 0.25 * sin(vUv.x * 9.42) * sin(vUv.x * 17.0);
+    gl_FragColor = vec4(uColor, glow * hSpread * hVar * uIntensity);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// Time-of-day helper
+// ---------------------------------------------------------------------------
+function computeTimeState(
+  isDay: number | undefined,
+  sunsetTime: string | undefined,
+  sunriseTime: string | undefined,
+  currentTime: string | undefined,
+): 'day' | 'sunset' | 'night' {
+  if (isDay === 0) {
+    if (sunriseTime && currentTime) {
+      try {
+        const cur = new Date(currentTime.replace(' ', 'T'));
+        const [tp, per] = sunriseTime.split(' ');
+        const [h, m] = tp.split(':').map(Number);
+        let h24 = h;
+        if (per === 'PM' && h !== 12) h24 = h + 12;
+        else if (per === 'AM' && h === 12) h24 = 0;
+        const sr = new Date(cur);
+        sr.setHours(h24, m, 0, 0);
+        if (cur >= new Date(sr.getTime() - 3600000) && cur <= new Date(sr.getTime() + 3600000)) {
+          return 'day';
+        }
+      } catch { /* fall through */ }
+    }
+    return 'night';
+  }
+  if (sunsetTime && currentTime) {
+    try {
+      const cur = new Date(currentTime.replace(' ', 'T'));
+      const [tp, per] = sunsetTime.split(' ');
+      const [h, m] = tp.split(':').map(Number);
+      let h24 = h;
+      if (per === 'PM' && h !== 12) h24 = h + 12;
+      else if (per === 'AM' && h === 12) h24 = 0;
+      const ss = new Date(cur);
+      ss.setHours(h24, m, 0, 0);
+      if (cur >= new Date(ss.getTime() - 3600000) && cur <= new Date(ss.getTime() + 3600000)) {
+        return 'sunset';
+      }
+    } catch { /* fall through */ }
+  }
+  return 'day';
+}
+
+// ---------------------------------------------------------------------------
 // FogLayer component
 // ---------------------------------------------------------------------------
 interface FogLayerProps {
@@ -199,11 +283,161 @@ function FogLayerMesh({
 }
 
 // ---------------------------------------------------------------------------
+// DiffuseMoonGlow – soft lunar corona diffused through fog
+// ---------------------------------------------------------------------------
+function DiffuseMoonGlow() {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const W = 50, H = 30;
+
+  const uniforms = useMemo(
+    () => ({
+      uGlowColor: { value: new THREE.Color(0.48, 0.52, 0.65) },
+      uIntensity: { value: 0.50 },
+      uCenter:    { value: new THREE.Vector2(0.62, 0.70) },
+      uAspect:    { value: W / H },
+    }),
+    [],
+  );
+
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.uniforms.uIntensity.value =
+        0.50 + Math.sin(clock.elapsedTime * 0.25) * 0.04;
+    }
+  });
+
+  return (
+    <mesh position={[0, 2, -13]}>
+      <planeGeometry args={[W, H, 1, 1]} />
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={vertexShader}
+        fragmentShader={moonGlowFragmentShader}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// NightAmbientGlow – warm city-light scatter rising from the ground
+// ---------------------------------------------------------------------------
+function NightAmbientGlow() {
+  const uniforms = useMemo(
+    () => ({
+      uColor:     { value: new THREE.Color(0.42, 0.32, 0.22) },
+      uIntensity: { value: 0.22 },
+    }),
+    [],
+  );
+
+  return (
+    <mesh position={[0, -6, -12]}>
+      <planeGeometry args={[60, 24, 1, 1]} />
+      <shaderMaterial
+        vertexShader={vertexShader}
+        fragmentShader={ambientGlowFragmentShader}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FoggyScene – multiple fog layers at different depths
 // ---------------------------------------------------------------------------
-function FoggyScene({ isSunset }: { isSunset?: boolean }) {
+function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
   const layers = useMemo(() => {
-    if (isSunset) {
+    if (timeState === 'night') {
+      return [
+        // Deep background haze – dark blue-grey, very slow
+        {
+          zDepth: -11,
+          speed: 0.022,
+          scale: 1.8,
+          opacity: 0.55,
+          coverage: 0.26,
+          softness: 0.26,
+          warpStrength: 0.8,
+          fogColor: new THREE.Color(0.18, 0.20, 0.26),
+          fogShadow: new THREE.Color(0.08, 0.09, 0.13),
+          windDir: [1.0, 0.04] as [number, number],
+          planeSize: [58, 34] as [number, number],
+          yOffset: 0,
+          verticalFade: 0.28,
+        },
+        // Mid rolling fog – dense, cool blue-grey
+        {
+          zDepth: -6,
+          speed: 0.038,
+          scale: 1.3,
+          opacity: 0.72,
+          coverage: 0.32,
+          softness: 0.22,
+          warpStrength: 1.1,
+          fogColor: new THREE.Color(0.16, 0.18, 0.24),
+          fogShadow: new THREE.Color(0.06, 0.07, 0.11),
+          windDir: [1.0, 0.06] as [number, number],
+          planeSize: [58, 30] as [number, number],
+          yOffset: -2,
+          verticalFade: 0.40,
+        },
+        // Lower dense band – picks up warm ground-light tint
+        {
+          zDepth: -3.5,
+          speed: 0.050,
+          scale: 1.0,
+          opacity: 0.80,
+          coverage: 0.34,
+          softness: 0.18,
+          warpStrength: 1.2,
+          fogColor: new THREE.Color(0.20, 0.19, 0.22),
+          fogShadow: new THREE.Color(0.10, 0.09, 0.11),
+          windDir: [1.0, 0.03] as [number, number],
+          planeSize: [62, 26] as [number, number],
+          yOffset: -4,
+          verticalFade: 0.56,
+        },
+        // Near ground mist – warmest from street-light scatter
+        {
+          zDepth: -1.5,
+          speed: 0.068,
+          scale: 2.0,
+          opacity: 0.62,
+          coverage: 0.38,
+          softness: 0.16,
+          warpStrength: 0.7,
+          fogColor: new THREE.Color(0.24, 0.22, 0.22),
+          fogShadow: new THREE.Color(0.12, 0.10, 0.10),
+          windDir: [1.0, 0.02] as [number, number],
+          planeSize: [64, 20] as [number, number],
+          yOffset: -6,
+          verticalFade: 0.70,
+        },
+        // Foreground wisp – subtle, catches ambient light
+        {
+          zDepth: -0.3,
+          speed: 0.090,
+          scale: 2.6,
+          opacity: 0.40,
+          coverage: 0.42,
+          softness: 0.15,
+          warpStrength: 0.5,
+          fogColor: new THREE.Color(0.22, 0.21, 0.24),
+          fogShadow: new THREE.Color(0.10, 0.09, 0.12),
+          windDir: [1.0, 0.03] as [number, number],
+          planeSize: [66, 16] as [number, number],
+          yOffset: -7,
+          verticalFade: 0.86,
+        },
+      ];
+    }
+
+    if (timeState === 'sunset') {
       return [
         {
           zDepth: -10,
@@ -268,8 +502,8 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
       ];
     }
 
+    // ---- Day (default) ----
     return [
-      // Deep background haze – slow, full coverage, lightest
       {
         zDepth: -11,
         speed: 0.03,
@@ -285,7 +519,6 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
         yOffset: 0,
         verticalFade: 0.32,
       },
-      // Mid rolling fog
       {
         zDepth: -6,
         speed: 0.05,
@@ -301,7 +534,6 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
         yOffset: -2,
         verticalFade: 0.45,
       },
-      // Lower dense fog band
       {
         zDepth: -3.5,
         speed: 0.065,
@@ -317,7 +549,6 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
         yOffset: -4,
         verticalFade: 0.6,
       },
-      // Near ground mist
       {
         zDepth: -1.5,
         speed: 0.09,
@@ -333,7 +564,6 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
         yOffset: -6,
         verticalFade: 0.75,
       },
-      // Foreground wisp
       {
         zDepth: -0.3,
         speed: 0.12,
@@ -350,10 +580,19 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
         verticalFade: 0.9,
       },
     ];
-  }, [isSunset]);
+  }, [timeState]);
 
   return (
     <>
+      {timeState === 'night' && (
+        <>
+          <ambientLight intensity={0.06} />
+          <directionalLight position={[5, 10, 5]} intensity={0.10} color={0x5566aa} />
+          <InstancedStars count={180} />
+          <DiffuseMoonGlow />
+          <NightAmbientGlow />
+        </>
+      )}
       {layers.map((cfg, i) => (
         <FogLayerMesh key={i} {...cfg} />
       ))}
@@ -362,60 +601,40 @@ function FoggyScene({ isSunset }: { isSunset?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
+// Background gradients
+// ---------------------------------------------------------------------------
+const GRADIENTS = {
+  day: 'linear-gradient(to bottom, rgb(205, 210, 216) 0%, rgb(190, 196, 204) 25%, rgb(175, 182, 192) 50%, rgb(160, 168, 178) 75%, rgb(148, 155, 165) 100%)',
+  sunset: 'linear-gradient(to bottom, rgb(145, 140, 148) 0%, rgb(125, 120, 128) 30%, rgb(110, 108, 115) 60%, rgb(95, 92, 100) 100%)',
+  night: 'linear-gradient(to bottom, rgb(12, 16, 28) 0%, rgb(18, 22, 36) 15%, rgb(26, 28, 40) 35%, rgb(34, 34, 44) 55%, rgb(40, 38, 42) 75%, rgb(48, 42, 42) 100%)',
+};
+
+// ---------------------------------------------------------------------------
 // Exported component
 // ---------------------------------------------------------------------------
 interface FoggyWeatherBackgroundProps {
   className?: string;
   sunsetTime?: string;
+  sunriseTime?: string;
   currentTime?: string;
+  isDay?: number;
 }
 
 export default function FoggyWeatherBackground({
   className = '',
   sunsetTime,
+  sunriseTime,
   currentTime,
+  isDay,
 }: FoggyWeatherBackgroundProps) {
-  const isSunset = useMemo(() => {
-    if (!sunsetTime || !currentTime) return false;
-    try {
-      const currentDate = new Date(currentTime.replace(' ', 'T'));
-      const [sunsetTimePart, sunsetPeriod] = sunsetTime.split(' ');
-      const [sunsetHours, sunsetMinutes] = sunsetTimePart.split(':').map(Number);
-      let sunsetHours24 = sunsetHours;
-      if (sunsetPeriod === 'PM' && sunsetHours !== 12) {
-        sunsetHours24 = sunsetHours + 12;
-      } else if (sunsetPeriod === 'AM' && sunsetHours === 12) {
-        sunsetHours24 = 0;
-      }
-      const sunsetDate = new Date(currentDate);
-      sunsetDate.setHours(sunsetHours24, sunsetMinutes, 0, 0);
-      const oneHourBefore = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
-      const oneHourAfter = new Date(sunsetDate.getTime() + 60 * 60 * 1000);
-      return currentDate >= oneHourBefore && currentDate <= oneHourAfter;
-    } catch {
-      return false;
-    }
-  }, [sunsetTime, currentTime]);
+  const timeState = useMemo(
+    () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
+    [isDay, sunsetTime, sunriseTime, currentTime],
+  );
 
   return (
     <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
-      {isSunset ? (
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgb(145, 140, 148) 0%, rgb(125, 120, 128) 30%, rgb(110, 108, 115) 60%, rgb(95, 92, 100) 100%)',
-          }}
-        />
-      ) : (
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgb(205, 210, 216) 0%, rgb(190, 196, 204) 25%, rgb(175, 182, 192) 50%, rgb(160, 168, 178) 75%, rgb(148, 155, 165) 100%)',
-          }}
-        />
-      )}
+      <div className="absolute inset-0" style={{ background: GRADIENTS[timeState] }} />
 
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
@@ -429,7 +648,7 @@ export default function FoggyWeatherBackground({
         dpr={[1, 1]}
         performance={{ min: 0.5 }}
       >
-        <FoggyScene isSunset={isSunset} />
+        <FoggyScene timeState={timeState} />
       </Canvas>
     </div>
   );

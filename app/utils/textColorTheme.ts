@@ -43,8 +43,8 @@ export function getBackgroundType(
     return 'dark';
   }
 
-  // Overcast and foggy use light grey backgrounds → dark text
   if (isOvercast || isFoggy) {
+    if (isNight || isDay === 0) return 'dark';
     return 'light';
   }
 
