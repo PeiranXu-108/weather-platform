@@ -5,34 +5,85 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import CloudLayer from './CloudLayer';
 
-// 共享几何体与材质，减少 150 份重复创建
-const RAINDROP_BASE_LENGTH = 0.5;
-const sharedRaindropGeometry = new THREE.CylinderGeometry(0.01, 0.01, RAINDROP_BASE_LENGTH, 4);
-const sharedRaindropMaterial = new THREE.MeshStandardMaterial({
-  color: 0xeaf0ff,
-  transparent: true,
-  opacity: 0.6,
-  emissive: 0xfffff,
-  emissiveIntensity: 0.2,
-});
+interface RainConfig {
+  totalCount: number;
+  detailedCount: number;
+  lengthMin: number;
+  lengthRange: number;
+  radiusTop: number;
+  radiusBottom: number;
+  speedMin: number;
+  speedRange: number;
+  detailedSpeedMin: number;
+  detailedSpeedRange: number;
+  opacity: number;
+  emissiveIntensity: number;
+  fogNear: number;
+  fogFar: number;
+}
 
-// 单个雨滴组件 - 细长型，使用共享 geometry/material，scale.y 表示长度
+function getRainConfig(precipMm: number): RainConfig {
+  // precipMm 映射到 0~1 的强度值，使用对数曲线使小雨/中雨变化更明显
+  // 0mm → 0.05, 0.5mm → 0.2, 2.5mm → 0.5, 7.5mm → 0.75, 20mm → 0.9, 50mm+ → 1.0
+  const t = Math.min(1, Math.max(0.05, Math.log(1 + precipMm * 2) / Math.log(1 + 100)));
+
+  const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
+
+  return {
+    totalCount: Math.round(lerp(800, 6000, t)),
+    detailedCount: Math.round(lerp(10, 65, t)),
+    lengthMin: lerp(0.2, 0.55, t),
+    lengthRange: lerp(0.2, 0.6, t),
+    radiusTop: lerp(0.012, 0.026, t),
+    radiusBottom: lerp(0.008, 0.018, t),
+    speedMin: lerp(1.5, 5.0, t),
+    speedRange: lerp(1.0, 3.5, t),
+    detailedSpeedMin: lerp(2.5, 7.0, t),
+    detailedSpeedRange: lerp(1.0, 3.0, t),
+    opacity: lerp(0.35, 0.78, t),
+    emissiveIntensity: lerp(0.15, 0.42, t),
+    fogNear: lerp(12, 7, t),
+    fogFar: lerp(30, 23, t),
+  };
+}
+
+const RAINDROP_BASE_LENGTH = 0.5;
+
 function Raindrop({
   position,
   length,
   speed,
   seed,
+  config,
 }: {
   position: [number, number, number];
   length: number;
   speed: number;
   seed: number;
+  config: RainConfig;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const scaleY = length / RAINDROP_BASE_LENGTH;
+  const scaleXZ = config.radiusTop / 0.025;
 
   const initialY = useMemo(() => position[1], [position[1]]);
   const initialX = useMemo(() => position[0], [position[0]]);
+
+  const geometry = useMemo(
+    () => new THREE.CylinderGeometry(0.025, 0.018, RAINDROP_BASE_LENGTH, 6),
+    [],
+  );
+  const material = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0xdde4f0,
+        transparent: true,
+        opacity: Math.min(1, config.opacity + 0.05),
+        emissive: 0xc0d0e8,
+        emissiveIntensity: config.emissiveIntensity + 0.05,
+      }),
+    [config.opacity, config.emissiveIntensity],
+  );
 
   useFrame((state) => {
     if (meshRef.current) {
@@ -50,23 +101,23 @@ function Raindrop({
     <mesh
       ref={meshRef}
       position={position}
-      geometry={sharedRaindropGeometry}
-      material={sharedRaindropMaterial}
-      scale={[1, scaleY, 1]}
+      geometry={geometry}
+      material={material}
+      scale={[scaleXZ, scaleY, scaleXZ]}
     />
   );
 }
 
-// 使用 InstancedMesh 批量渲染大量雨滴（性能优化）
-function InstancedRaindrops({ 
-  count 
-}: { 
+function InstancedRaindrops({
+  count,
+  config,
+}: {
   count: number;
+  config: RainConfig;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const tempObject = useRef(new THREE.Object3D());
-  
-  // 生成雨滴数据并维护位置状态
+
   const { raindrops, positions } = useMemo(() => {
     const drops: Array<{
       position: [number, number, number];
@@ -76,159 +127,146 @@ function InstancedRaindrops({
       initialY: number;
       initialX: number;
     }> = [];
-    
+
     const pos: Array<{ x: number; y: number; z: number; rotation: number }> = [];
-    
+
     for (let i = 0; i < count; i++) {
       const seed = i * 0.1;
       const random = (offset: number) => {
         const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
         return x - Math.floor(x);
       };
-      
+
       const x = (random(1) - 0.5) * 40;
       const y = (random(2) - 0.5) * 30 + 5;
       const z = -8 + random(3) * 4;
-      const length = 0.3 + random(4) * 0.4; // 雨滴长度
-      
+      const length = config.lengthMin + random(4) * config.lengthRange;
+
       drops.push({
         position: [x, y, z],
-        length: length,
-        speed: 3.0 + random(10) * 2.0, // 较快的下落速度
-        seed: seed,
+        length,
+        speed: config.speedMin + random(10) * config.speedRange,
+        seed,
         initialY: y,
         initialX: x,
       });
-      
+
       pos.push({ x, y, z, rotation: 0.1 });
     }
-    
+
     return { raindrops: drops, positions: pos };
-  }, [count]);
-  
-  // 创建几何体和材质 - 细长的圆柱体
-  const geometry = useMemo(() => {
-    return new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4);
-  }, []);
-  
-  const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: 0x88aaff,
-      transparent: true,
-      opacity: 0.7,
-      emissive: 0x4488ff,
-      emissiveIntensity: 0.15,
-    });
-  }, []);
-  
-  // 初始化实例矩阵
+  }, [count, config.lengthMin, config.lengthRange, config.speedMin, config.speedRange]);
+
+  const geometry = useMemo(
+    () => new THREE.CylinderGeometry(config.radiusTop * 0.8, config.radiusBottom * 0.8, 0.5, 6),
+    [config.radiusTop, config.radiusBottom],
+  );
+
+  const material = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0xc8d4e8,
+        transparent: true,
+        opacity: config.opacity,
+        emissive: 0xb0c0d8,
+        emissiveIntensity: config.emissiveIntensity,
+      }),
+    [config.opacity, config.emissiveIntensity],
+  );
+
   useEffect(() => {
     if (!meshRef.current) return;
     meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    
+
     raindrops.forEach((drop, i) => {
       tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
-      tempObject.current.scale.set(1, drop.length, 1); // y轴缩放表示长度
+      tempObject.current.scale.set(1, drop.length, 1);
       tempObject.current.rotation.z = positions[i].rotation;
       tempObject.current.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
     });
-    
+
     meshRef.current.instanceMatrix.needsUpdate = true;
   }, [raindrops, positions]);
-  
-  // 使用 requestAnimationFrame 优化的更新循环
+
   useFrame((state) => {
     if (!meshRef.current) return;
-    
+
     const elapsedTime = state.clock.elapsedTime;
-    
-    // 批量更新所有实例的位置
+
     raindrops.forEach((drop, i) => {
-      // 计算新位置 - 快速下落
       let y = positions[i].y - drop.speed * 0.02;
-      
-      // 轻微的左右倾斜（模拟风的效果）
+
       const windOffset = Math.sin(elapsedTime * 2 + drop.seed) * 0.1;
       const x = drop.initialX + windOffset;
-      
-      // 循环：当雨滴落到底部时，重新从顶部开始
+
       if (y < -15) {
         y = drop.initialY + 30;
         positions[i].x = drop.initialX;
       }
-      
-      // 更新位置状态
+
       positions[i].x = x;
       positions[i].y = y;
-      
-      // 更新矩阵
+
       tempObject.current.position.set(x, y, positions[i].z);
       tempObject.current.scale.set(1, drop.length, 1);
-      tempObject.current.rotation.z = 0.1; // 轻微的倾斜
+      tempObject.current.rotation.z = 0.1;
       tempObject.current.updateMatrix();
       meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
     });
-    
+
     meshRef.current.instanceMatrix.needsUpdate = true;
   });
-  
+
   return (
     <instancedMesh ref={meshRef} args={[geometry, material, count]} />
   );
 }
 
-// 场景组件
-function RainyScene() {
-  // 分离精致雨滴和简单雨滴
+function RainyScene({ config }: { config: RainConfig }) {
   const { detailedDrops, simpleCount } = useMemo(() => {
-    const detailed: Array<{ 
-      position: [number, number, number]; 
+    const detailed: Array<{
+      position: [number, number, number];
       length: number;
       speed: number;
       seed: number;
     }> = [];
-    
-    const detailedCount = 60;
-    const totalCount = 5000;
-    
-    // 生成精致雨滴数据
-    for (let i = 0; i < detailedCount; i++) {
+
+    for (let i = 0; i < config.detailedCount; i++) {
       const seed = i * 0.1;
       const random = (offset: number) => {
         const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
         return x - Math.floor(x);
       };
-      
+
       detailed.push({
         position: [
           (random(1) - 0.5) * 40,
           (random(2) - 0.5) * 30 + 5,
           -5 + random(3) * 3,
         ],
-        length: 0.4 + random(4) * 0.4,
-        speed: 6.0 + random(10) * 2.0,
-        seed: seed,
+        length: config.lengthMin * 1.15 + random(4) * config.lengthRange * 1.1,
+        speed: config.detailedSpeedMin + random(10) * config.detailedSpeedRange,
+        seed,
       });
     }
-    
-    return { detailedDrops: detailed, simpleCount: totalCount - detailedCount };
-  }, []);
-  
+
+    return {
+      detailedDrops: detailed,
+      simpleCount: config.totalCount - config.detailedCount,
+    };
+  }, [config.totalCount, config.detailedCount, config.lengthMin, config.lengthRange, config.detailedSpeedMin, config.detailedSpeedRange]);
+
   return (
     <>
-      {/* 环境光 - 雨天时较暗 */}
       <ambientLight intensity={0.3} />
-      {/* 主光源 - 柔和的冷光 */}
-      <directionalLight 
-        position={[5, 10, 5]} 
-        intensity={0.4} 
+      <directionalLight
+        position={[5, 10, 5]}
+        intensity={0.4}
         color={0xaaaaaa}
       />
-      {/* 补充光源 - 从下方反射的冷光 */}
       <directionalLight position={[0, -5, -5]} intensity={0.15} color={0x888888} />
 
-      {/* Background cloud layers behind rain */}
       <CloudLayer
         zDepth={-12}
         speed={0.03}
@@ -257,23 +295,21 @@ function RainyScene() {
         planeSize={[52, 30]}
         yOffset={0}
       />
-      
-      {/* 使用 InstancedMesh 批量渲染大量雨滴 */}
-      <InstancedRaindrops count={simpleCount} />
-      
-      {/* 渲染精致的雨滴 */}
+
+      <InstancedRaindrops count={simpleCount} config={config} />
+
       {detailedDrops.map((drop, index) => (
-        <Raindrop 
+        <Raindrop
           key={`detailed-${index}`}
-          position={drop.position} 
+          position={drop.position}
           length={drop.length}
           speed={drop.speed}
           seed={drop.seed}
+          config={config}
         />
       ))}
-      
-      {/* 雾效果，增强深度感和真实感 - 雨天使用深灰色雾 */}
-      <fog attach="fog" args={[0x4a4a4a, 5, 20]} />
+
+      <fog attach="fog" args={[0x4a4a4a, config.fogNear, config.fogFar]} />
     </>
   );
 }
@@ -282,15 +318,18 @@ interface RainyWeatherBackgroundProps {
   className?: string;
   sunsetTime?: string;
   currentTime?: string;
+  precipMm?: number;
 }
 
-export default function RainyWeatherBackground({ 
-  className = '', 
+export default function RainyWeatherBackground({
+  className = '',
   sunsetTime,
-  currentTime 
+  currentTime,
+  precipMm = 2.5,
 }: RainyWeatherBackgroundProps) {
-  // 判断是否在日落前后一小时
-  const isSunset = Boolean(sunsetTime && currentTime && 
+  const config = useMemo(() => getRainConfig(precipMm), [precipMm]);
+
+  const isSunset = Boolean(sunsetTime && currentTime &&
     (() => {
       try {
         const currentDate = new Date(currentTime.replace(' ', 'T'));
@@ -314,31 +353,27 @@ export default function RainyWeatherBackground({
 
   return (
     <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
-      {/* 深灰色渐变背景 */}
       {isSunset ? (
-        // 日落时的深灰蓝渐变
-        <div 
+        <div
           className="absolute inset-0"
           style={{
             background: 'linear-gradient(to bottom, rgb(50, 55, 65) 0%, rgb(60, 65, 75) 30%, rgb(70, 75, 85) 60%, rgb(80, 85, 95) 100%)'
           }}
         />
       ) : (
-        // 正常雨天的深灰色渐变：深灰 -> 中灰 -> 深灰
-        <div 
+        <div
           className="absolute inset-0"
           style={{
             background: 'linear-gradient(to bottom, rgb(60, 65, 70) 0%, rgb(70, 75, 80) 50%, rgb(55, 60, 65) 100%)'
           }}
         />
       )}
-      
-      {/* Three.js Canvas - 优化性能配置 */}
+
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
         style={{ width: '100%', height: '100%' }}
-        gl={{ 
-          alpha: true, 
+        gl={{
+          alpha: true,
           antialias: false,
           preserveDrawingBuffer: true,
           powerPreference: "high-performance",
@@ -349,7 +384,7 @@ export default function RainyWeatherBackground({
         performance={{ min: 0.5 }}
         frameloop="always"
       >
-        <RainyScene />
+        <RainyScene config={config} />
       </Canvas>
     </div>
   );

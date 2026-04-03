@@ -416,7 +416,7 @@ export default function Home() {
     <main className="min-h-screen p-4 md:p-8 pb-20 relative" style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}>
       {/* Backgrounds */}
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
+      {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} precipMm={weatherData?.current.precip_mm} />}
       {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
       {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
       {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
