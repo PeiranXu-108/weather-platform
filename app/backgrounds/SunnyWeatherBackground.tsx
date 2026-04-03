@@ -133,11 +133,10 @@ export default function SunnyWeatherBackground({
           }}
         />
       ) : timeState === 'night' ? (
-        // 黑夜渐变：深蓝色和黑色渐变
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(to bottom, rgb(10, 15, 30) 0%, rgb(5, 10, 25) 30%, rgb(0, 5, 20) 60%, rgb(0, 0, 15) 100%)'
+            background: 'linear-gradient(to bottom, rgb(10, 20, 52) 0%, rgb(8, 16, 44) 25%, rgb(5, 12, 36) 50%, rgb(3, 8, 28) 75%, rgb(1, 5, 22) 100%)'
           }}
         />
       ) : (

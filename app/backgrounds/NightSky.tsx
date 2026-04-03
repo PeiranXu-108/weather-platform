@@ -4,12 +4,11 @@ import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// 共享几何体：最大半径 0.07，用 scale 表示不同大小
-const STAR_MAX_SIZE = 0.07;
-const sharedStarGeometry = new THREE.SphereGeometry(STAR_MAX_SIZE, 8, 8);
+const STAR_MAX_SIZE = 0.08;
+const sharedStarGeometry = new THREE.SphereGeometry(STAR_MAX_SIZE, 16, 16);
 
 // ---------------------------------------------------------------------------
-// Star – single twinkling star with emissive material
+// Star – single twinkling star with emissive material (bright highlights)
 // ---------------------------------------------------------------------------
 export function Star({
   position,
@@ -101,9 +100,6 @@ export function ShootingStar({
     return group;
   }, []);
 
-  const initialX = useMemo(() => position[0], [position[0]]);
-  const initialY = useMemo(() => position[1], [position[1]]);
-
   const speed = useMemo(() => {
     const random = (offset: number) => {
       const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
@@ -145,15 +141,43 @@ export function ShootingStar({
 }
 
 // ---------------------------------------------------------------------------
-// InstancedStars – batch-rendered twinkling stars
+// InstancedStars – Points-based rendering for perfect circles & performance
 // ---------------------------------------------------------------------------
-export function InstancedStars({ count }: { count: number }) {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const tempObject = useRef(new THREE.Object3D());
+const starVertexShader = /* glsl */ `
+  attribute float aSeed;
+  attribute float aSize;
+  uniform float uTime;
+  uniform float uPixelRatio;
+  varying float vBrightness;
 
-  const { stars, positions } = useMemo(() => {
-    const starData: Array<{ position: [number, number, number]; size: number; seed: number }> = [];
-    const pos: Array<{ x: number; y: number; z: number; size: number }> = [];
+  void main() {
+    float twinkle = sin(uTime * (1.8 + aSeed * 0.5) + aSeed) * 0.3;
+    vBrightness = 0.65 + twinkle + 0.35;
+
+    vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * (22.0 / -mvPos.z) * uPixelRatio * (0.85 + twinkle * 0.25);
+    gl_Position = projectionMatrix * mvPos;
+  }
+`;
+
+const starFragmentShader = /* glsl */ `
+  varying float vBrightness;
+
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    if (d > 0.5) discard;
+    float alpha = 1.0 - smoothstep(0.25, 0.5, d);
+    gl_FragColor = vec4(vec3(1.0), alpha * vBrightness);
+  }
+`;
+
+export function InstancedStars({ count }: { count: number }) {
+  const pointsRef = useRef<THREE.Points>(null);
+
+  const geometry = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const seeds = new Float32Array(count);
+    const sizes = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
       const seed = i * 0.1;
@@ -162,67 +186,46 @@ export function InstancedStars({ count }: { count: number }) {
         return x - Math.floor(x);
       };
 
-      const x = (random(1) - 0.5) * 50;
-      const y = (random(2) - 0.5) * 30 + 5;
-      const z = -15 + random(3) * 10;
-      const size = 0.02 + random(4) * 0.03;
-
-      starData.push({ position: [x, y, z], size, seed });
-      pos.push({ x, y, z, size });
+      pos[i * 3]     = (random(1) - 0.5) * 66;
+      pos[i * 3 + 1] = (random(2) - 0.5) * 42 + 4;
+      pos[i * 3 + 2] = -18 + random(3) * 14;
+      seeds[i] = seed;
+      sizes[i] = 0.6 + random(4) * 2.0;
     }
 
-    return { stars: starData, positions: pos };
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    return geo;
   }, [count]);
-
-  const geometry = useMemo(() => new THREE.SphereGeometry(0.03, 6, 6), []);
 
   const material = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0xffffff,
-        emissiveIntensity: 1.2,
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uPixelRatio: { value: 1 },
+        },
+        vertexShader: starVertexShader,
+        fragmentShader: starFragmentShader,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
       }),
     [],
   );
 
-  useEffect(() => {
-    if (!meshRef.current) return;
-    meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    stars.forEach((star, i) => {
-      tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
-      tempObject.current.scale.setScalar(positions[i].size);
-      tempObject.current.updateMatrix();
-      meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [stars, positions]);
-
-  useFrame((state) => {
-    if (!meshRef.current) return;
-
-    stars.forEach((star, i) => {
-      const twinkleSpeed = 2 + star.seed * 0.5;
-      const twinkleAmount = Math.sin(state.clock.elapsedTime * twinkleSpeed + star.seed) * 0.3;
-      const scale = positions[i].size * (0.8 + twinkleAmount);
-
-      tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
-      tempObject.current.scale.setScalar(scale);
-      tempObject.current.updateMatrix();
-      meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
+  useFrame(({ clock, gl }) => {
+    material.uniforms.uTime.value = clock.elapsedTime;
+    material.uniforms.uPixelRatio.value = gl.getPixelRatio();
   });
 
-  return <instancedMesh ref={meshRef} args={[geometry, material, count]} />;
+  return <points ref={pointsRef} geometry={geometry} material={material} />;
 }
 
 // ---------------------------------------------------------------------------
-// NightSkyEffects – composite: instanced stars + detailed stars + shooting stars
-// Renders only the sky objects (no lights / fog) so the caller can compose them.
+// NightSkyEffects – composite: point stars + detailed stars + shooting stars
 // ---------------------------------------------------------------------------
 export default function NightSkyEffects() {
   const [shootingStars, setShootingStars] = useState<
@@ -232,7 +235,7 @@ export default function NightSkyEffects() {
   const detailedStars = useMemo(() => {
     const detailed: Array<{ position: [number, number, number]; size: number; seed: number }> = [];
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       const seed = i * 0.1;
       const random = (offset: number) => {
         const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
@@ -240,8 +243,8 @@ export default function NightSkyEffects() {
       };
 
       detailed.push({
-        position: [(random(1) - 0.5) * 50, (random(2) - 0.5) * 30 + 5, -15 + random(3) * 10],
-        size: 0.03 + random(4) * 0.04,
+        position: [(random(1) - 0.5) * 60, (random(2) - 0.5) * 36 + 5, -16 + random(3) * 12],
+        size: 0.03 + random(4) * 0.05,
         seed,
       });
     }
@@ -296,7 +299,7 @@ export default function NightSkyEffects() {
 
   return (
     <>
-      <InstancedStars count={600} />
+      <InstancedStars count={1650} />
 
       {detailedStars.map((star, index) => (
         <Star key={`star-${index}`} position={star.position} size={star.size} seed={star.seed} />
