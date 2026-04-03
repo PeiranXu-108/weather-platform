@@ -20,16 +20,26 @@ interface RainConfig {
   emissiveIntensity: number;
   fogNear: number;
   fogFar: number;
+  isNight: boolean;
+  dropColor: number;
+  dropEmissive: number;
+  detailedDropColor: number;
+  detailedDropEmissive: number;
+  ambientIntensity: number;
+  mainLightIntensity: number;
+  mainLightColor: number;
+  fogColor: number;
+  cloudColor1: THREE.Color;
+  cloudShadow1: THREE.Color;
+  cloudColor2: THREE.Color;
+  cloudShadow2: THREE.Color;
 }
 
-function getRainConfig(precipMm: number): RainConfig {
-  // precipMm 映射到 0~1 的强度值，使用对数曲线使小雨/中雨变化更明显
-  // 0mm → 0.05, 0.5mm → 0.2, 2.5mm → 0.5, 7.5mm → 0.75, 20mm → 0.9, 50mm+ → 1.0
+function getRainConfig(precipMm: number, isNight: boolean): RainConfig {
   const t = Math.min(1, Math.max(0.05, Math.log(1 + precipMm * 2) / Math.log(1 + 100)));
-
   const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
 
-  return {
+  const base = {
     totalCount: Math.round(lerp(800, 6000, t)),
     detailedCount: Math.round(lerp(10, 65, t)),
     lengthMin: lerp(0.2, 0.55, t),
@@ -40,10 +50,49 @@ function getRainConfig(precipMm: number): RainConfig {
     speedRange: lerp(1.0, 3.5, t),
     detailedSpeedMin: lerp(2.5, 7.0, t),
     detailedSpeedRange: lerp(1.0, 3.0, t),
-    opacity: lerp(0.35, 0.78, t),
-    emissiveIntensity: lerp(0.15, 0.42, t),
+    isNight,
+  };
+
+  if (isNight) {
+    return {
+      ...base,
+      opacity: lerp(0.25, 0.55, t),
+      emissiveIntensity: lerp(0.08, 0.22, t),
+      fogNear: lerp(10, 5, t),
+      fogFar: lerp(26, 18, t),
+      dropColor: 0x8090a8,
+      dropEmissive: 0x506078,
+      detailedDropColor: 0x9aaabe,
+      detailedDropEmissive: 0x607088,
+      ambientIntensity: 0.12,
+      mainLightIntensity: 0.15,
+      mainLightColor: 0x667788,
+      fogColor: 0x1a1e24,
+      cloudColor1: new THREE.Color(0.18, 0.20, 0.24),
+      cloudShadow1: new THREE.Color(0.08, 0.10, 0.14),
+      cloudColor2: new THREE.Color(0.14, 0.16, 0.20),
+      cloudShadow2: new THREE.Color(0.06, 0.08, 0.12),
+    };
+  }
+
+  return {
+    ...base,
+    opacity: lerp(0.38, 0.80, t),
+    emissiveIntensity: lerp(0.18, 0.45, t),
     fogNear: lerp(12, 7, t),
     fogFar: lerp(30, 23, t),
+    dropColor: 0xd0daea,
+    dropEmissive: 0xb8c8dc,
+    detailedDropColor: 0xe0e8f4,
+    detailedDropEmissive: 0xc8d8ec,
+    ambientIntensity: 0.35,
+    mainLightIntensity: 0.45,
+    mainLightColor: 0xbbbbbb,
+    fogColor: 0x5a5e64,
+    cloudColor1: new THREE.Color(0.42, 0.44, 0.48),
+    cloudShadow1: new THREE.Color(0.22, 0.24, 0.28),
+    cloudColor2: new THREE.Color(0.36, 0.38, 0.42),
+    cloudShadow2: new THREE.Color(0.18, 0.20, 0.24),
   };
 }
 
@@ -76,13 +125,13 @@ function Raindrop({
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xdde4f0,
+        color: config.detailedDropColor,
         transparent: true,
         opacity: Math.min(1, config.opacity + 0.05),
-        emissive: 0xc0d0e8,
+        emissive: config.detailedDropEmissive,
         emissiveIntensity: config.emissiveIntensity + 0.05,
       }),
-    [config.opacity, config.emissiveIntensity],
+    [config.opacity, config.emissiveIntensity, config.detailedDropColor, config.detailedDropEmissive],
   );
 
   useFrame((state) => {
@@ -165,13 +214,13 @@ function InstancedRaindrops({
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xc8d4e8,
+        color: config.dropColor,
         transparent: true,
         opacity: config.opacity,
-        emissive: 0xb0c0d8,
+        emissive: config.dropEmissive,
         emissiveIntensity: config.emissiveIntensity,
       }),
-    [config.opacity, config.emissiveIntensity],
+    [config.opacity, config.emissiveIntensity, config.dropColor, config.dropEmissive],
   );
 
   useEffect(() => {
@@ -259,24 +308,24 @@ function RainyScene({ config }: { config: RainConfig }) {
 
   return (
     <>
-      <ambientLight intensity={0.3} />
+      <ambientLight intensity={config.ambientIntensity} />
       <directionalLight
         position={[5, 10, 5]}
-        intensity={0.4}
-        color={0xaaaaaa}
+        intensity={config.mainLightIntensity}
+        color={config.mainLightColor}
       />
-      <directionalLight position={[0, -5, -5]} intensity={0.15} color={0x888888} />
+      <directionalLight position={[0, -5, -5]} intensity={config.isNight ? 0.06 : 0.15} color={config.isNight ? 0x445566 : 0x888888} />
 
       <CloudLayer
         zDepth={-12}
         speed={0.03}
         scale={2.2}
-        opacity={0.40}
+        opacity={config.isNight ? 0.30 : 0.40}
         coverage={0.44}
         softness={0.20}
         warpStrength={1.4}
-        cloudColor={new THREE.Color(0.38, 0.40, 0.44)}
-        shadowColor={new THREE.Color(0.18, 0.20, 0.24)}
+        cloudColor={config.cloudColor1}
+        shadowColor={config.cloudShadow1}
         windDir={[1.0, 0.10]}
         planeSize={[55, 32]}
         yOffset={2}
@@ -285,12 +334,12 @@ function RainyScene({ config }: { config: RainConfig }) {
         zDepth={-8}
         speed={0.05}
         scale={1.5}
-        opacity={0.50}
+        opacity={config.isNight ? 0.38 : 0.50}
         coverage={0.46}
         softness={0.16}
         warpStrength={1.0}
-        cloudColor={new THREE.Color(0.32, 0.34, 0.38)}
-        shadowColor={new THREE.Color(0.14, 0.16, 0.20)}
+        cloudColor={config.cloudColor2}
+        shadowColor={config.cloudShadow2}
         windDir={[1.0, 0.15]}
         planeSize={[52, 30]}
         yOffset={0}
@@ -309,7 +358,7 @@ function RainyScene({ config }: { config: RainConfig }) {
         />
       ))}
 
-      <fog attach="fog" args={[0x4a4a4a, config.fogNear, config.fogFar]} />
+      <fog attach="fog" args={[config.fogColor, config.fogNear, config.fogFar]} />
     </>
   );
 }
@@ -319,6 +368,7 @@ interface RainyWeatherBackgroundProps {
   sunsetTime?: string;
   currentTime?: string;
   precipMm?: number;
+  isDay?: number;
 }
 
 export default function RainyWeatherBackground({
@@ -326,8 +376,10 @@ export default function RainyWeatherBackground({
   sunsetTime,
   currentTime,
   precipMm = 2.5,
+  isDay = 1,
 }: RainyWeatherBackgroundProps) {
-  const config = useMemo(() => getRainConfig(precipMm), [precipMm]);
+  const isNight = isDay !== 1;
+  const config = useMemo(() => getRainConfig(precipMm, isNight), [precipMm, isNight]);
 
   const isSunset = Boolean(sunsetTime && currentTime &&
     (() => {
@@ -351,23 +403,18 @@ export default function RainyWeatherBackground({
       }
     })());
 
+  const bgGradient = isNight
+    ? 'linear-gradient(to bottom, rgb(18, 22, 30) 0%, rgb(25, 30, 40) 40%, rgb(22, 26, 34) 100%)'
+    : isSunset
+      ? 'linear-gradient(to bottom, rgb(50, 55, 65) 0%, rgb(60, 65, 75) 30%, rgb(70, 75, 85) 60%, rgb(80, 85, 95) 100%)'
+      : 'linear-gradient(to bottom, rgb(65, 72, 78) 0%, rgb(78, 84, 90) 50%, rgb(62, 68, 74) 100%)';
+
   return (
     <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
-      {isSunset ? (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(to bottom, rgb(50, 55, 65) 0%, rgb(60, 65, 75) 30%, rgb(70, 75, 85) 60%, rgb(80, 85, 95) 100%)'
-          }}
-        />
-      ) : (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(to bottom, rgb(60, 65, 70) 0%, rgb(70, 75, 80) 50%, rgb(55, 60, 65) 100%)'
-          }}
-        />
-      )}
+      <div
+        className="absolute inset-0"
+        style={{ background: bgGradient }}
+      />
 
       <Canvas
         camera={{ position: [0, 0, 10], fov: 75 }}
