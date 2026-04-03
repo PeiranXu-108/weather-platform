@@ -20,6 +20,7 @@ import {
 import { fetchWeatherByCoords } from '@/app/lib/api';
 import Globe3D from './Globe3D';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
+import { isDomesticCity } from '@/app/utils/utils';
 
 interface WeatherMapProps {
   location: Location;
@@ -35,7 +36,7 @@ declare global {
   }
 }
 
-const Key = process.env.NEXT_PUBLIC_AMAP_KEY 
+const Key = process.env.NEXT_PUBLIC_AMAP_KEY
 const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
@@ -123,8 +124,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     }).format(new Date(targetTimelineEpoch * 1000));
   }, [targetTimelineEpoch]);
 
+  const isForeignCity = useMemo(() => !isDomesticCity(location.country ?? '', location.region ?? '', location.name ?? ''), [location.country, location.region, location.name]);
+
   const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
-  const is3DMode = mapRenderMode === '3d';
+  // 国外城市强制使用3D地球视图
+  const is3DMode = isForeignCity || mapRenderMode === '3d';
   const showLayerProgress =
     (temperatureLayerEnabled && temperatureLayerLoading) ||
     (windLayerEnabled && windLayerLoading) ||
@@ -262,8 +266,8 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
               typeof layer.getzIndex === 'function'
                 ? layer.getzIndex()
                 : typeof layer.getZIndex === 'function'
-                ? layer.getZIndex()
-                : layer.zIndex ?? 0;
+                  ? layer.getZIndex()
+                  : layer.zIndex ?? 0;
             mapLabelLayerZIndexRef.current.set(layer, typeof current === 'number' ? current : 0);
           }
           if (typeof layer.setzIndex === 'function') {
@@ -343,11 +347,11 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     try {
       setLoadingWeather(true);
       const response = await fetchWeatherByCoords(lat, lon);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch weather data');
       }
-      
+
       const data = await response.json();
       setCenterWeather(data);
     } catch (error) {
@@ -482,7 +486,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     // 高德地图 Bounds 对象使用方法获取坐标
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
-    
+
     // 获取地图缩放级别，用于动态调整网格密度
     const zoom = mapInstanceRef.current.getZoom();
 
@@ -804,36 +808,36 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       const task = isTimelinePlaying
         ? renderTemperatureLayer(true, targetTimelineEpoch)
         : new Promise<void>((resolve) => {
-            debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpoch);
-            resolve();
-          });
+          debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpoch);
+          resolve();
+        });
       enabledTasks.push(task);
     }
     if (windLayerEnabledRef.current) {
       const task = isTimelinePlaying
         ? renderWindLayer(true, targetTimelineEpoch)
         : new Promise<void>((resolve) => {
-            debouncedRenderWindLayerRef.current?.(true, targetTimelineEpoch);
-            resolve();
-          });
+          debouncedRenderWindLayerRef.current?.(true, targetTimelineEpoch);
+          resolve();
+        });
       enabledTasks.push(task);
     }
     if (cloudLayerEnabledRef.current) {
       const task = isTimelinePlaying
         ? renderCloudLayer(true, targetTimelineEpoch)
         : new Promise<void>((resolve) => {
-            debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpoch);
-            resolve();
-          });
+          debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpoch);
+          resolve();
+        });
       enabledTasks.push(task);
     }
     if (precipLayerEnabledRef.current) {
       const task = isTimelinePlaying
         ? renderPrecipLayer(true, targetTimelineEpoch)
         : new Promise<void>((resolve) => {
-            debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpoch);
-            resolve();
-          });
+          debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpoch);
+          resolve();
+        });
       enabledTasks.push(task);
     }
 
@@ -919,12 +923,12 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     if (!fullscreenContainerRef.current) return;
 
     const element = fullscreenContainerRef.current;
-    
+
     // 检查是否支持全屏 API
-    if (!document.fullscreenElement && 
-        !(document as any).webkitFullscreenElement && 
-        !(document as any).mozFullScreenElement && 
-        !(document as any).msFullscreenElement) {
+    if (!document.fullscreenElement &&
+      !(document as any).webkitFullscreenElement &&
+      !(document as any).mozFullScreenElement &&
+      !(document as any).msFullscreenElement) {
       // 进入全屏
       if (element.requestFullscreen) {
         element.requestFullscreen();
@@ -952,7 +956,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
   // 处理温度图层启用/禁用
   const handleTemperatureLayerChange = useCallback((enabled: boolean) => {
     setTemperatureLayerEnabled(enabled);
-    
+
     if (enabled) {
       setTemperatureLayerProgress(0);
       // 立即渲染当前视图的温度图层
@@ -969,7 +973,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       setTemperatureLayerLoading(false);
       setTemperatureLayerProgress(0);
     }
-    
+
     // Note: We no longer call onTemperatureLayerChange since layer is managed internally
   }, [debouncedRenderTemperatureLayer, targetTimelineEpoch]);
 
@@ -1116,12 +1120,12 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         if (windLayerRef.current) {
           windLayerRef.current.clear();
         }
-      if (cloudLayerRef.current) {
-        cloudLayerRef.current.clear();
-      }
-      if (precipLayerRef.current) {
-        precipLayerRef.current.clear();
-      }
+        if (cloudLayerRef.current) {
+          cloudLayerRef.current.clear();
+        }
+        if (precipLayerRef.current) {
+          precipLayerRef.current.clear();
+        }
         try {
           mapInstanceRef.current.destroy();
         } catch (error) {
@@ -1130,7 +1134,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           mapInstanceRef.current = null;
         }
       }
-      
+
       // 重置温度图层 renderer（地图重新初始化后需要重新创建）
       if (temperatureLayerRef.current) {
         temperatureLayerRef.current = null;
@@ -1162,9 +1166,9 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
 
       syncMapTextLayer(
         temperatureLayerEnabledRef.current ||
-          windLayerEnabledRef.current ||
-          cloudLayerEnabledRef.current ||
-          precipLayerEnabledRef.current
+        windLayerEnabledRef.current ||
+        cloudLayerEnabledRef.current ||
+        precipLayerEnabledRef.current
       );
 
       // 添加标记点
@@ -1274,7 +1278,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       // 删除高德地图水印
       const removeWatermark = () => {
         if (disposed) return;
-        
+
         // 只隐藏水印节点，不直接 remove，避免与地图 SDK 自身的销毁流程冲突
         const selectors = [
           '[class*="amap-copyright"]',
@@ -1283,14 +1287,14 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           '.amap-copyright',
           '.amap-logo'
         ];
-        
+
         selectors.forEach(selector => {
           const elements = mapContainerEl.querySelectorAll(selector);
           elements.forEach((el: Element) => {
             const htmlEl = el as HTMLElement;
             if (htmlEl.textContent && (
-              htmlEl.textContent.includes('高德地图') || 
-              htmlEl.textContent.includes('Amap') || 
+              htmlEl.textContent.includes('高德地图') ||
+              htmlEl.textContent.includes('Amap') ||
               htmlEl.textContent.includes('©') ||
               htmlEl.textContent.includes('GS(')
             )) {
@@ -1300,7 +1304,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
             }
           });
         });
-        
+
         const allElements = mapContainerEl.querySelectorAll('*');
         allElements.forEach((el: Element) => {
           const htmlEl = el as HTMLElement;
@@ -1319,7 +1323,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
       scheduleTimeout(removeWatermark, 300);
       scheduleTimeout(removeWatermark, 800);
       scheduleTimeout(removeWatermark, 1500);
-      
+
       // 监听地图加载完成事件
       activeMoveEndHandler = handleMoveEnd;
       activeZoomEndHandler = handleZoomEnd;
@@ -1500,20 +1504,22 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
           地图位置
         </h2>
-        <SegmentedDropdown
-          textColorTheme={textColorTheme}
-          positionClassName="relative z-20"
-          mainButton={{
-            value: mapRenderMode,
-            label: mapRenderMode === '3d' ? '地球视图' : '地图视图',
-            icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
-          }}
-          dropdownOptions={[
-            { value: '2d', label: '地图视图', icon: '/icons/地图.svg' },
-            { value: '3d', label: '地球视图', icon: '/icons/地球.svg' },
-          ]}
-          onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
-        />
+        {!isForeignCity && (
+          <SegmentedDropdown
+            textColorTheme={textColorTheme}
+            positionClassName="relative z-20"
+            mainButton={{
+              value: mapRenderMode,
+              label: mapRenderMode === '3d' ? '地球视图' : '地图视图',
+              icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
+            }}
+            dropdownOptions={[
+              { value: '2d', label: '地图视图', icon: '/icons/地图.svg' },
+              { value: '3d', label: '地球视图', icon: '/icons/地球.svg' },
+            ]}
+            onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
+          />
+        )}
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
         {is3DMode && (
@@ -1691,26 +1697,26 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
         </div>
         {/* 上方正中间：缩放按钮（左右排布） */}
         {!is3DMode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10 flex flex-row gap-px">
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-            title="缩小"
-            aria-label="缩小"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-            title="放大"
-            aria-label="放大"
-          >
-            +
-          </button>
-        </div>
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10 flex flex-row gap-px">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+              title="缩小"
+              aria-label="缩小"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
+              title="放大"
+              aria-label="放大"
+            >
+              +
+            </button>
+          </div>
         )}
         {!is3DMode && anyLayerEnabled && (
           <MapTimelinePlayback
@@ -1722,7 +1728,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           />
         )}
         {/* 右下角：悬浮天气信息组件（展示窗口中央对应坐标的天气） */}
-        <FloatingWeatherInfo 
+        <FloatingWeatherInfo
           location={viewportCenterWeather?.location ?? location}
           current={viewportCenterWeather?.current}
           loading={viewportCenterLoading}
