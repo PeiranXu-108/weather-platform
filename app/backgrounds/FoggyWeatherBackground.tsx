@@ -114,9 +114,9 @@ const fragmentShader = /* glsl */ `
     // Vertical density: denser at bottom
     float vertFade = mix(1.0, smoothstep(0.0, 0.85, 1.0 - uv.y), uVerticalFade);
 
-    // Edge vignette
-    float edgeFade = smoothstep(0.0, 0.12, uv.x) * smoothstep(1.0, 0.88, uv.x)
-                   * smoothstep(0.0, 0.10, uv.y) * smoothstep(1.0, 0.90, uv.y);
+    // Edge vignette – wide fade zones so plane boundaries never show
+    float edgeFade = smoothstep(0.0, 0.22, uv.x) * smoothstep(1.0, 0.78, uv.x)
+                   * smoothstep(0.0, 0.22, uv.y) * smoothstep(1.0, 0.78, uv.y);
 
     gl_FragColor = vec4(col, fog * uOpacity * edgeFade * vertFade);
   }
@@ -139,7 +139,10 @@ const moonGlowFragmentShader = /* glsl */ `
     float inner = exp(-d * d * 22.0) * 0.65;
     float mid   = exp(-d * d * 5.5)  * 0.30;
     float outer = exp(-d * d * 1.4)  * 0.10;
-    gl_FragColor = vec4(uGlowColor, (inner + mid + outer) * uIntensity);
+    // Fade out at plane edges so the quad boundary never shows
+    float edgeFade = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x)
+                   * smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.82, vUv.y);
+    gl_FragColor = vec4(uGlowColor, (inner + mid + outer) * uIntensity * edgeFade);
   }
 `;
 
@@ -287,7 +290,7 @@ function FogLayerMesh({
 // ---------------------------------------------------------------------------
 function DiffuseMoonGlow() {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const W = 50, H = 30;
+  const W = 70, H = 44;
 
   const uniforms = useMemo(
     () => ({
@@ -366,7 +369,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
           fogColor: new THREE.Color(0.18, 0.20, 0.26),
           fogShadow: new THREE.Color(0.08, 0.09, 0.13),
           windDir: [1.0, 0.04] as [number, number],
-          planeSize: [58, 34] as [number, number],
+          planeSize: [78, 46] as [number, number],
           yOffset: 0,
           verticalFade: 0.28,
         },
@@ -382,7 +385,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
           fogColor: new THREE.Color(0.16, 0.18, 0.24),
           fogShadow: new THREE.Color(0.06, 0.07, 0.11),
           windDir: [1.0, 0.06] as [number, number],
-          planeSize: [58, 30] as [number, number],
+          planeSize: [72, 42] as [number, number],
           yOffset: -2,
           verticalFade: 0.40,
         },
@@ -398,7 +401,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
           fogColor: new THREE.Color(0.20, 0.19, 0.22),
           fogShadow: new THREE.Color(0.10, 0.09, 0.11),
           windDir: [1.0, 0.03] as [number, number],
-          planeSize: [62, 26] as [number, number],
+          planeSize: [68, 40] as [number, number],
           yOffset: -4,
           verticalFade: 0.56,
         },
@@ -414,7 +417,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
           fogColor: new THREE.Color(0.24, 0.22, 0.22),
           fogShadow: new THREE.Color(0.12, 0.10, 0.10),
           windDir: [1.0, 0.02] as [number, number],
-          planeSize: [64, 20] as [number, number],
+          planeSize: [64, 40] as [number, number],
           yOffset: -6,
           verticalFade: 0.70,
         },
@@ -430,7 +433,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
           fogColor: new THREE.Color(0.22, 0.21, 0.24),
           fogShadow: new THREE.Color(0.10, 0.09, 0.12),
           windDir: [1.0, 0.03] as [number, number],
-          planeSize: [66, 16] as [number, number],
+          planeSize: [64, 40] as [number, number],
           yOffset: -7,
           verticalFade: 0.86,
         },
