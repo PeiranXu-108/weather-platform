@@ -192,6 +192,7 @@ interface CloudyWeatherBackgroundProps {
   isDay?: number;
   moonPhase?: string;
   moonIllumination?: number;
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export default function CloudyWeatherBackground({
@@ -204,6 +205,7 @@ export default function CloudyWeatherBackground({
   isDay,
   moonPhase,
   moonIllumination,
+  layout = 'fullscreen',
 }: CloudyWeatherBackgroundProps) {
   const timeState = useMemo(
     () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
@@ -215,7 +217,7 @@ export default function CloudyWeatherBackground({
   const bgGradient = gradientSet[timeState];
 
   return (
-    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
+    <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`}>
       <div className="absolute inset-0" style={{ background: bgGradient }} />
 
       <Canvas

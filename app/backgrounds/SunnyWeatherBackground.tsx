@@ -43,6 +43,7 @@ interface SunnyWeatherBackgroundProps {
   isDay?: number;
   moonPhase?: string;
   moonIllumination?: number;
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export default function SunnyWeatherBackground({
@@ -53,6 +54,7 @@ export default function SunnyWeatherBackground({
   isDay,
   moonPhase,
   moonIllumination,
+  layout = 'fullscreen',
 }: SunnyWeatherBackgroundProps) {
   // 判断时间状态：日落时段、黑夜、正常白天
   // 优先使用 API 的 is_day 字段，避免时区问题
@@ -122,7 +124,7 @@ export default function SunnyWeatherBackground({
   }, [sunsetTime, sunriseTime, currentTime, isDay]);
 
   return (
-    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`} aria-hidden>
+    <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`} aria-hidden>
       {/* 根据时间状态显示不同的渐变背景 */}
       {timeState === 'sunset' ? (
         // 日落渐变：深蓝 -> 蓝 -> 紫 -> 橙 -> 深橙（多级渐变）

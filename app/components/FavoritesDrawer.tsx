@@ -1,14 +1,21 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getTextColorTheme } from '@/app/utils/textColorTheme';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
+import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { weatherUrl } from '@/app/lib/api';
+
+const WeatherBackgroundLayer = dynamic(
+  () => import('@/app/backgrounds/WeatherBackgroundLayer'),
+  { ssr: false },
+);
 
 export type FavoriteCity = {
   query: string; // city name or "lat,lon"
@@ -59,12 +66,104 @@ function saveWeatherCache(cache: Record<string, CachedWeather>) {
   localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cache));
 }
 
+function FavoriteCityCard({
+  fav,
+  cached,
+  isLoading,
+  fallbackTheme,
+  showBackground,
+  scrollContainer,
+  onSelect,
+}: {
+  fav: FavoriteCity;
+  cached: CachedWeather | null;
+  isLoading: boolean;
+  fallbackTheme: TextColorTheme;
+  showBackground: boolean;
+  scrollContainer: HTMLDivElement | null;
+  onSelect: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || !showBackground) {
+      setIsVisible(false);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { root: scrollContainer, rootMargin: '100px 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showBackground, scrollContainer]);
+
+  const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
+  const weatherData = cached?.data ?? null;
+
+  const displayName = weatherData
+    ? translateLocation(weatherData.location).name
+    : (fav.label || fav.query);
+  const temp = weatherData ? `${weatherData.current.temp_c.toFixed(0)}°C` : '--';
+  const cond = weatherData
+    ? translateWeatherCondition(weatherData.current.condition)
+    : (isLoading ? '加载中…' : '未加载');
+
+  const hasBg = showBackground && weatherData && isVisible;
+
+  const cardTheme = useMemo(() => {
+    if (!showBackground || !weatherData) return fallbackTheme;
+    const condStr = translateWeatherCondition(weatherData.current.condition);
+    const { isSunset, isNight } = getSolarFlags(weatherData);
+    return getTextColorTheme(condStr, isSunset, isNight, weatherData.current.is_day);
+  }, [showBackground, weatherData, fallbackTheme]);
+
+  const cardIsDark = cardTheme.backgroundType === 'dark';
+
+  return (
+    <div
+      ref={cardRef}
+      className={`group relative min-h-[100px] sm:min-h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
+        hasBg
+          ? 'border-white/15'
+          : cardIsDark
+            ? 'border-white/10 bg-white/5 hover:bg-white/10'
+            : 'border-white/60 bg-white/30 hover:bg-white/50'
+      }`}
+    >
+      {hasBg && <WeatherBackgroundLayer weather={weatherData} layout="embedded" show />}
+      <button
+        type="button"
+        onClick={onSelect}
+        className="relative z-10 w-full text-left p-4"
+        aria-label={`查看${displayName}天气`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className={`text-3xl font-bold ${cardTheme.textColor.primary}`} style={hasBg ? { textShadow: '0 1px 4px rgba(0,0,0,0.35)' } : undefined}>{displayName}</p>
+            <p className={`text-xs ${cardTheme.textColor.muted}`}>
+              {isLoading ? '正在更新…' : isFresh ? '' : '待更新'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className={`text-3xl font-extrabold ${cardTheme.textColor.primary}`} style={hasBg ? { textShadow: '0 1px 4px rgba(0,0,0,0.35)' } : undefined}>{temp}</p>
+            <p className={`text-sm mt-12 ${cardTheme.textColor.secondary}`} style={hasBg ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } : undefined}>{cond}</p>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 interface FavoritesDrawerProps {
   textColorTheme: TextColorTheme;
   currentCityQuery?: string;
   favorites: FavoriteCity[];
   onChangeFavorites: (next: FavoriteCity[]) => void;
   onSelectCity: (query: string) => void;
+  showBackground?: boolean;
 }
 
 export default function FavoritesDrawer({
@@ -73,6 +172,7 @@ export default function FavoritesDrawer({
   favorites,
   onChangeFavorites,
   onSelectCity,
+  showBackground = true,
 }: FavoritesDrawerProps) {
   const [open, setOpen] = useState(false);
   const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedWeather>>({});
@@ -80,6 +180,7 @@ export default function FavoritesDrawer({
   const cacheRef = useRef<Record<string, CachedWeather>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
   const openRef = useRef(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const isDark = textColorTheme.backgroundType === 'dark';
 
@@ -231,56 +332,28 @@ export default function FavoritesDrawer({
               </button>
             </div>
 
-            <div className="px-5 pb-2 overflow-y-auto h-[calc(100%-102px)]">
+            <div className="px-5 pb-2 overflow-y-auto h-[calc(100%-102px)]" ref={scrollContainerRef}>
               {favorites.length === 0 ? (
                 <div className={`mt-10 text-center ${textColorTheme.textColor.muted}`}>
                   暂无收藏城市
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {favorites.map((fav) => {
-                    const cached = weatherByQuery[fav.query];
-                    const isLoading = !!loadingQueries[fav.query];
-                    const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
-
-                    const displayName = cached
-                      ? translateLocation(cached.data.location).name
-                      : (fav.label || fav.query);
-                    const temp = cached ? `${cached.data.current.temp_c.toFixed(0)}°C` : '--';
-                    const cond = cached ? translateWeatherCondition(cached.data.current.condition) : (isLoading ? '加载中…' : '未加载');
-
-                    return (
-                      <div
-                        key={fav.query}
-                        className={`group relative min-h-[100px] sm:min-h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
-                          isDark ? 'border-white/10 bg-white/5 hover:bg-white/10' : 'border-white/60 bg-white/30 hover:bg-white/50'
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectCity(fav.query);
-                            setOpen(false);
-                          }}
-                          className="w-full text-left p-4"
-                          aria-label={`查看${displayName}天气`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className={`text-3xl font-bold ${textColorTheme.textColor.primary}`}>{displayName}</p>
-                              <p className={`text-xs ${textColorTheme.textColor.muted}`}>
-                                {isLoading ? '正在更新…' : isFresh ? '' : '待更新'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className={`text-3xl font-extrabold ${textColorTheme.textColor.primary}`}>{temp}</p>
-                              <p className={`text-sm mt-12 ${textColorTheme.textColor.secondary}`}>{cond}</p>
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {favorites.map((fav) => (
+                    <FavoriteCityCard
+                      key={fav.query}
+                      fav={fav}
+                      cached={weatherByQuery[fav.query] ?? null}
+                      isLoading={!!loadingQueries[fav.query]}
+                      fallbackTheme={textColorTheme}
+                      showBackground={showBackground && open}
+                      scrollContainer={scrollContainerRef.current}
+                      onSelect={() => {
+                        onSelectCity(fav.query);
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>

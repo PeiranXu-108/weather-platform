@@ -621,6 +621,7 @@ interface FoggyWeatherBackgroundProps {
   sunriseTime?: string;
   currentTime?: string;
   isDay?: number;
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export default function FoggyWeatherBackground({
@@ -629,6 +630,7 @@ export default function FoggyWeatherBackground({
   sunriseTime,
   currentTime,
   isDay,
+  layout = 'fullscreen',
 }: FoggyWeatherBackgroundProps) {
   const timeState = useMemo(
     () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
@@ -636,7 +638,7 @@ export default function FoggyWeatherBackground({
   );
 
   return (
-    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
+    <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`}>
       <div className="absolute inset-0" style={{ background: GRADIENTS[timeState] }} />
 
       <Canvas

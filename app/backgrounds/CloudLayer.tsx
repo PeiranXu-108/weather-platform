@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useLayoutEffect, useRef, useMemo } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 // ---------------------------------------------------------------------------
@@ -137,6 +137,22 @@ export default function CloudLayer({
   yOffset = 0,
 }: CloudLayerProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const { camera, size } = useThree();
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh || !(camera instanceof THREE.PerspectiveCamera)) return;
+
+    const distance = Math.abs(camera.position.z - zDepth);
+    const vFov = (camera.fov * Math.PI) / 180;
+    const frustumHeight = 2 * Math.tan(vFov / 2) * distance;
+    const frustumWidth = frustumHeight * (size.width / Math.max(size.height, 1));
+
+    const [pw, ph] = planeSize;
+    const s = Math.max(frustumWidth / pw, frustumHeight / ph);
+    mesh.scale.setScalar(s);
+  }, [camera, size.width, size.height, zDepth, planeSize[0], planeSize[1]]);
 
   const uniforms = useMemo(
     () => ({
@@ -163,7 +179,7 @@ export default function CloudLayer({
   });
 
   return (
-    <mesh position={[0, yOffset, zDepth]}>
+    <mesh ref={meshRef} position={[0, yOffset, zDepth]}>
       <planeGeometry args={[planeSize[0], planeSize[1], 1, 1]} />
       <shaderMaterial
         ref={matRef}

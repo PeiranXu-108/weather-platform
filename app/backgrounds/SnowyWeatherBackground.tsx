@@ -451,12 +451,14 @@ interface SnowyWeatherBackgroundProps {
   className?: string;
   sunsetTime?: string;
   currentTime?: string;
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export default function SnowyWeatherBackground({ 
   className = '', 
   sunsetTime,
-  currentTime 
+  currentTime,
+  layout = 'fullscreen',
 }: SnowyWeatherBackgroundProps) {
   // 判断是否在日落前后一小时
   const isSunset = Boolean(sunsetTime && currentTime && 
@@ -482,7 +484,7 @@ export default function SnowyWeatherBackground({
     })());
 
   return (
-    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
+    <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`}>
       <div className="absolute inset-0">
         <div 
           className="absolute inset-0"

@@ -369,6 +369,7 @@ interface RainyWeatherBackgroundProps {
   currentTime?: string;
   precipMm?: number;
   isDay?: number;
+  layout?: 'fullscreen' | 'embedded';
 }
 
 export default function RainyWeatherBackground({
@@ -377,6 +378,7 @@ export default function RainyWeatherBackground({
   currentTime,
   precipMm = 2.5,
   isDay = 1,
+  layout = 'fullscreen',
 }: RainyWeatherBackgroundProps) {
   const isNight = isDay !== 1;
   const config = useMemo(() => getRainConfig(precipMm, isNight), [precipMm, isNight]);
@@ -410,7 +412,7 @@ export default function RainyWeatherBackground({
       : 'linear-gradient(to bottom, rgb(65, 72, 78) 0%, rgb(78, 84, 90) 50%, rgb(62, 68, 74) 100%)';
 
   return (
-    <div data-weather-bg className={`fixed inset-0 z-0 ${className}`}>
+    <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`}>
       <div
         className="absolute inset-0"
         style={{ background: bgGradient }}
