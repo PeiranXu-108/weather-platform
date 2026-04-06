@@ -39,16 +39,16 @@ export default function WeatherBackgroundLayer({
     return <RainyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} precipMm={props.precipMm} isDay={props.isDay} />;
   }
   if (flags.isSunny) {
-    return <SunnyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} sunriseTime={props.sunriseTime} currentTime={props.currentTime} isDay={props.isDay} moonPhase={props.moonPhase} moonIllumination={props.moonIllumination} />;
+    return <SunnyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} sunriseTime={props.sunriseTime} currentTime={props.currentTime} currentTimeEpoch={props.currentTimeEpoch} isDay={props.isDay} moonPhase={props.moonPhase} moonIllumination={props.moonIllumination} />;
   }
   if (flags.isFoggy) {
     return <FoggyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} sunriseTime={props.sunriseTime} currentTime={props.currentTime} isDay={props.isDay} />;
   }
   if (flags.isOvercast) {
-    return <CloudyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} />;
+    return <CloudyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} currentTimeEpoch={props.currentTimeEpoch} />;
   }
   if (flags.isPartlyCloudy) {
-    return <CloudyWeatherBackground layout={layout} mode="partly-cloudy" cloudAmount={props.cloudAmount} isDay={props.isDay} sunsetTime={props.sunsetTime} sunriseTime={props.sunriseTime} currentTime={props.currentTime} moonPhase={props.moonPhase} moonIllumination={props.moonIllumination} />;
+    return <CloudyWeatherBackground layout={layout} mode="partly-cloudy" cloudAmount={props.cloudAmount} isDay={props.isDay} sunsetTime={props.sunsetTime} sunriseTime={props.sunriseTime} currentTime={props.currentTime} currentTimeEpoch={props.currentTimeEpoch} moonPhase={props.moonPhase} moonIllumination={props.moonIllumination} />;
   }
 
   return (

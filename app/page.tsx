@@ -343,6 +343,7 @@ export default function Home() {
   const sunsetTime = todayForecast?.astro?.sunset;
   const sunriseTime = todayForecast?.astro?.sunrise;
   const currentTime = weatherData?.location.localtime;
+  const currentTimeEpoch = weatherData?.location.localtime_epoch;
   const isDay = weatherData?.current.is_day === 1;
   const moonPhase = todayForecast?.astro?.moon_phase;
   const moonIllumination = todayForecast?.astro?.moon_illumination;
@@ -417,10 +418,10 @@ export default function Home() {
       {/* Backgrounds */}
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} precipMm={weatherData?.current.precip_mm} isDay={weatherData?.current.is_day} />}
-      {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
+      {showBackground && isSunny && <SunnyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} currentTimeEpoch={currentTimeEpoch} isDay={weatherData?.current.is_day} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
       {showBackground && isFoggy && <FoggyWeatherBackground sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
-      {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} />}
-      {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
+      {showBackground && isOvercast && <CloudyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} currentTimeEpoch={currentTimeEpoch} />}
+      {showBackground && isPartlyCloudy && <CloudyWeatherBackground mode="partly-cloudy" cloudAmount={weatherData?.current.cloud} isDay={weatherData?.current.is_day} sunsetTime={sunsetTime} sunriseTime={sunriseTime} currentTime={currentTime} currentTimeEpoch={currentTimeEpoch} moonPhase={moonPhase} moonIllumination={moonIllumination} />}
       {!weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {showBackground && !isSnowy && !isRainy && !isSunny && !isFoggy && !isOvercast && !isPartlyCloudy && weatherData && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
       {!showBackground && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
@@ -539,4 +540,3 @@ export default function Home() {
     </main>
   );
 }
-

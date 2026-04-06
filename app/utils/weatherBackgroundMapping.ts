@@ -20,6 +20,7 @@ export interface WeatherBackgroundProps {
   sunsetTime?: string;
   sunriseTime?: string;
   currentTime?: string;
+  currentTimeEpoch?: number;
   isDay?: number;
   moonPhase?: string;
   moonIllumination?: number;
@@ -102,6 +103,7 @@ export function getBackgroundProps(weather: WeatherResponse): WeatherBackgroundP
     sunsetTime: today?.astro?.sunset,
     sunriseTime: today?.astro?.sunrise,
     currentTime: weather.location.localtime,
+    currentTimeEpoch: weather.location.localtime_epoch,
     isDay: weather.current.is_day,
     moonPhase: today?.astro?.moon_phase,
     moonIllumination: today?.astro?.moon_illumination,

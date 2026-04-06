@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import CloudLayer from './CloudLayer';
@@ -8,6 +8,7 @@ import type { CloudLayerProps } from './CloudLayer';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
 import MoonEffect from './MoonEffect';
+import { getDaytimeProgress, getLiveLocalDate, getTimeState, type TimeState } from '../utils/solarTime';
 
 // ---------------------------------------------------------------------------
 // Overcast layer presets (grey sky, full dense coverage)
@@ -42,6 +43,7 @@ const PARTLY_CLOUDY_BASE: Array<Omit<LayerConfig, 'cloudColor' | 'shadowColor'>>
 ];
 
 const CLOUD_COLORS = {
+  sunrise: { cloud: new THREE.Color(0.96, 0.90, 0.90), shadow: new THREE.Color(0.72, 0.64, 0.66) },
   day:    { cloud: new THREE.Color(0.92, 0.93, 0.96), shadow: new THREE.Color(0.62, 0.65, 0.72) },
   sunset: { cloud: new THREE.Color(0.82, 0.68, 0.60), shadow: new THREE.Color(0.45, 0.35, 0.35) },
   night:  { cloud: new THREE.Color(0.22, 0.24, 0.30), shadow: new THREE.Color(0.08, 0.10, 0.14) },
@@ -49,7 +51,7 @@ const CLOUD_COLORS = {
 
 function buildPartlyCloudyLayers(
   cloudAmount: number,
-  timeState: 'day' | 'sunset' | 'night',
+  timeState: TimeState,
 ): LayerConfig[] {
   const t = Math.max(0, Math.min(100, cloudAmount)) / 100;
   const layerCount = Math.max(1, Math.min(4, Math.ceil(t * 4)));
@@ -64,8 +66,10 @@ function buildPartlyCloudyLayers(
   }));
 }
 
+const PC_SUNRISE_SUN = new THREE.Color(1.0, 0.82, 0.72);
 const PC_DAY_SUN    = new THREE.Color(1.0, 0.96, 0.82);
 const PC_SUNSET_SUN = new THREE.Color(1.0, 0.72, 0.42);
+const CLOCK_TICK_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // CloudyScene – compose multiple cloud layers + sky effects
@@ -74,12 +78,14 @@ function CloudyScene({
   timeState,
   cloudAmount,
   isPartlyCloudy,
+  dayProgress,
   moonPhase,
   moonIllumination,
 }: {
-  timeState: 'day' | 'sunset' | 'night';
+  timeState: TimeState;
   cloudAmount: number;
   isPartlyCloudy: boolean;
+  dayProgress?: number;
   moonPhase?: string;
   moonIllumination?: number;
 }) {
@@ -92,6 +98,8 @@ function CloudyScene({
 
   const showNightSky = isPartlyCloudy && timeState === 'night';
   const showSun      = isPartlyCloudy && timeState !== 'night';
+  const isSunrise = timeState === 'sunrise';
+  const isSunset = timeState === 'sunset';
 
   return (
     <>
@@ -105,9 +113,11 @@ function CloudyScene({
       )}
       {showSun && (
         <SunEffect
-          sunPos={timeState === 'sunset' ? [0.15, 0.38] : [0.20, 0.94]}
-          sunColor={timeState === 'sunset' ? PC_SUNSET_SUN : PC_DAY_SUN}
-          intensity={timeState === 'sunset' ? 0.75 : 0.90}
+          sunPos={isSunrise ? [0.15, 0.38] : isSunset ? [0.85, 0.38] : undefined}
+          dayProgress={isSunrise || isSunset ? undefined : dayProgress}
+          sunColor={isSunrise ? PC_SUNRISE_SUN : isSunset ? PC_SUNSET_SUN : PC_DAY_SUN}
+          intensity={isSunrise ? 0.84 : isSunset ? 0.75 : 0.90}
+          variant={isSunrise ? 'sunrise' : isSunset ? 'sunset' : 'day'}
           zDepth={-14}
         />
       )}
@@ -119,60 +129,17 @@ function CloudyScene({
 }
 
 // ---------------------------------------------------------------------------
-// Time-of-day helper
-// ---------------------------------------------------------------------------
-function computeTimeState(
-  isDay: number | undefined,
-  sunsetTime: string | undefined,
-  sunriseTime: string | undefined,
-  currentTime: string | undefined,
-): 'day' | 'sunset' | 'night' {
-  if (isDay === 0) {
-    if (sunriseTime && currentTime) {
-      try {
-        const cur = new Date(currentTime.replace(' ', 'T'));
-        const [tp, per] = sunriseTime.split(' ');
-        const [h, m] = tp.split(':').map(Number);
-        let h24 = h;
-        if (per === 'PM' && h !== 12) h24 = h + 12;
-        else if (per === 'AM' && h === 12) h24 = 0;
-        const sr = new Date(cur);
-        sr.setHours(h24, m, 0, 0);
-        if (cur >= new Date(sr.getTime() - 3600000) && cur <= new Date(sr.getTime() + 3600000)) {
-          return 'day';
-        }
-      } catch { /* fall through */ }
-    }
-    return 'night';
-  }
-  if (sunsetTime && currentTime) {
-    try {
-      const cur = new Date(currentTime.replace(' ', 'T'));
-      const [tp, per] = sunsetTime.split(' ');
-      const [h, m] = tp.split(':').map(Number);
-      let h24 = h;
-      if (per === 'PM' && h !== 12) h24 = h + 12;
-      else if (per === 'AM' && h === 12) h24 = 0;
-      const ss = new Date(cur);
-      ss.setHours(h24, m, 0, 0);
-      if (cur >= new Date(ss.getTime() - 3600000) && cur <= new Date(ss.getTime() + 3600000)) {
-        return 'sunset';
-      }
-    } catch { /* fall through */ }
-  }
-  return 'day';
-}
-
-// ---------------------------------------------------------------------------
 // Background gradients
 // ---------------------------------------------------------------------------
 const GRADIENTS = {
   overcast: {
+    sunrise: 'linear-gradient(to bottom, rgb(120, 136, 156) 0%, rgb(150, 162, 176) 24%, rgb(194, 178, 176) 58%, rgb(206, 176, 160) 82%, rgb(186, 162, 150) 100%)',
     day: 'linear-gradient(to bottom, rgb(88, 96, 112) 0%, rgb(110, 118, 132) 20%, rgb(135, 142, 155) 45%, rgb(155, 158, 163) 65%, rgb(140, 144, 150) 85%, rgb(115, 120, 128) 100%)',
     sunset: 'linear-gradient(to bottom, rgb(62, 68, 82) 0%, rgb(82, 88, 108) 15%, rgb(100, 100, 125) 35%, rgb(120, 112, 118) 55%, rgb(138, 118, 110) 75%, rgb(120, 105, 95) 100%)',
     night: 'linear-gradient(to bottom, rgb(88, 96, 112) 0%, rgb(110, 118, 132) 20%, rgb(135, 142, 155) 45%, rgb(155, 158, 163) 65%, rgb(140, 144, 150) 85%, rgb(115, 120, 128) 100%)',
   },
   partlyCloudy: {
+    sunrise: 'linear-gradient(to bottom, rgb(115, 170, 212) 0%, rgb(150, 204, 230) 24%, rgb(235, 208, 205) 60%, rgb(248, 192, 162) 84%, rgb(243, 180, 138) 100%)',
     day: 'linear-gradient(to bottom, rgb(120, 193, 226) 0%, rgb(63, 180, 227) 40%, rgb(3, 140, 194) 100%)',
     sunset: 'linear-gradient(to bottom, rgb(69, 89, 142) 0%, rgb(95, 114, 177) 10%, rgb(108, 160, 244) 40%, rgb(196, 174, 247) 60%, rgb(242, 194, 159) 85%, rgb(234, 163, 124) 100%)',
     night: 'linear-gradient(to bottom, rgb(10, 15, 30) 0%, rgb(5, 10, 25) 30%, rgb(0, 5, 20) 60%, rgb(0, 0, 15) 100%)',
@@ -187,6 +154,7 @@ interface CloudyWeatherBackgroundProps {
   sunsetTime?: string;
   sunriseTime?: string;
   currentTime?: string;
+  currentTimeEpoch?: number;
   mode?: 'overcast' | 'partly-cloudy';
   cloudAmount?: number;
   isDay?: number;
@@ -200,6 +168,7 @@ export default function CloudyWeatherBackground({
   sunsetTime,
   sunriseTime,
   currentTime,
+  currentTimeEpoch,
   mode = 'overcast',
   cloudAmount = 100,
   isDay,
@@ -207,9 +176,31 @@ export default function CloudyWeatherBackground({
   moonIllumination,
   layout = 'fullscreen',
 }: CloudyWeatherBackgroundProps) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      startTransition(() => {
+        setNowMs(Date.now());
+      });
+    }, CLOCK_TICK_MS);
+
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  const fallbackSnapshotAtMs = useMemo(() => Date.now(), [currentTime, currentTimeEpoch]);
+  const liveLocalTime = useMemo(
+    () => getLiveLocalDate(currentTime, currentTimeEpoch, nowMs, fallbackSnapshotAtMs),
+    [currentTime, currentTimeEpoch, nowMs, fallbackSnapshotAtMs],
+  );
+
   const timeState = useMemo(
-    () => computeTimeState(isDay, sunsetTime, sunriseTime, currentTime),
-    [isDay, sunsetTime, sunriseTime, currentTime],
+    () => getTimeState(isDay, sunsetTime, sunriseTime, liveLocalTime),
+    [isDay, sunsetTime, sunriseTime, liveLocalTime],
+  );
+  const daytimeSunProgress = useMemo(
+    () => getDaytimeProgress(liveLocalTime, sunriseTime, sunsetTime),
+    [liveLocalTime, sunriseTime, sunsetTime],
   );
 
   const isPartlyCloudy = mode === 'partly-cloudy';
@@ -236,6 +227,7 @@ export default function CloudyWeatherBackground({
           timeState={timeState}
           cloudAmount={cloudAmount}
           isPartlyCloudy={isPartlyCloudy}
+          dayProgress={daytimeSunProgress}
           moonPhase={moonPhase}
           moonIllumination={moonIllumination}
         />
