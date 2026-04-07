@@ -184,6 +184,92 @@ const ATMO_OUTER_FRAG = `
   }
 `;
 
+const AURORA_FRAG = `
+  uniform vec3 viewVector;
+  uniform vec3 lightDir;
+  uniform float time;
+  uniform float intensityScale;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
+
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 345.45));
+    p += dot(p, p + 34.345);
+    return fract(p.x * p.y);
+  }
+
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  }
+
+  float fbm(vec2 p) {
+    mat2 rot = mat2(1.6, 1.2, -1.2, 1.6);
+    float value = 0.0;
+    float amp = 0.5;
+    value += amp * noise(p); p = rot * p; amp *= 0.5;
+    value += amp * noise(p); p = rot * p; amp *= 0.5;
+    value += amp * noise(p); p = rot * p; amp *= 0.5;
+    value += amp * noise(p);
+    return value;
+  }
+
+  void main() {
+    vec3 normalDir = normalize(vNormal);
+    vec3 viewDir = normalize(viewVector - vWorldPosition);
+    vec3 sun = normalize(lightDir);
+
+    float polar = abs(normalDir.y);
+    float polarMask = smoothstep(0.52, 0.84, polar);
+    float capFade = 1.0 - smoothstep(0.985, 1.0, polar);
+    float poleBand = polarMask * capFade;
+
+    float dayDot = dot(normalDir, sun);
+    float dayFactor = smoothstep(-0.05, 0.45, dayDot);
+    float nightDominance = mix(1.0, 0.16, dayFactor);
+
+    float lon = atan(normalDir.z, normalDir.x) / 6.28318530718 + 0.5;
+    float lat = polar;
+
+    vec2 flowUv = vec2(lon * 5.8 + time * 0.022, lat * 4.5 - time * 0.018);
+    float baseFlow = fbm(flowUv + vec2(0.0, fbm(flowUv * 1.8)));
+    float detailFlow = fbm(vec2(lon * 17.0 - time * 0.095, lat * 13.0 + time * 0.05));
+    float curtain = smoothstep(0.38, 0.88, baseFlow * 0.72 + detailFlow * 0.48);
+
+    float wave = 0.65 + 0.35 * sin(time * 0.70 + lon * 26.0 + detailFlow * 5.0);
+    float breath = 0.76 + 0.24 * sin(time * 0.42 + lat * 10.0 + lon * 6.0);
+    float filament = pow(max(0.0, sin((lon * 90.0 + detailFlow * 8.0) - time * 2.4)), 16.0);
+    filament *= (0.25 + 0.75 * poleBand);
+
+    float fresnel = pow(1.0 - max(dot(normalDir, viewDir), 0.0), 2.2);
+    float intensity = poleBand * curtain * wave * breath * fresnel * nightDominance;
+
+    vec3 neonA = vec3(0.12, 0.98, 0.78);
+    vec3 neonB = vec3(0.35, 0.62, 1.0);
+    vec3 neonC = vec3(0.95, 0.36, 0.98);
+    float chroma = clamp(baseFlow * 0.62 + detailFlow * 0.58, 0.0, 1.0);
+    vec3 col = mix(neonA, neonB, chroma);
+    col = mix(col, neonC, clamp(pow(detailFlow, 1.8) * 0.55 + filament * 0.65, 0.0, 1.0));
+    col += neonC * filament * 0.55;
+
+    float polarHalo = smoothstep(0.62, 0.95, polar) * (0.25 + 0.75 * (1.0 - dayFactor));
+    col += mix(neonA, neonB, 0.35) * polarHalo * 0.45;
+
+    float alpha = intensity * 0.82 + polarHalo * 0.05;
+    col *= intensityScale;
+    alpha = clamp(alpha * intensityScale, 0.0, 0.95);
+    if (alpha < 0.003) discard;
+
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
 function normalizeDegrees(value: number): number {
   return ((value % 360) + 360) % 360;
 }
@@ -249,6 +335,7 @@ function AtmosphereGlow({ radius, sunDir }: { radius: number; sunDir: THREE.Vect
   const { camera } = useThree();
   const innerRef = useRef<THREE.ShaderMaterial>(null);
   const outerRef = useRef<THREE.ShaderMaterial>(null);
+  const auroraRef = useRef<THREE.ShaderMaterial>(null);
 
   const innerMat = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
@@ -276,20 +363,48 @@ function AtmosphereGlow({ radius, sunDir }: { radius: number; sunDir: THREE.Vect
     depthWrite: false,
   }), [sunDir]);
 
-  useFrame(() => {
+  const auroraMat = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      viewVector: { value: new THREE.Vector3() },
+      lightDir: { value: sunDir.clone() },
+      time: { value: 0 },
+      intensityScale: { value: 1.0 },
+    },
+    vertexShader: ATMO_VERTEX,
+    fragmentShader: AURORA_FRAG,
+    side: THREE.BackSide,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+  }), [sunDir]);
+
+  useFrame(({ clock }) => {
     innerRef.current?.uniforms.viewVector.value.copy(camera.position);
+    innerRef.current?.uniforms.lightDir.value.copy(sunDir);
+
+    auroraRef.current?.uniforms.viewVector.value.copy(camera.position);
+    auroraRef.current?.uniforms.lightDir.value.copy(sunDir);
+    if (auroraRef.current) {
+      auroraRef.current.uniforms.time.value = clock.getElapsedTime();
+    }
+
     outerRef.current?.uniforms.viewVector.value.copy(camera.position);
+    outerRef.current?.uniforms.lightDir.value.copy(sunDir);
   });
 
   useEffect(() => {
-    return () => { innerMat.dispose(); outerMat.dispose(); };
-  }, [innerMat, outerMat]);
+    return () => { innerMat.dispose(); auroraMat.dispose(); outerMat.dispose(); };
+  }, [innerMat, auroraMat, outerMat]);
 
   return (
     <>
       <mesh>
         <sphereGeometry args={[radius * 1.015, 96, 96]} />
         <primitive ref={innerRef} object={innerMat} attach="material" />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[radius * 1.045, 96, 96]} />
+        <primitive ref={auroraRef} object={auroraMat} attach="material" />
       </mesh>
       <mesh>
         <sphereGeometry args={[radius * 1.06, 96, 96]} />
