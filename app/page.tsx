@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Header from './components/Header';
 import CurrentWeather from './components/CurrentWeather';
 import TemperatureChart from './components/Forcast30days';
@@ -412,6 +412,10 @@ export default function Home() {
   const allHourlyData: Hour[] = weatherData?.forecast.forecastday.reduce((acc, day) => {
     return [...acc, ...day.hour];
   }, [] as Hour[]) || [];
+  const liveFavoriteWeather = useMemo(
+    () => ({ query: currentCityQuery, data: weatherData }),
+    [currentCityQuery, weatherData]
+  );
 
   return (
     <main className="min-h-screen p-4 md:p-8 pb-20 relative" style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}>
@@ -434,6 +438,7 @@ export default function Home() {
           onChangeFavorites={setFavorites}
           onSelectCity={handleSelectFavorite}
           showBackground={showBackground}
+          liveWeather={liveFavoriteWeather}
         />
       <div className={`relative z-10 max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
         {/* Header with Search - Always visible */}

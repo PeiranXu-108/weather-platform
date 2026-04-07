@@ -164,6 +164,10 @@ interface FavoritesDrawerProps {
   onChangeFavorites: (next: FavoriteCity[]) => void;
   onSelectCity: (query: string) => void;
   showBackground?: boolean;
+  liveWeather?: {
+    query: string;
+    data: WeatherResponse | null;
+  };
 }
 
 export default function FavoritesDrawer({
@@ -173,13 +177,13 @@ export default function FavoritesDrawer({
   onChangeFavorites,
   onSelectCity,
   showBackground = true,
+  liveWeather,
 }: FavoritesDrawerProps) {
   const [open, setOpen] = useState(false);
   const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedWeather>>({});
   const [loadingQueries, setLoadingQueries] = useState<Record<string, boolean>>({});
   const cacheRef = useRef<Record<string, CachedWeather>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
-  const openRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const isDark = textColorTheme.backgroundType === 'dark';
@@ -203,21 +207,32 @@ export default function FavoritesDrawer({
     };
   }, [open]);
 
+  // keep favorite card in sync with latest weather shown in main panel
+  useEffect(() => {
+    if (!liveWeather?.query || !liveWeather.data) return;
+    if (!favorites.some((fav) => fav.query === liveWeather.query)) return;
+
+    const prev = cacheRef.current[liveWeather.query];
+    const prevEpoch = prev?.data.current.last_updated_epoch ?? 0;
+    const nextEpoch = liveWeather.data.current.last_updated_epoch ?? 0;
+    if (prev && nextEpoch < prevEpoch) return;
+
+    const next: CachedWeather = {
+      fetchedAt: Date.now(),
+      data: liveWeather.data,
+    };
+    cacheRef.current = { ...cacheRef.current, [liveWeather.query]: next };
+    setWeatherByQuery((current) => ({ ...current, [liveWeather.query]: next }));
+    saveWeatherCache(cacheRef.current);
+  }, [liveWeather?.query, liveWeather?.data, favorites]);
+
   // fetch when opened
   useEffect(() => {
-    // only trigger on closed -> open transition
-    if (!open) {
-      openRef.current = false;
-      return;
-    }
-    if (openRef.current) return;
-    openRef.current = true;
-
-    if (favorites.length === 0) return;
+    if (!open || favorites.length === 0) return;
 
     let cancelled = false;
     // merge latest storage cache into ref (source of truth)
-    cacheRef.current = { ...cacheRef.current, ...loadWeatherCache() };
+    cacheRef.current = { ...loadWeatherCache(), ...cacheRef.current };
 
     async function fetchOne(query: string) {
       if (inFlightRef.current.has(query)) return;
@@ -228,7 +243,7 @@ export default function FavoritesDrawer({
       inFlightRef.current.add(query);
       setLoadingQueries((prev) => ({ ...prev, [query]: true }));
       try {
-        const res = await fetch(buildWeatherUrl(query));
+        const res = await fetch(buildWeatherUrl(query), { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch weather');
         const data: WeatherResponse = await res.json();
         const next: CachedWeather = { fetchedAt: Date.now(), data };
@@ -363,5 +378,4 @@ export default function FavoritesDrawer({
     </>
   );
 }
-
 
