@@ -12,7 +12,7 @@ import WeatherSkeleton from './components/WeatherSkeleton';
 import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
 import { translateLocation } from './utils/locationTranslations';
 import { translateWeatherCondition } from './utils/weatherTranslations';
-import { getTextColorTheme } from './utils/textColorTheme';
+import { getTextColorTheme, readableTextShadowStyle, shouldEnhanceReadableText } from './utils/textColorTheme';
 import dynamic from 'next/dynamic';
 import type { WeatherResponse, Hour } from './types/weather';
 import { useSyncFavorites } from './hooks/useSyncFavorites';
@@ -408,6 +408,8 @@ export default function Home() {
       ? getTextColorTheme(weatherCondition, isSunset, isNight, weatherData.current.is_day)
       : defaultTheme);
 
+  const enhanceReadableText = shouldEnhanceReadableText(showBackground, textColorTheme);
+
   // Collect all hourly data
   const allHourlyData: Hour[] = weatherData?.forecast.forecastday.reduce((acc, day) => {
     return [...acc, ...day.hour];
@@ -466,6 +468,7 @@ export default function Home() {
                     location={weatherData.location}
                     current={weatherData.current}
                     textColorTheme={textColorTheme}
+                    enhanceReadableText={enhanceReadableText}
                     cityQuery={currentCityQuery}
                     isFavorite={favorites.some((f) => f.query === currentCityQuery)}
                     onToggleFavorite={handleToggleFavorite}
@@ -478,6 +481,7 @@ export default function Home() {
                     currentTime={weatherData.location.localtime}
                     currentTimeEpoch={weatherData.location.localtime_epoch}
                     textColorTheme={textColorTheme}
+                    enhanceReadableText={enhanceReadableText}
                     opacity={opacity}
                     astro={weatherData.forecast.forecastday[0]?.astro ?? null}
                     astroNextDay={weatherData.forecast.forecastday[1]?.astro ?? null}
@@ -494,6 +498,7 @@ export default function Home() {
                       lon: Number(weatherData.location.lon.toFixed(2))
                     }}
                     textColorTheme={textColorTheme}
+                    enhanceReadableText={enhanceReadableText}
                     opacity={opacity}
                   />
                 </div>
@@ -501,6 +506,7 @@ export default function Home() {
                   <WeatherMetrics
                     current={weatherData.current}
                     textColorTheme={textColorTheme}
+                    enhanceReadableText={enhanceReadableText}
                     opacity={opacity}
                   />
                 </div>
@@ -510,19 +516,24 @@ export default function Home() {
               <HourlyChart
                 hourlyData={allHourlyData}
                 textColorTheme={textColorTheme}
+                enhanceReadableText={enhanceReadableText}
                 opacity={opacity}
               />
 
               <WeatherMap
                 location={weatherData.location}
                 textColorTheme={textColorTheme}
+                enhanceReadableText={enhanceReadableText}
                 opacity={opacity}
                 onGoToLocation={handleLocationSelect}
               />
 
               {/* Footer */}
               <footer className="text-center pt-8 pb-4">
-                <p className="text-sm text-white-100 opacity-80">
+                <p
+                  className="text-sm text-white-100 opacity-80"
+                  style={readableTextShadowStyle('secondary', enhanceReadableText)}
+                >
                   数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
                 </p>
               </footer>

@@ -1,17 +1,18 @@
 import React from 'react';
 import type { Current } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
 interface WeatherMetricsProps {
   current: Current;
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   opacity?: number;
 }
 
-export default function WeatherMetrics({ current, textColorTheme, opacity = 100 }: WeatherMetricsProps) {
+export default function WeatherMetrics({ current, textColorTheme, enhanceReadableText = false, opacity = 100 }: WeatherMetricsProps) {
   const metrics = [
     { label: '湿度', value: `${current.humidity}%`, icon: ICONS.humidity, iconColor: 'text-blue-500' },
     { label: '风速', value: `${Math.round(current.wind_kph)} km/h`, icon: ICONS.wind, iconColor: 'text-emerald-500' },
@@ -23,9 +24,15 @@ export default function WeatherMetrics({ current, textColorTheme, opacity = 100 
     { label: '云量', value: `${current.cloud}%`, icon: ICONS.cloudAmount, iconColor: 'text-slate-400' },
   ];
 
+  const rs = (level: 'primary' | 'secondary') =>
+    readableTextShadowStyle(level, enhanceReadableText);
+
   return (
     <div className={`rounded-2xl shadow-xl p-4 sm:p-6 h-[400px] sm:h-[520px] flex flex-col min-h-0`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <h2 className={`text-base sm:text-lg font-bold ${textColorTheme.textColor.primary} mb-3 sm:mb-4`}>
+      <h2
+        className={`text-base sm:text-lg font-bold ${textColorTheme.textColor.primary} mb-3 sm:mb-4`}
+        style={rs('primary')}
+      >
         天气指标
       </h2>
       <div className="flex-1 min-h-0 flex flex-col">
@@ -39,10 +46,16 @@ export default function WeatherMetrics({ current, textColorTheme, opacity = 100 
                 <Icon src={metric.icon} className={`w-7 h-7 sm:w-8 sm:h-8 ${metric.iconColor}`} title={metric.label} />
               </span>
               <div className="min-w-0 flex-1 flex flex-col justify-center text-left">
-                <p className={`text-xl sm:text-2xl font-medium ${textColorTheme.textColor.secondary} truncate`}>
+                <p
+                  className={`text-xl sm:text-2xl font-medium ${textColorTheme.textColor.secondary} truncate`}
+                  style={rs('secondary')}
+                >
                   {metric.label}
                 </p>
-                <p className={`text-sm sm:text-base font-bold ${textColorTheme.textColor.primary} truncate`}>
+                <p
+                  className={`text-sm sm:text-base font-bold ${textColorTheme.textColor.primary} truncate`}
+                  style={rs('primary')}
+                >
                   {metric.value}
                 </p>
               </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
+import { readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
@@ -39,6 +40,8 @@ interface SegmentedDropdownProps {
   showDropdown?: boolean;
   // 位置类名（默认 top-6 right-6）
   positionClassName?: string;
+  /** 与主页收藏卡片一致的文字阴影（强光动态背景） */
+  enhanceReadableText?: boolean;
 }
 
 export default function SegmentedDropdown({
@@ -49,6 +52,7 @@ export default function SegmentedDropdown({
   onSelect,
   showDropdown: externalShowDropdown,
   positionClassName = 'absolute top-6 right-6 z-10',
+  enhanceReadableText = false,
 }: SegmentedDropdownProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -100,6 +104,9 @@ export default function SegmentedDropdown({
     ? 'bg-transparent text-gray-200 hover:bg-white/10'
     : 'bg-white/50 text-slate-600 hover:bg-white/70';
 
+  const rs = (level: 'primary' | 'secondary') =>
+    readableTextShadowStyle(level, enhanceReadableText);
+
   return (
     <div
       className={`${positionClassName} ${shouldShowDropdown ? 'z-[80]' : ''}`}
@@ -119,7 +126,7 @@ export default function SegmentedDropdown({
                   className="w-4 h-4 flex-shrink-0 opacity-80"
                 />
               )}
-              <span>{mainButton.label}</span>
+              <span style={rs('secondary')}>{mainButton.label}</span>
               {mainButton.showChevron !== false && (
                 <Icon
                   src={ICONS.chevronRight}
@@ -150,7 +157,7 @@ export default function SegmentedDropdown({
                           className="w-4 h-4 flex-shrink-0 opacity-80"
                         />
                       )}
-                      <span>{option.label}</span>
+                      <span style={rs('secondary')}>{option.label}</span>
                     </button>
                   );
                 })}
@@ -168,7 +175,7 @@ export default function SegmentedDropdown({
               }}
               className={`px-3 py-2 min-h-[32px] flex items-center text-xs rounded-lg transition-all ${segmentInactiveClass}`}
             >
-              {button.label}
+              <span style={rs('secondary')}>{button.label}</span>
             </button>
           ))}
         </div>

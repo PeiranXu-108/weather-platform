@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import { getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
 import TemperatureLegend from './TemperatureLegend';
 import PrecipLegend from './PrecipLegend';
@@ -25,6 +25,7 @@ import { isDomesticCity } from '@/app/utils/utils';
 interface WeatherMapProps {
   location: Location;
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   opacity?: number;
   /** 点击卡片「查看详情」时，切换到该坐标的天气主页并刷新 */
   onGoToLocation?: (lat: number, lon: number) => void;
@@ -41,7 +42,7 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
-export default function WeatherMap({ location, textColorTheme, opacity = 100 }: WeatherMapProps) {
+export default function WeatherMap({ location, textColorTheme, enhanceReadableText = false, opacity = 100 }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -1498,15 +1499,19 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
     };
   }, []);
 
+  const mapTitleShadow = readableTextShadowStyle('primary', enhanceReadableText);
+  const mapFooterShadow = readableTextShadowStyle('secondary', enhanceReadableText);
+
   return (
     <div className="rounded-2xl shadow-xl p-4 h-full flex flex-col relative" style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`}>
+        <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`} style={mapTitleShadow}>
           地图位置
         </h2>
         {!isForeignCity && (
           <SegmentedDropdown
             textColorTheme={textColorTheme}
+            enhanceReadableText={enhanceReadableText}
             positionClassName="relative z-20"
             mainButton={{
               value: mapRenderMode,
@@ -1735,7 +1740,7 @@ export default function WeatherMap({ location, textColorTheme, opacity = 100 }: 
           textColorTheme={textColorTheme}
         />
       </div>
-      <div className={`mt-3 text-sm ${textColorTheme.textColor.secondary}`}>
+      <div className={`mt-3 text-sm ${textColorTheme.textColor.secondary}`} style={mapFooterShadow}>
         <p>坐标: {location.lat.toFixed(4)}, {location.lon.toFixed(4)}</p>
       </div>
     </div>

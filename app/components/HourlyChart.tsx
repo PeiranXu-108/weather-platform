@@ -4,13 +4,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { Hour } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import {
+  getCardStyle,
+  getCardBackgroundStyle,
+  readableEChartsTextShadowStyle,
+} from '@/app/utils/textColorTheme';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { ICONS } from '@/app/utils/icons';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   opacity?: number;
 }
 
@@ -36,7 +41,7 @@ interface DataTypeConfig {
   areaColor: string;
 }
 
-export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 }: HourlyChartProps) {
+export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadableText = false, opacity = 100 }: HourlyChartProps) {
   const [selectedDataType, setSelectedDataType] = useState<DataType>('temperature');
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -181,6 +186,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
     const config = dataTypeConfigs[selectedDataType];
     const titleFontSize = isMobile ? 14 : 18;
     const axisFontSize = isMobile ? 10 : 12;
+    const echartsTs = readableEChartsTextShadowStyle(enhanceReadableText);
     return {
       title: {
         text: `24小时${config.label}预报`,
@@ -188,7 +194,8 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         textStyle: {
           fontSize: titleFontSize,
           fontWeight: 'bold',
-          color: titleColor
+          color: titleColor,
+          ...echartsTs,
         }
       },
       tooltip: {
@@ -209,7 +216,8 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         bottom: 10,
         textStyle: {
           color: axisColor,
-          fontSize: axisFontSize
+          fontSize: axisFontSize,
+          ...echartsTs,
         }
       },
       grid: {
@@ -239,7 +247,8 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
           rotate: 45,
           interval: 2,
           color: axisColor,
-          fontSize: axisFontSize
+          fontSize: axisFontSize,
+          ...echartsTs,
         },
         axisLine: {
           lineStyle: {
@@ -251,12 +260,14 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         type: 'value',
         name: config.yAxisName,
         nameTextStyle: {
-          color: axisColor
+          color: axisColor,
+          ...echartsTs,
         },
         axisLabel: {
           formatter: (value: number) => config.formatter(value),
           color: axisColor,
-          fontSize: axisFontSize
+          fontSize: axisFontSize,
+          ...echartsTs,
         },
         axisLine: {
           lineStyle: {
@@ -299,13 +310,14 @@ export default function HourlyChart({ hourlyData, textColorTheme, opacity = 100 
         }
       ]
     };
-  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark, isMobile]);
+  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark, isMobile, enhanceReadableText]);
 
   return (
     <div className={`rounded-2xl shadow-xl p-4 sm:p-6 relative min-h-[240px] sm:min-h-[280px]`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       {/* Dropdown selector in top right */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
+        enhanceReadableText={enhanceReadableText}
         mainButton={{
           value: selectedDataType,
           label: currentConfig.label,

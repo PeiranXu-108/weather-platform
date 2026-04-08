@@ -5,7 +5,7 @@ import type { Hour, Astro } from '@/app/types/weather';
 import Image from 'next/image';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 
@@ -14,6 +14,7 @@ interface HourlyForecast24hProps {
   currentTime: string; // Current time in format "YYYY-MM-DD HH:mm"
   currentTimeEpoch?: number; // Optional: current time epoch (more accurate)
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   opacity?: number;
   /** Today's astro (sunrise/sunset) for the same day as the 24h strip */
   astro?: Astro | null;
@@ -21,7 +22,7 @@ interface HourlyForecast24hProps {
   astroNextDay?: Astro | null;
 }
 
-export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, opacity = 100, astro, astroNextDay }: HourlyForecast24hProps) {
+export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, enhanceReadableText = false, opacity = 100, astro, astroNextDay }: HourlyForecast24hProps) {
   const [selectedHour, setSelectedHour] = useState<Hour | null>(null);
   // Parse current time correctly (format: "YYYY-MM-DD HH:mm")
   // Use provided epoch if available (more accurate), otherwise parse from string
@@ -203,9 +204,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
     ? 'hover:bg-white/10 focus-visible:ring-white/60 focus-visible:ring-offset-gray-900/60'
     : 'hover:bg-white/30 focus-visible:ring-sky-200 focus-visible:ring-offset-white/60';
 
+  const rs = (level: 'primary' | 'secondary') =>
+    readableTextShadowStyle(level, enhanceReadableText);
+
   return (
     <div className={`rounded-2xl shadow-xl p-4 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`}>未来24小时</h2>
+      <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`} style={rs('primary')}>
+        未来24小时
+      </h2>
       <div className="overflow-x-auto flex-1">
         <div className="flex gap-3 min-w-max pb-2 pr-1">
           {stripItems.map((item, index) => {
@@ -222,11 +228,17 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                     } ${cardInteractiveClass}`}
                   aria-label={`查看${formatTime(hour.time)}天气详情`}
                 >
-                  <p className={`text-xs mb-1 whitespace-nowrap ${isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
-                    }`}>
+                  <p
+                    className={`text-xs mb-1 whitespace-nowrap ${isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
+                      }`}
+                    style={rs('secondary')}
+                  >
                     {isCurrent ? '现在' : formatTime(hour.time)}
                   </p>
-                  <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>
+                  <p
+                    className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}
+                    style={rs('secondary')}
+                  >
                     {getDayOfWeek(hour.time)}
                   </p>
                   <div className="flex justify-center mb-2">
@@ -238,11 +250,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                       className="w-10 h-10 transition-transform duration-200 group-hover:scale-110"
                     />
                   </div>
-                  <p className={`text-sm font-semibold ${isCurrent ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
-                    }`}>
+                  <p
+                    className={`text-sm font-semibold ${isCurrent ? textColorTheme.textColor.accent : textColorTheme.textColor.primary
+                      }`}
+                    style={rs('primary')}
+                  >
                     {hour.temp_c.toFixed(1)}°C
                   </p>
-                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>
+                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
                     体感 {hour.feelslike_c.toFixed(1)}°C
                   </p>
                 </button>
@@ -255,13 +270,21 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                   className={cardBaseClass}
                   aria-label={`日出 ${item.time}`}
                 >
-                  <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日出</p>
-                  <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>—</p>
+                  <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
+                    日出
+                  </p>
+                  <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`} style={rs('secondary')}>
+                    —
+                  </p>
                   <div className="flex justify-center mb-2">
                     <Icon src={ICONS.sunrise} className="w-10 h-10 text-amber-500" title="日出" />
                   </div>
-                  <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`}>{item.time}</p>
-                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>—</p>
+                  <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`} style={rs('primary')}>
+                    {item.time}
+                  </p>
+                  <p className={`text-[11px] ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
+                    —
+                  </p>
                 </div>
               );
             }
@@ -272,13 +295,21 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                 className={cardBaseClass}
                 aria-label={`日落 ${item.time}`}
               >
-                <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`}>日落</p>
-                <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}>—</p>
+                <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
+                  日落
+                </p>
+                <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`} style={rs('secondary')}>
+                  —
+                </p>
                 <div className="flex justify-center mb-2">
                   <Icon src={ICONS.sunset} className="w-10 h-10 text-orange-500" title="日落" />
                 </div>
-                <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`}>{item.time}</p>
-                <p className={`text-[11px] ${textColorTheme.textColor.muted}`}>—</p>
+                <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`} style={rs('primary')}>
+                  {item.time}
+                </p>
+                <p className={`text-[11px] ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
+                  —
+                </p>
               </div>
             );
           })}

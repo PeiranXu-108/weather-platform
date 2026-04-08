@@ -3,7 +3,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import {
+  getCardStyle,
+  getCardBackgroundStyle,
+  readableEChartsTextShadowStyle,
+  readableTextShadowStyle,
+} from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
@@ -13,6 +18,7 @@ import { fetchWeather30d } from '@/app/lib/api';
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   opacity?: number;
 }
 
@@ -49,7 +55,7 @@ interface DailyForecast {
 type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
 type ViewType = 'chart' | 'table';
 
-export default function TemperatureChart({ location, textColorTheme, opacity = 100 }: TemperatureChartProps) {
+export default function TemperatureChart({ location, textColorTheme, enhanceReadableText = false, opacity = 100 }: TemperatureChartProps) {
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [viewType, setViewType] = useState<ViewType>('chart');
   const [forecastData, setForecastData] = useState<DailyForecast[]>([]);
@@ -296,6 +302,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
   const option = useMemo(() => {
     const titleFontSize = isMobile ? 14 : 18;
     const axisFontSize = isMobile ? 10 : 12;
+    const echartsTs = readableEChartsTextShadowStyle(enhanceReadableText);
     if (isPieChart) {
       return {
         title: {
@@ -305,7 +312,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           textStyle: {
             fontSize: titleFontSize,
             fontWeight: 'bold',
-            color: titleColor
+            color: titleColor,
+            ...echartsTs,
           }
         },
         tooltip: {
@@ -319,7 +327,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           left: 'left',
           top: 'middle',
           textStyle: {
-            color: axisColor
+            color: axisColor,
+            ...echartsTs,
           },
           formatter: (name: string) => {
             const item = weatherStats.weatherDistribution.find(w => w.name === name);
@@ -341,7 +350,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
               show: true,
               formatter: '{b}: {c}天',
               color: axisColor,
-              fontSize: axisFontSize
+              fontSize: axisFontSize,
+              ...echartsTs,
             },
             emphasis: {
               label: {
@@ -375,7 +385,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         textStyle: {
           fontSize: titleFontSize,
           fontWeight: 'bold',
-          color: titleColor
+          color: titleColor,
+          ...echartsTs,
         }
       },
       tooltip: {
@@ -412,7 +423,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         bottom: 10,
         show: !isBarChart,
         textStyle: {
-          color: axisColor
+          color: axisColor,
+          ...echartsTs,
         }
       },
       grid: {
@@ -438,7 +450,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           bottom: 40,
           handleSize: '80%',
           textStyle: {
-            color: axisColor
+            color: axisColor,
+            ...echartsTs,
           },
           borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
           fillerColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
@@ -451,7 +464,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         axisLabel: {
           color: axisColor,
           rotate: 45,
-          fontSize: axisFontSize
+          fontSize: axisFontSize,
+          ...echartsTs,
         },
         axisLine: {
           lineStyle: {
@@ -463,12 +477,14 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         type: 'value',
         name: '温度 (°C)',
         nameTextStyle: {
-          color: axisColor
+          color: axisColor,
+          ...echartsTs,
         },
         axisLabel: {
           formatter: (value: number) => `${value.toFixed(0)}°C`,
           color: axisColor,
-          fontSize: axisFontSize
+          fontSize: axisFontSize,
+          ...echartsTs,
         },
         axisLine: {
           lineStyle: {
@@ -524,7 +540,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
             },
             color: titleColor,
             fontSize: 12,
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            ...echartsTs,
           }
         }
       ] : isScatterChart ? [
@@ -551,7 +568,8 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
             color: titleColor,
             fontSize: 10,
             fontWeight: 'bold',
-            position: 'top'
+            position: 'top',
+            ...echartsTs,
           }
         }
       ] : [
@@ -585,12 +603,17 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
         }
       ]
     };
-  }, [isMobile, isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan]);
+  }, [isMobile, isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan, enhanceReadableText]);
+
+  const rs = (level: 'primary' | 'secondary') =>
+    readableTextShadowStyle(level, enhanceReadableText);
 
   if (error) {
     return (
       <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full min-h-[320px] sm:min-h-[380px] relative flex items-center justify-center`}>
-        <div className={`${textColorTheme.textColor.secondary}`}>加载失败: {error}</div>
+        <div className={`${textColorTheme.textColor.secondary}`} style={rs('secondary')}>
+          加载失败: {error}
+        </div>
       </div>
     );
   }
@@ -604,6 +627,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
       {/* View Type Selector */}
       <SegmentedDropdown
         textColorTheme={textColorTheme}
+        enhanceReadableText={enhanceReadableText}
         mainButton={{
           value: viewType === 'chart' ? chartType : 'chart',
           label: viewType === 'chart'
@@ -668,11 +692,11 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
           {/* 饼状图统计信息 - 显示在图表下方 */}
           {isPieChart && (
             <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm">
-              <div className={`${textColorTheme.textColor.primary} font-semibold`}>
+              <div className={`${textColorTheme.textColor.primary} font-semibold`} style={rs('primary')}>
                 <span className={textColorTheme.textColor.secondary}>降温</span>
                 {weatherStats.coolingDays}次，
               </div>
-              <div className={`${textColorTheme.textColor.primary} font-semibold`}>
+              <div className={`${textColorTheme.textColor.primary} font-semibold`} style={rs('primary')}>
                 <span className={textColorTheme.textColor.secondary}>降水</span>
                 {weatherStats.precipitationDays}天
               </div>
@@ -682,7 +706,10 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden min-h-[280px] sm:min-h-[320px]">
           {/* Calendar Table View Title */}
-          <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}>
+          <h2
+            className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}
+            style={rs('primary')}
+          >
             30日天气预报
           </h2>
 
@@ -703,6 +730,7 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
                       key={index}
                       className={`p-2 text-center text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
                         }`}
+                      style={isDark ? rs('secondary') : undefined}
                     >
                       {day}
                     </th>
@@ -741,20 +769,29 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
                                     : 'border-gray-200 bg-white/20 hover:bg-white/30'
                                 }`}
                             >
-                              <div className={`text-xs font-semibold mb-1 ${isToday
+                              <div
+                                className={`text-xs font-semibold mb-1 ${isToday
                                   ? 'text-blue-600'
                                   : isDark
                                     ? 'text-white'
                                     : 'text-gray-900'
-                                }`}>
+                                  }`}
+                                style={isDark ? rs('primary') : undefined}
+                              >
                                 {date.getMonth() + 1}月{date.getDate()}日
                               </div>
-                              <div className={`text-xs mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
-                                }`}>
+                              <div
+                                className={`text-xs mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
+                                  }`}
+                                style={isDark ? rs('secondary') : undefined}
+                              >
                                 {forecast.textDay}
                               </div>
-                              <div className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
-                                }`}>
+                              <div
+                                className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
+                                  }`}
+                                style={isDark ? rs('secondary') : undefined}
+                              >
                                 <span className={isDark ? 'text-white' : 'text-gray-900'}>
                                   {forecast.tempMax}°
                                 </span>
@@ -765,8 +802,11 @@ export default function TemperatureChart({ location, textColorTheme, opacity = 1
                               </div>
                             </button>
                           ) : (
-                            <div className={`w-full p-2 rounded-lg text-center ${isDark ? 'text-gray-600' : 'text-gray-400'
-                              }`}>
+                            <div
+                              className={`w-full p-2 rounded-lg text-center ${isDark ? 'text-gray-600' : 'text-gray-400'
+                                }`}
+                              style={isDark ? rs('secondary') : undefined}
+                            >
                               {dayNumber}日
                             </div>
                           )}

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle, getTextColorTheme } from '@/app/utils/textColorTheme';
+import { getCardStyle, getTextColorTheme, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
 import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
@@ -142,14 +142,14 @@ function FavoriteCityCard({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className={`text-3xl font-bold ${cardTheme.textColor.primary}`} style={hasBg ? { textShadow: '0 1px 4px rgba(0,0,0,0.35)' } : undefined}>{displayName}</p>
+            <p className={`text-3xl font-bold ${cardTheme.textColor.primary}`} style={readableTextShadowStyle('primary', !!hasBg)}>{displayName}</p>
             <p className={`text-xs ${cardTheme.textColor.muted}`}>
               {isLoading ? '正在更新…' : isFresh ? '' : '待更新'}
             </p>
           </div>
           <div className="text-right">
-            <p className={`text-3xl font-extrabold ${cardTheme.textColor.primary}`} style={hasBg ? { textShadow: '0 1px 4px rgba(0,0,0,0.35)' } : undefined}>{temp}</p>
-            <p className={`text-sm mt-12 ${cardTheme.textColor.secondary}`} style={hasBg ? { textShadow: '0 1px 3px rgba(0,0,0,0.3)' } : undefined}>{cond}</p>
+            <p className={`text-3xl font-extrabold ${cardTheme.textColor.primary}`} style={readableTextShadowStyle('primary', !!hasBg)}>{temp}</p>
+            <p className={`text-sm mt-12 ${cardTheme.textColor.secondary}`} style={readableTextShadowStyle('secondary', !!hasBg)}>{cond}</p>
           </div>
         </div>
       </button>

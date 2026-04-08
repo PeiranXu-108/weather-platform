@@ -2,6 +2,8 @@
  * 根据天气条件和时间判断背景类型，返回相应的字体颜色样式
  */
 
+import type { CSSProperties } from 'react';
+
 export type BackgroundType = 'dark' | 'light';
 
 export interface TextColorTheme {
@@ -11,6 +13,48 @@ export interface TextColorTheme {
     secondary: string;   // 次要文字颜色
     muted: string;       // 弱化文字颜色
     accent: string;      // 强调文字颜色
+  };
+}
+
+/** 与收藏栏卡片一致：主标题 / 大号数字 */
+export const READABLE_TEXT_SHADOW_PRIMARY = '0 1px 4px rgba(0,0,0,0.35)';
+/** 与收藏栏卡片一致：说明、次级文案 */
+export const READABLE_TEXT_SHADOW_SECONDARY = '0 1px 3px rgba(0,0,0,0.3)';
+
+/** 全屏天气背景开启且主题为浅色字时，为叠在强光上的文字加阴影 */
+export function shouldEnhanceReadableText(
+  showBackground: boolean,
+  theme: TextColorTheme
+): boolean {
+  return showBackground && theme.backgroundType === 'dark';
+}
+
+export function readableTextShadowStyle(
+  level: 'primary' | 'secondary',
+  enhance: boolean
+): CSSProperties | undefined {
+  if (!enhance) return undefined;
+  return {
+    textShadow:
+      level === 'primary'
+        ? READABLE_TEXT_SHADOW_PRIMARY
+        : READABLE_TEXT_SHADOW_SECONDARY,
+  };
+}
+
+/** ECharts textStyle 与 CSS 阴影对齐（enhance 为 true 时使用） */
+export function readableEChartsTextShadowStyle(enhance: boolean): {
+  textShadowColor?: string;
+  textShadowBlur?: number;
+  textShadowOffsetY?: number;
+  textShadowOffsetX?: number;
+} {
+  if (!enhance) return {};
+  return {
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowBlur: 4,
+    textShadowOffsetY: 1,
+    textShadowOffsetX: 0,
   };
 }
 

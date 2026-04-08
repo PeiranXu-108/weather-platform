@@ -4,7 +4,7 @@ import React from 'react';
 import type { Location, Current } from '@/app/types/weather';
 import Image from 'next/image';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardBackgroundStyle } from '@/app/utils/textColorTheme';
+import { getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { useTranslatedTexts } from '@/app/hooks/useTranslatedText';
@@ -15,13 +15,14 @@ interface CurrentWeatherProps {
   location: Location;
   current: Current;
   textColorTheme: TextColorTheme;
+  enhanceReadableText?: boolean;
   cityQuery?: string;
   isFavorite?: boolean;
   onToggleFavorite?: (cityQuery: string, displayName: string) => void;
   opacity?: number;
 }
 
-export default function CurrentWeather({ location, current, textColorTheme, cityQuery, isFavorite, onToggleFavorite, opacity = 100 }: CurrentWeatherProps) {
+export default function CurrentWeather({ location, current, textColorTheme, enhanceReadableText = false, cityQuery, isFavorite, onToggleFavorite, opacity = 100 }: CurrentWeatherProps) {
   const originals = [
     location.name ?? '',
     location.region ?? '',
@@ -86,10 +87,16 @@ export default function CurrentWeather({ location, current, textColorTheme, city
       )}
       <div className="flex flex-col flex-1 justify-between">
         <div>
-          <h1 className={`text-3xl sm:text-5xl lg:text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}>
+          <h1
+            className={`text-3xl sm:text-5xl lg:text-6xl font-bold ${textColorTheme.textColor.primary} mb-2`}
+            style={readableTextShadowStyle('primary', enhanceReadableText)}
+          >
             {displayName}
           </h1>
-          <p className={`text-base sm:text-xl ${textColorTheme.textColor.secondary} mb-4`}>
+          <p
+            className={`text-base sm:text-xl ${textColorTheme.textColor.secondary} mb-4`}
+            style={readableTextShadowStyle('secondary', enhanceReadableText)}
+          >
             {displayCountry} {displayRegion}
           </p>
 
@@ -104,10 +111,16 @@ export default function CurrentWeather({ location, current, textColorTheme, city
                 className="w-12 h-12"
               />
               <div className="ml-2">
-                <p className={`text-3xl sm:text-4xl font-bold ${textColorTheme.textColor.primary}`}>
+                <p
+                  className={`text-3xl sm:text-4xl font-bold ${textColorTheme.textColor.primary}`}
+                  style={readableTextShadowStyle('primary', enhanceReadableText)}
+                >
                   {current.temp_c.toFixed(1)}°C
                 </p>
-                <p className={`text-x ${textColorTheme.textColor.secondary}`}>
+                <p
+                  className={`text-x ${textColorTheme.textColor.secondary}`}
+                  style={readableTextShadowStyle('secondary', enhanceReadableText)}
+                >
                   {displayCondition}
                 </p>
               </div>
@@ -116,10 +129,16 @@ export default function CurrentWeather({ location, current, textColorTheme, city
         </div>
       
         <div className="mt-3 pt-3">
-          <p className={`text-xs ${textColorTheme.textColor.muted}`}>
+          <p
+            className={`text-xs ${textColorTheme.textColor.muted}`}
+            style={readableTextShadowStyle('secondary', enhanceReadableText)}
+          >
             最后更新：北京时间 {formatTime(current.last_updated)}
           </p>
-          <p className={`text-xs ${textColorTheme.textColor.secondary}`}>
+          <p
+            className={`text-xs ${textColorTheme.textColor.secondary}`}
+            style={readableTextShadowStyle('secondary', enhanceReadableText)}
+          >
             当地时间 {formattedLocalTime}
           </p>
         </div>

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { searchCities, getEnglishCityName, type CityOption } from '@/app/utils/citySearch';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
-import { getCardStyle } from '@/app/utils/textColorTheme';
+import { getCardStyle, readableTextShadowStyle, shouldEnhanceReadableText } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { useSession } from 'next-auth/react';
@@ -38,6 +38,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
       accent: 'text-sky-700',
     },
   };
+  const enhanceReadableText = shouldEnhanceReadableText(showBackground, theme);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<CityOption[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -187,7 +188,10 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
         )}
         {session?.user ? (
           <>
-            <span className={`hidden sm:inline text-sm font-medium ${theme.textColor.primary}`}>
+            <span
+              className={`hidden sm:inline text-sm font-medium ${theme.textColor.primary}`}
+              style={readableTextShadowStyle('primary', enhanceReadableText)}
+            >
               {session.user.name || session.user.email}
             </span>
             <button
@@ -247,6 +251,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               }}
               placeholder="搜索城市"
               className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-12 sm:pr-20 md:pr-40' : 'pr-12 sm:pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
+              style={readableTextShadowStyle('primary', enhanceReadableText)}
             />
             <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
               <Icon
@@ -300,8 +305,18 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className={`font-medium ${theme.textColor.primary}`}>{city.chineseName}</p>
-                    <p className={`text-sm ${theme.textColor.muted}`}>{city.englishName}</p>
+                    <p
+                      className={`font-medium ${theme.textColor.primary}`}
+                      style={readableTextShadowStyle('primary', enhanceReadableText)}
+                    >
+                      {city.chineseName}
+                    </p>
+                    <p
+                      className={`text-sm ${theme.textColor.muted}`}
+                      style={readableTextShadowStyle('secondary', enhanceReadableText)}
+                    >
+                      {city.englishName}
+                    </p>
                   </div>
                   <Icon
                     src={ICONS.chevronRight}
