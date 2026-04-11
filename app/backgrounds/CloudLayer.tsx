@@ -159,8 +159,8 @@ export default function CloudLayer({
       uTime:         { value: 0 },
       uSpeed:        { value: speed },
       uScale:        { value: scale },
-      uCloudColor:   { value: cloudColor },
-      uShadowColor:  { value: shadowColor },
+      uCloudColor:   { value: cloudColor.clone() },
+      uShadowColor:  { value: shadowColor.clone() },
       uOpacity:      { value: opacity },
       uCoverage:     { value: coverage },
       uSoftness:     { value: softness },
@@ -168,9 +168,38 @@ export default function CloudLayer({
       uWindDir:      { value: new THREE.Vector2(windDir[0], windDir[1]) },
       uAspect:       { value: planeSize[0] / planeSize[1] },
     }),
+    // Stable object: initial values; prop-driven updates happen in useLayoutEffect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  useLayoutEffect(() => {
+    const mat = matRef.current;
+    if (!mat) return;
+    mat.uniforms.uSpeed.value = speed;
+    mat.uniforms.uScale.value = scale;
+    mat.uniforms.uCloudColor.value.copy(cloudColor);
+    mat.uniforms.uShadowColor.value.copy(shadowColor);
+    mat.uniforms.uOpacity.value = opacity;
+    mat.uniforms.uCoverage.value = coverage;
+    mat.uniforms.uSoftness.value = softness;
+    mat.uniforms.uWarpStrength.value = warpStrength;
+    mat.uniforms.uWindDir.value.set(windDir[0], windDir[1]);
+    mat.uniforms.uAspect.value = planeSize[0] / planeSize[1];
+  }, [
+    speed,
+    scale,
+    cloudColor,
+    shadowColor,
+    opacity,
+    coverage,
+    softness,
+    warpStrength,
+    windDir[0],
+    windDir[1],
+    planeSize[0],
+    planeSize[1],
+  ]);
 
   useFrame(({ clock }) => {
     if (matRef.current) {
