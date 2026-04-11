@@ -42,7 +42,7 @@ const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
-export default function WeatherMap({ location, textColorTheme, enhanceReadableText = false, opacity = 100 }: WeatherMapProps) {
+export default function WeatherMap({ location, textColorTheme, enhanceReadableText = false, opacity = 100, onGoToLocation }: WeatherMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -1738,6 +1738,9 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
           current={viewportCenterWeather?.current}
           loading={viewportCenterLoading}
           textColorTheme={textColorTheme}
+          onGoToLocation={onGoToLocation}
+          variant={is3DMode ? 'globe' : 'default'}
+          enhanceReadableText={enhanceReadableText}
         />
       </div>
       <div className={`mt-3 text-sm ${textColorTheme.textColor.secondary}`} style={mapFooterShadow}>
