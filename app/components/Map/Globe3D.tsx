@@ -562,7 +562,7 @@ function GlobeMesh({
       </mesh>
       <AtmosphereGlow radius={GLOBE_RADIUS} sunDir={sunDir} />
       <PulseMarker position={cityPosition} />
-      <Stars radius={120} depth={60} count={5000} factor={5} saturation={0.1} fade speed={0.3} />
+      <Stars radius={120} depth={60} count={9000} factor={10.5} saturation={0.1} fade speed={0.3} />
     </>
   );
 }
@@ -582,7 +582,7 @@ function GlobeFallback({ location }: { location: Location }) {
         <meshPhongMaterial color="#1f2937" shininess={10} />
       </mesh>
       <PulseMarker position={cityPosition} />
-      <Stars radius={120} depth={60} count={5000} factor={5} saturation={0.1} fade speed={0.3} />
+      <Stars radius={120} depth={60} count={9000} factor={10.5} saturation={0.1} fade speed={0.3} />
     </>
   );
 }
