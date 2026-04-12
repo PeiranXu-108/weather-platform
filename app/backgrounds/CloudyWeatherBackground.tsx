@@ -81,6 +81,7 @@ function CloudyScene({
   dayProgress,
   moonPhase,
   moonIllumination,
+  layout,
 }: {
   timeState: TimeState;
   cloudAmount: number;
@@ -88,6 +89,7 @@ function CloudyScene({
   dayProgress?: number;
   moonPhase?: string;
   moonIllumination?: number;
+  layout: 'fullscreen' | 'embedded';
 }) {
   const layers = useMemo(() => {
     if (isPartlyCloudy) {
@@ -108,7 +110,7 @@ function CloudyScene({
           <ambientLight intensity={0.1} />
           <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
           <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
-          <NightSkyEffects />
+          <NightSkyEffects layout={layout} />
         </>
       )}
       {showSun && (
@@ -230,6 +232,7 @@ export default function CloudyWeatherBackground({
           dayProgress={daytimeSunProgress}
           moonPhase={moonPhase}
           moonIllumination={moonIllumination}
+          layout={layout}
         />
       </Canvas>
     </div>

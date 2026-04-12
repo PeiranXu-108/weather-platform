@@ -353,7 +353,13 @@ function NightAmbientGlow() {
 // ---------------------------------------------------------------------------
 // FoggyScene – multiple fog layers at different depths
 // ---------------------------------------------------------------------------
-function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
+function FoggyScene({
+  timeState,
+  layout,
+}: {
+  timeState: 'day' | 'sunset' | 'night';
+  layout: 'fullscreen' | 'embedded';
+}) {
   const layers = useMemo(() => {
     if (timeState === 'night') {
       return [
@@ -591,7 +597,7 @@ function FoggyScene({ timeState }: { timeState: 'day' | 'sunset' | 'night' }) {
         <>
           <ambientLight intensity={0.06} />
           <directionalLight position={[5, 10, 5]} intensity={0.10} color={0x5566aa} />
-          <InstancedStars count={180} />
+          <InstancedStars count={layout === 'embedded' ? 55 : 180} />
           <DiffuseMoonGlow />
           <NightAmbientGlow />
         </>
@@ -653,7 +659,7 @@ export default function FoggyWeatherBackground({
         dpr={[1, 1]}
         performance={{ min: 0.5 }}
       >
-        <FoggyScene timeState={timeState} />
+        <FoggyScene timeState={timeState} layout={layout} />
       </Canvas>
     </div>
   );

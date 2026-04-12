@@ -227,15 +227,22 @@ export function InstancedStars({ count }: { count: number }) {
 // ---------------------------------------------------------------------------
 // NightSkyEffects – composite: point stars + detailed stars + shooting stars
 // ---------------------------------------------------------------------------
-export default function NightSkyEffects() {
+/** 全屏夜空用高密度；embedded（卡片小窗）降低点数避免「噪点」感 */
+const NIGHT_SKY_POINT_STARS = { fullscreen: 1650, embedded: 180 } as const;
+const NIGHT_SKY_MESH_STARS = { fullscreen: 40, embedded: 5 } as const;
+
+export default function NightSkyEffects({ layout = 'fullscreen' }: { layout?: 'fullscreen' | 'embedded' }) {
   const [shootingStars, setShootingStars] = useState<
     Array<{ position: [number, number, number]; seed: number; id: number }>
   >([]);
 
+  const pointStarCount = NIGHT_SKY_POINT_STARS[layout];
+  const detailedStarCount = NIGHT_SKY_MESH_STARS[layout];
+
   const detailedStars = useMemo(() => {
     const detailed: Array<{ position: [number, number, number]; size: number; seed: number }> = [];
 
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < detailedStarCount; i++) {
       const seed = i * 0.1;
       const random = (offset: number) => {
         const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
@@ -250,7 +257,7 @@ export default function NightSkyEffects() {
     }
 
     return detailed;
-  }, []);
+  }, [detailedStarCount]);
 
   useEffect(() => {
     let meteorId = 0;
@@ -299,7 +306,7 @@ export default function NightSkyEffects() {
 
   return (
     <>
-      <InstancedStars count={1650} />
+      <InstancedStars count={pointStarCount} />
 
       {detailedStars.map((star, index) => (
         <Star key={`star-${index}`} position={star.position} size={star.size} seed={star.seed} />

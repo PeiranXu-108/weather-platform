@@ -34,13 +34,21 @@ function SunnyWeatherScene({
   );
 }
 
-function NightScene({ moonPhase, moonIllumination }: { moonPhase?: string; moonIllumination?: number }) {
+function NightScene({
+  moonPhase,
+  moonIllumination,
+  layout,
+}: {
+  moonPhase?: string;
+  moonIllumination?: number;
+  layout: 'fullscreen' | 'embedded';
+}) {
   return (
     <>
       <ambientLight intensity={0.1} />
       <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
       <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
-      <NightSkyEffects />
+      <NightSkyEffects layout={layout} />
       <fog attach="fog" args={[0x0a0a1a, 10, 30]} />
     </>
   );
@@ -143,7 +151,7 @@ export default function SunnyWeatherBackground({
         performance={{ min: 0.5 }}
       >
         {timeState === 'night' ? (
-          <NightScene moonPhase={moonPhase} moonIllumination={moonIllumination} />
+          <NightScene moonPhase={moonPhase} moonIllumination={moonIllumination} layout={layout} />
         ) : (
           <SunnyWeatherScene timeState={timeState} dayProgress={daytimeSunProgress} />
         )}
