@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo } from 'react';
+import { useLayoutEffect, useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { InstancedStars } from './NightSky';
@@ -249,8 +249,8 @@ function FogLayerMesh({
       uTime:         { value: 0 },
       uSpeed:        { value: speed },
       uScale:        { value: scale },
-      uFogColor:     { value: fogColor },
-      uFogShadow:    { value: fogShadow },
+      uFogColor:     { value: fogColor.clone() },
+      uFogShadow:    { value: fogShadow.clone() },
       uOpacity:      { value: opacity },
       uCoverage:     { value: coverage },
       uSoftness:     { value: softness },
@@ -259,9 +259,40 @@ function FogLayerMesh({
       uAspect:       { value: planeSize[0] / planeSize[1] },
       uVerticalFade: { value: verticalFade },
     }),
+    // Stable object; prop-driven updates in useLayoutEffect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  useLayoutEffect(() => {
+    const mat = matRef.current;
+    if (!mat) return;
+    mat.uniforms.uSpeed.value = speed;
+    mat.uniforms.uScale.value = scale;
+    mat.uniforms.uFogColor.value.copy(fogColor);
+    mat.uniforms.uFogShadow.value.copy(fogShadow);
+    mat.uniforms.uOpacity.value = opacity;
+    mat.uniforms.uCoverage.value = coverage;
+    mat.uniforms.uSoftness.value = softness;
+    mat.uniforms.uWarpStrength.value = warpStrength;
+    mat.uniforms.uWindDir.value.set(windDir[0], windDir[1]);
+    mat.uniforms.uAspect.value = planeSize[0] / planeSize[1];
+    mat.uniforms.uVerticalFade.value = verticalFade;
+  }, [
+    speed,
+    scale,
+    fogColor,
+    fogShadow,
+    opacity,
+    coverage,
+    softness,
+    warpStrength,
+    windDir[0],
+    windDir[1],
+    planeSize[0],
+    planeSize[1],
+    verticalFade,
+  ]);
 
   useFrame(({ clock }) => {
     if (matRef.current) {
