@@ -3,446 +3,404 @@
 import { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import CloudLayer from './CloudLayer';
 
-// 单个雪花组件 - 使用六角星形状
-function Snowflake({ 
-  position, 
-  size, 
-  speed, 
-  seed 
-}: { 
-  position: [number, number, number]; 
-  size: number;
-  speed: number;
-  seed: number;
-}) {
-  const meshRef = useRef<THREE.Group>(null);
-  
-  // 创建精致的六角星雪花形状
-  const snowflakeGroup = useMemo(() => {
-    const group = new THREE.Group();
-    
-    // 使用种子值来生成固定的随机值
-    const random = (offset: number) => {
-      const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
-      return x - Math.floor(x);
-    };
-    
-    const branchMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.3,
-    });
-    
-    const geometries: THREE.BufferGeometry[] = [];
-    
-    const addPlane = (
-      width: number,
-      height: number,
-      position: THREE.Vector3,
-      localRotationZ: number,
-      groupRotationZ: number
-    ) => {
-      const geometry = new THREE.PlaneGeometry(width, height);
-      const localRotation = new THREE.Matrix4().makeRotationZ(localRotationZ);
-      const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
-      const groupRotation = new THREE.Matrix4().makeRotationZ(groupRotationZ);
-      geometry.applyMatrix4(localRotation);
-      geometry.applyMatrix4(translation);
-      geometry.applyMatrix4(groupRotation);
-      geometries.push(geometry);
-    };
-    
-    // 创建六角星雪花 - 使用多个交叉的平面
-    const createStarBranch = (angle: number, length: number) => {
-      const branchHeight = length * size;
-      const branchWidth = 0.02 * size;
-      
-      // 主分支 - 细长的矩形
-      addPlane(
-        branchWidth,
-        branchHeight,
-        new THREE.Vector3(0, branchHeight * 0.5, 0),
-        0,
-        angle
-      );
-      
-      // 侧分支 - 左右各3个
-      for (let i = 0; i < 3; i++) {
-        const sideLength = (0.3 + random(i) * 0.2) * length * size;
-        const sideWidth = 0.015 * size;
-        const sideAngle = (i + 1) * 0.3;
-        const sideDistance = (0.2 + random(i + 10) * 0.3) * length * size;
-        const sideY = (0.3 + random(i + 20) * 0.4) * length * size;
-        
-        addPlane(
-          sideWidth,
-          sideLength,
-          new THREE.Vector3(Math.sin(sideAngle) * sideDistance, sideY, 0),
-          sideAngle,
-          angle
-        );
-        
-        // 另一侧的对称分支
-        addPlane(
-          sideWidth,
-          sideLength,
-          new THREE.Vector3(-Math.sin(sideAngle) * sideDistance, sideY, 0),
-          -sideAngle,
-          angle
-        );
-      }
-    };
-    
-    // 创建6个主分支，形成完整的六角星
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
-      const branchLength = 0.4 + random(i * 5) * 0.2;
-      createStarBranch(angle, branchLength);
-    }
-    
-    // 中心小圆点
-    const centerGeometry = new THREE.CircleGeometry(0.05 * size, 8);
-    const centerMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.95,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.4,
-    });
-    
-    const mergedGeometry = mergeGeometries(geometries, false);
-    geometries.forEach((g) => g.dispose());
-    mergedGeometry?.computeBoundingSphere();
-    const snowflakeMesh = new THREE.Mesh(mergedGeometry ?? new THREE.BufferGeometry(), branchMaterial);
-    group.add(snowflakeMesh);
-    
-    const center = new THREE.Mesh(centerGeometry, centerMaterial);
-    group.add(center);
-    
-    return group;
-  }, [size, seed]);
-
-  useEffect(() => {
-    return () => {
-      snowflakeGroup.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry?.dispose();
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((m) => m.dispose());
-          } else {
-            obj.material?.dispose();
-          }
-        }
-      });
-    };
-  }, [snowflakeGroup]);
-  
-  // 初始位置和速度
-  const initialY = useMemo(() => position[1], [position[1]]);
-  const driftSpeed = useMemo(() => (Math.sin(seed * 100) - 0.5) * 0.3, [seed]);
-  const rotationSpeed = useMemo(() => (Math.sin(seed * 50) - 0.5) * 0.02, [seed]);
-  
-  useFrame((state) => {
-    if (meshRef.current) {
-      // 垂直下落
-      meshRef.current.position.y -= speed * 0.01;
-      
-      // 水平漂移（模拟风的效果）
-      const windOffset = Math.sin(state.clock.elapsedTime * 0.5 + seed) * driftSpeed;
-      meshRef.current.position.x = position[0] + windOffset;
-      
-      // 旋转效果
-      meshRef.current.rotation.z += rotationSpeed;
-      
-      // 循环：当雪花落到底部时，重新从顶部开始
-      if (meshRef.current.position.y < -15) {
-        meshRef.current.position.y = initialY + 30;
-        meshRef.current.position.x = position[0];
-      }
-    }
-  });
-  
-  return (
-    <group ref={meshRef} position={position}>
-      <primitive object={snowflakeGroup} />
-    </group>
-  );
+interface SnowConfig {
+  isNight: boolean;
+  nearCount: number;
+  midCount: number;
+  farCount: number;
+  ambientIntensity: number;
+  mainLightIntensity: number;
+  mainLightColor: number;
+  fillLightIntensity: number;
+  fillLightColor: number;
+  fogColor: number;
+  fogNear: number;
+  fogFar: number;
+  nearOpacity: number;
+  midOpacity: number;
+  farOpacity: number;
+  nearSize: [number, number];
+  midSize: [number, number];
+  farSize: [number, number];
+  cloudColor1: THREE.Color;
+  cloudShadow1: THREE.Color;
+  cloudColor2: THREE.Color;
+  cloudShadow2: THREE.Color;
+  cloudOpacity1: number;
+  cloudOpacity2: number;
 }
 
-// 简单的雪花粒子（用于远处的雪花，提高性能）
-function SimpleSnowflake({ 
-  position, 
-  size, 
-  speed, 
-  seed 
-}: { 
-  position: [number, number, number]; 
-  size: number;
-  speed: number;
-  seed: number;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  
-  const driftSpeed = useMemo(() => (Math.sin(seed * 100) - 0.5) * 0.2, [seed]);
-  const initialY = useMemo(() => position[1], [position[1]]);
-  
-  const geometry = useMemo(() => {
-    return new THREE.CircleGeometry(size * 0.08, 6);
-  }, [size]);
-  
-  const material = useMemo(() => {
-    // 计算随机不透明度
-    const random = (offset: number) => {
-      const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
-      return x - Math.floor(x);
-    };
-    return new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.7 + random(1) * 0.2,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.2,
-    });
-  }, [seed]);
-  
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.y -= speed * 0.01;
-      const windOffset = Math.sin(state.clock.elapsedTime * 0.5 + seed) * driftSpeed;
-      meshRef.current.position.x = position[0] + windOffset;
-      
-      if (meshRef.current.position.y < -15) {
-        meshRef.current.position.y = initialY + 30;
-        meshRef.current.position.x = position[0];
-      }
-    }
-  });
-  
-  return <mesh ref={meshRef} position={position} geometry={geometry} material={material} />;
+function scaleSizeRange(range: [number, number], factor: number): [number, number] {
+  return [range[0] * factor, range[1] * factor];
 }
 
-// 使用 InstancedMesh 批量渲染大量简单雪花（性能优化）
-function InstancedSnowflakes({ 
-  count, 
-  detailedFlakes 
-}: { 
-  count: number;
-  detailedFlakes: Array<{ position: [number, number, number]; size: number; speed: number; seed: number }>;
+function getSnowConfig(isNight: boolean, layout: 'fullscreen' | 'embedded'): SnowConfig {
+  const config: SnowConfig = isNight
+    ? {
+        isNight: true,
+        nearCount: 140,
+        midCount: 1200,
+        farCount: 2000,
+        ambientIntensity: 0.10,
+        mainLightIntensity: 0.12,
+        mainLightColor: 0x667799,
+        fillLightIntensity: 0.05,
+        fillLightColor: 0x445566,
+        fogColor: 0x161a22,
+        fogNear: 6,
+        fogFar: 22,
+        nearOpacity: 0.7,
+        midOpacity: 0.45,
+        farOpacity: 0.22,
+        nearSize: [0.12, 0.26],
+        midSize: [0.06, 0.14],
+        farSize: [0.03, 0.07],
+        cloudColor1: new THREE.Color(0.16, 0.18, 0.24),
+        cloudShadow1: new THREE.Color(0.07, 0.08, 0.13),
+        cloudColor2: new THREE.Color(0.12, 0.14, 0.20),
+        cloudShadow2: new THREE.Color(0.05, 0.06, 0.10),
+        cloudOpacity1: 0.28,
+        cloudOpacity2: 0.35,
+      }
+    : {
+        isNight: false,
+        nearCount: 140,
+        midCount: 1200,
+        farCount: 2000,
+        ambientIntensity: 0.45,
+        mainLightIntensity: 0.50,
+        mainLightColor: 0xccccee,
+        fillLightIntensity: 0.20,
+        fillLightColor: 0xaaaacc,
+        fogColor: 0x5a5e68,
+        fogNear: 5,
+        fogFar: 20,
+        nearOpacity: 0.92,
+        midOpacity: 0.6,
+        farOpacity: 0.30,
+        nearSize: [0.12, 0.26],
+        midSize: [0.06, 0.14],
+        farSize: [0.03, 0.07],
+        cloudColor1: new THREE.Color(0.42, 0.44, 0.50),
+        cloudShadow1: new THREE.Color(0.22, 0.24, 0.30),
+        cloudColor2: new THREE.Color(0.36, 0.38, 0.44),
+        cloudShadow2: new THREE.Color(0.18, 0.20, 0.26),
+        cloudOpacity1: 0.35,
+        cloudOpacity2: 0.45,
+      };
+
+  if (layout !== 'embedded') {
+    return config;
+  }
+
+  const nightBoost = config.isNight;
+  return {
+    ...config,
+    nearCount: Math.round(config.nearCount * 1.2),
+    nearSize: scaleSizeRange(config.nearSize, 2.35),
+    midSize: scaleSizeRange(config.midSize, 2.15),
+    farSize: scaleSizeRange(config.farSize, 2.05),
+    nearOpacity: Math.min(1, config.nearOpacity + (nightBoost ? 0.2 : 0.06)),
+    midOpacity: Math.min(1, config.midOpacity + (nightBoost ? 0.15 : 0.08)),
+    farOpacity: Math.min(1, config.farOpacity + (nightBoost ? 0.12 : 0.07)),
+  };
+}
+
+// Soft snowflake sprite texture — radial gradient with subtle crystalline sparkle
+function createSnowflakeTexture(): THREE.Texture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2;
+
+  // Soft radial core
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.15, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.4, 'rgba(240,245,255,0.55)');
+  grad.addColorStop(0.7, 'rgba(220,230,255,0.18)');
+  grad.addColorStop(1, 'rgba(200,215,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Very subtle 6-fold crystalline highlight — barely visible, adds sparkle
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 6; i++) {
+    ctx.rotate(Math.PI / 3);
+    const armGrad = ctx.createLinearGradient(0, 0, 0, -r * 0.65);
+    armGrad.addColorStop(0, 'rgba(255,255,255,0.18)');
+    armGrad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+    armGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = armGrad;
+    ctx.fillRect(-0.8, 0, 1.6, -r * 0.65);
+  }
+  ctx.restore();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Bokeh-style blurred snowflake for out-of-focus depth layers
+function createBokehSnowflakeTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2;
+
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grad.addColorStop(0, 'rgba(255,255,255,0.8)');
+  grad.addColorStop(0.3, 'rgba(245,248,255,0.45)');
+  grad.addColorStop(0.6, 'rgba(230,238,255,0.15)');
+  grad.addColorStop(1, 'rgba(210,220,240,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+interface FlakeData {
+  x: number;
+  y: number;
+  z: number;
+  initialX: number;
+  initialY: number;
+  size: number;
+  speed: number;
+  driftFreq: number;
+  driftAmp: number;
+  wobbleFreq: number;
+  wobbleAmp: number;
+  rotSpeed: number;
+  phase: number;
+}
+
+function seededRandom(seed: number, offset: number): number {
+  const x = Math.sin(seed * 12.9898 + offset * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function generateFlakes(
+  count: number,
+  sizeRange: [number, number],
+  zRange: [number, number],
+  baseSeed: number,
+): FlakeData[] {
+  const flakes: FlakeData[] = [];
+  for (let i = 0; i < count; i++) {
+    const seed = baseSeed + i * 0.137;
+    const r = (o: number) => seededRandom(seed, o);
+    const x = (r(1) - 0.5) * 45;
+    const y = (r(2) - 0.5) * 35 + 5;
+    const z = zRange[0] + r(3) * (zRange[1] - zRange[0]);
+    const size = sizeRange[0] + r(4) * (sizeRange[1] - sizeRange[0]);
+    flakes.push({
+      x, y, z,
+      initialX: x,
+      initialY: y,
+      size,
+      speed: 0.90 + r(5) * 1.2,
+      driftFreq: 0.15 + r(6) * 0.35,
+      driftAmp: 0.3 + r(7) * 0.8,
+      wobbleFreq: 0.8 + r(8) * 1.5,
+      wobbleAmp: 0.04 + r(9) * 0.08,
+      rotSpeed: (r(10) - 0.5) * 0.6,
+      phase: r(11) * Math.PI * 2,
+    });
+  }
+  return flakes;
+}
+
+function SnowLayer({
+  flakes,
+  opacity,
+  texture,
+  isNight,
+}: {
+  flakes: FlakeData[];
+  opacity: number;
+  texture: THREE.Texture;
+  isNight: boolean;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const tempObject = useRef(new THREE.Object3D());
-  
-  // 生成简单雪花数据并维护位置状态
-  const { simpleFlakes, positions } = useMemo(() => {
-    const flakes: Array<{
-      position: [number, number, number];
-      size: number;
-      speed: number;
-      seed: number;
-      initialY: number;
-      initialX: number;
-      driftSpeed: number;
-    }> = [];
-    
-    const pos: Array<{ x: number; y: number; z: number }> = [];
-    
-    for (let i = 0; i < count; i++) {
-      const seed = (i + detailedFlakes.length) * 0.1;
-      const random = (offset: number) => {
-        const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      
-      const x = (random(1) - 0.5) * 40;
-      const y = (random(2) - 0.5) * 30 + 5;
-      const z = -10 + random(3) * 5;
-      
-      flakes.push({
-        position: [x, y, z],
-        size: 0.4 + random(4) * 0.4,
-        speed: 1.5 + random(10) * 0.6,
-        seed: seed,
-        initialY: y,
-        initialX: x,
-        driftSpeed: (Math.sin(seed * 100) - 0.5) * 0.2,
-      });
-      
-      pos.push({ x, y, z });
-    }
-    
-    return { simpleFlakes: flakes, positions: pos };
-  }, [count, detailedFlakes.length]);
-  
-  // 创建几何体和材质
-  const geometry = useMemo(() => {
-    return new THREE.CircleGeometry(0.08, 6);
-  }, []);
-  
+  const dummy = useRef(new THREE.Object3D());
+  const posRef = useRef<{ x: number; y: number }[]>([]);
+
+  const count = flakes.length;
+
+  useEffect(() => {
+    posRef.current = flakes.map(f => ({ x: f.x, y: f.y }));
+  }, [flakes]);
+
   const material = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+    return new THREE.MeshBasicMaterial({
+      map: texture,
       transparent: true,
-      opacity: 0.7,
-      emissive: 0xffffff,
-      emissiveIntensity: 0.2,
+      opacity,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      color: isNight ? 0x99aacc : 0xffffff,
     });
-  }, []);
-  
-  // 初始化实例矩阵 - 使用 useEffect 确保在组件挂载后执行
+  }, [texture, opacity, isNight]);
+
+  const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+
   useEffect(() => {
     if (!meshRef.current) return;
     meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    
-    simpleFlakes.forEach((flake, i) => {
-      tempObject.current.position.set(positions[i].x, positions[i].y, positions[i].z);
-      tempObject.current.scale.setScalar(flake.size);
-      tempObject.current.updateMatrix();
-      meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
+    flakes.forEach((f, i) => {
+      dummy.current.position.set(f.x, f.y, f.z);
+      dummy.current.scale.setScalar(f.size);
+      dummy.current.updateMatrix();
+      meshRef.current!.setMatrixAt(i, dummy.current.matrix);
     });
-    
     meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [simpleFlakes, positions]);
-  
-  // 使用 requestAnimationFrame 优化的更新循环
+  }, [flakes]);
+
   useFrame((state) => {
     if (!meshRef.current) return;
-    
-    const elapsedTime = state.clock.elapsedTime;
-    
-    // 批量更新所有实例的位置
-    simpleFlakes.forEach((flake, i) => {
-      // 计算新位置
-      let y = positions[i].y - flake.speed * 0.01;
-      const windOffset = Math.sin(elapsedTime * 0.5 + flake.seed) * flake.driftSpeed;
-      const x = flake.initialX + windOffset;
-      
-      // 循环：当雪花落到底部时，重新从顶部开始
-      if (y < -15) {
-        y = flake.initialY + 30;
-        positions[i].x = flake.initialX;
+    const t = state.clock.elapsedTime;
+    const positions = posRef.current;
+
+    for (let i = 0; i < count; i++) {
+      const f = flakes[i];
+      let { y } = positions[i];
+
+      y -= f.speed * 0.012;
+
+      if (y < -18) {
+        y = f.initialY + 36;
+        positions[i].x = f.initialX;
       }
-      
-      // 更新位置状态
+
+      const drift = Math.sin(t * f.driftFreq + f.phase) * f.driftAmp;
+      const wobble = Math.sin(t * f.wobbleFreq + f.phase * 2.7) * f.wobbleAmp;
+      const x = f.initialX + drift + wobble;
+
       positions[i].x = x;
       positions[i].y = y;
-      
-      // 更新矩阵
-      tempObject.current.position.set(x, y, positions[i].z);
-      tempObject.current.scale.setScalar(flake.size);
-      tempObject.current.updateMatrix();
-      meshRef.current!.setMatrixAt(i, tempObject.current.matrix);
-    });
-    
+
+      dummy.current.position.set(x, y, f.z);
+      dummy.current.scale.setScalar(f.size);
+      dummy.current.rotation.z = t * f.rotSpeed + f.phase;
+      dummy.current.updateMatrix();
+      meshRef.current!.setMatrixAt(i, dummy.current.matrix);
+    }
+
     meshRef.current.instanceMatrix.needsUpdate = true;
   });
-  
-  return (
-    <instancedMesh ref={meshRef} args={[geometry, material, count]} />
-  );
+
+  return <instancedMesh ref={meshRef} args={[geometry, material, count]} />;
 }
 
-// 场景组件
-function SnowyScene() {
-  // 分离精致雪花和简单雪花
-  const { detailedFlakes, simpleCount } = useMemo(() => {
-    const detailed: Array<{ 
-      position: [number, number, number]; 
-      size: number;
-      speed: number;
-      seed: number;
-    }> = [];
-    
-    const detailedCount = 25;
-    const totalCount = 1000;
-    
-    // 生成精致雪花数据
-    for (let i = 0; i < detailedCount; i++) {
-      const seed = i * 0.1;
-      const random = (offset: number) => {
-        const x = Math.sin(seed * 12.9898 + offset) * 43758.5453;
-        return x - Math.floor(x);
-      };
-      
-      detailed.push({
-        position: [
-          (random(1) - 0.5) * 40,
-          (random(2) - 0.5) * 30 + 5,
-          -5 + random(3) * 3,
-        ],
-        size: 0.8 + random(4) * 0.6,
-        speed: 1.5 + random(10) * 0.6,
-        seed: seed,
-      });
-    }
-    
-    return { detailedFlakes: detailed, simpleCount: totalCount - detailedCount };
-  }, []);
-  
+function SnowyScene({ config }: { config: SnowConfig }) {
+  const sharpTex = useMemo(() => createSnowflakeTexture(), []);
+  const bokehTex = useMemo(() => createBokehSnowflakeTexture(), []);
+
+  const nearFlakes = useMemo(
+    () => generateFlakes(config.nearCount, config.nearSize, [-2, 2], 0),
+    [config.nearCount, config.nearSize],
+  );
+  const midFlakes = useMemo(
+    () => generateFlakes(config.midCount, config.midSize, [-6, -2], 1000),
+    [config.midCount, config.midSize],
+  );
+  const farFlakes = useMemo(
+    () => generateFlakes(config.farCount, config.farSize, [-12, -6], 5000),
+    [config.farCount, config.farSize],
+  );
+
+  useEffect(() => {
+    return () => {
+      sharpTex.dispose();
+      bokehTex.dispose();
+    };
+  }, [sharpTex, bokehTex]);
+
   return (
     <>
-      {/* 环境光 - 雪天时较暗 */}
-      <ambientLight intensity={0.4} />
-      {/* 主光源 - 柔和的冷光 */}
-      <directionalLight 
-        position={[5, 10, 5]} 
-        intensity={0.5} 
-        color={0xccccff}
+      <ambientLight intensity={config.ambientIntensity} />
+      <directionalLight
+        position={[5, 10, 5]}
+        intensity={config.mainLightIntensity}
+        color={config.mainLightColor}
       />
-      {/* 补充光源 - 从下方反射的冷光 */}
-      <directionalLight position={[0, -5, -5]} intensity={0.2} color={0xaaaaaa} />
+      <directionalLight
+        position={[0, -5, -5]}
+        intensity={config.fillLightIntensity}
+        color={config.fillLightColor}
+      />
 
-      {/* Background cloud layers behind snow */}
       <CloudLayer
-        zDepth={-12}
-        speed={0.025}
-        scale={2.0}
-        opacity={0.35}
+        zDepth={-14}
+        speed={0.02}
+        scale={2.2}
+        opacity={config.cloudOpacity1}
         coverage={0.44}
         softness={0.22}
         warpStrength={1.3}
-        cloudColor={new THREE.Color(0.42, 0.44, 0.50)}
-        shadowColor={new THREE.Color(0.22, 0.24, 0.30)}
+        cloudColor={config.cloudColor1}
+        shadowColor={config.cloudShadow1}
         windDir={[1.0, 0.08]}
         planeSize={[55, 32]}
         yOffset={2}
       />
       <CloudLayer
-        zDepth={-8}
-        speed={0.04}
-        scale={1.4}
-        opacity={0.45}
+        zDepth={-10}
+        speed={0.035}
+        scale={1.5}
+        opacity={config.cloudOpacity2}
         coverage={0.46}
         softness={0.18}
         warpStrength={0.9}
-        cloudColor={new THREE.Color(0.36, 0.38, 0.44)}
-        shadowColor={new THREE.Color(0.18, 0.20, 0.26)}
+        cloudColor={config.cloudColor2}
+        shadowColor={config.cloudShadow2}
         windDir={[1.0, 0.12]}
         planeSize={[52, 30]}
         yOffset={0}
       />
-      
-      {/* 使用 InstancedMesh 批量渲染大量简单雪花 */}
-      <InstancedSnowflakes count={simpleCount} detailedFlakes={detailedFlakes} />
-      
-      {/* 渲染精致的六角星雪花 */}
-      {detailedFlakes.map((flake, index) => (
-        <Snowflake 
-          key={`detailed-${index}`}
-          position={flake.position} 
-          size={flake.size}
-          speed={flake.speed}
-          seed={flake.seed}
-        />
-      ))}
-      
-      {/* 雾效果，增强深度感和真实感 - 雪天使用深灰色雾 */}
-      <fog attach="fog" args={[0x4a4a4a, 5, 20]} />
+
+      {/* Far layer — small bokeh dots, lowest opacity */}
+      <SnowLayer
+        flakes={farFlakes}
+        opacity={config.farOpacity}
+        texture={bokehTex}
+        isNight={config.isNight}
+      />
+
+      {/* Mid layer — medium bokeh dots */}
+      <SnowLayer
+        flakes={midFlakes}
+        opacity={config.midOpacity}
+        texture={bokehTex}
+        isNight={config.isNight}
+      />
+
+      {/* Near layer — crisp snowflakes with crystalline detail */}
+      <SnowLayer
+        flakes={nearFlakes}
+        opacity={config.nearOpacity}
+        texture={sharpTex}
+        isNight={config.isNight}
+      />
+
+      <fog attach="fog" args={[config.fogColor, config.fogNear, config.fogFar]} />
     </>
   );
 }
@@ -451,28 +409,29 @@ interface SnowyWeatherBackgroundProps {
   className?: string;
   sunsetTime?: string;
   currentTime?: string;
+  isDay?: number;
   layout?: 'fullscreen' | 'embedded';
 }
 
-export default function SnowyWeatherBackground({ 
-  className = '', 
+export default function SnowyWeatherBackground({
+  className = '',
   sunsetTime,
   currentTime,
+  isDay = 1,
   layout = 'fullscreen',
 }: SnowyWeatherBackgroundProps) {
-  // 判断是否在日落前后一小时
-  const isSunset = Boolean(sunsetTime && currentTime && 
+  const isNight = isDay !== 1;
+  const config = useMemo(() => getSnowConfig(isNight, layout), [isNight, layout]);
+
+  const isSunset = Boolean(sunsetTime && currentTime &&
     (() => {
       try {
         const currentDate = new Date(currentTime.replace(' ', 'T'));
         const [timePart, period] = sunsetTime.split(' ');
         const [hours, minutes] = timePart.split(':').map(Number);
         let sunsetHours = hours;
-        if (period === 'PM' && hours !== 12) {
-          sunsetHours = hours + 12;
-        } else if (period === 'AM' && hours === 12) {
-          sunsetHours = 0;
-        }
+        if (period === 'PM' && hours !== 12) sunsetHours = hours + 12;
+        else if (period === 'AM' && hours === 12) sunsetHours = 0;
         const sunsetDate = new Date(currentDate);
         sunsetDate.setHours(sunsetHours, minutes, 0, 0);
         const oneHourBefore = new Date(sunsetDate.getTime() - 60 * 60 * 1000);
@@ -483,34 +442,36 @@ export default function SnowyWeatherBackground({
       }
     })());
 
+  const bgGradient = isNight
+    ? 'linear-gradient(to bottom, rgb(16, 20, 30) 0%, rgb(22, 28, 38) 40%, rgb(18, 22, 32) 100%)'
+    : isSunset
+      ? 'linear-gradient(to bottom, rgb(55, 60, 72) 0%, rgb(65, 70, 82) 30%, rgb(75, 80, 90) 60%, rgb(80, 85, 95) 100%)'
+      : 'linear-gradient(to bottom, rgb(70, 78, 88) 0%, rgb(82, 88, 98) 50%, rgb(68, 74, 82) 100%)';
+
   return (
     <div data-weather-bg className={`${layout === 'embedded' ? 'absolute inset-0 z-0 rounded-2xl pointer-events-none overflow-hidden' : 'fixed inset-0 z-0'} ${className}`}>
-      <div className="absolute inset-0">
-        <div 
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(to bottom, rgb(60, 65, 70) 0%, rgb(70, 75, 80) 50%, rgb(55, 60, 65) 100%)'
-          }}
-        />
-      </div>
-      
-      {/* Three.js Canvas - 优化性能配置 */}
+      <div className="absolute inset-0" style={{ background: bgGradient }} />
+
       <Canvas
-        camera={{ position: [0, 0, 10], fov: 75 }}
+        camera={
+          layout === 'embedded'
+            ? { position: [0, 0, 8.2], fov: 72 }
+            : { position: [0, 0, 10], fov: 75 }
+        }
         style={{ width: '100%', height: '100%' }}
-        gl={{ 
-          alpha: true, 
+        gl={{
+          alpha: true,
           antialias: false,
           preserveDrawingBuffer: true,
-          powerPreference: "high-performance",
+          powerPreference: 'high-performance',
           stencil: false,
           depth: true,
         }}
-        dpr={[1, 2]}
+        dpr={layout === 'embedded' ? [1.5, 2] : [1, 2]}
         performance={{ min: 0.5 }}
         frameloop="always"
       >
-        <SnowyScene />
+        <SnowyScene config={config} />
       </Canvas>
     </div>
   );

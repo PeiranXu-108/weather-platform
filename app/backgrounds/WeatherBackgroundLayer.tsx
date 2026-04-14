@@ -33,7 +33,7 @@ export default function WeatherBackgroundLayer({
   const props = getBackgroundProps(weather);
 
   if (flags.isSnowy) {
-    return <SnowyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} />;
+    return <SnowyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} isDay={props.isDay} />;
   }
   if (flags.isRainy) {
     return <RainyWeatherBackground layout={layout} sunsetTime={props.sunsetTime} currentTime={props.currentTime} precipMm={props.precipMm} isDay={props.isDay} />;
