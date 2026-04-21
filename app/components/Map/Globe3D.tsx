@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Location } from '@/app/types/weather';
@@ -27,6 +27,84 @@ const GLOBE_TEXTURE_URLS = [
   EARTH_LIGHTS_MAP_URL,
   EARTH_CLOUDS_MAP_URL,
 ] as const;
+
+type GlobeTextures = {
+  earthMap: THREE.Texture;
+  earthNormal: THREE.Texture;
+  earthSpecular: THREE.Texture;
+  earthLights: THREE.Texture;
+  earthClouds: THREE.Texture;
+};
+
+function disposeGlobeTextures(bundle: GlobeTextures) {
+  bundle.earthMap.dispose();
+  bundle.earthNormal.dispose();
+  bundle.earthSpecular.dispose();
+  bundle.earthLights.dispose();
+  bundle.earthClouds.dispose();
+}
+
+/** Loads all globe CDN textures; on any failure sets `failed` so the caller can skip rendering the 3D globe. */
+function useGlobeTextures(urls: readonly string[]) {
+  const [textures, setTextures] = useState<GlobeTextures | null>(null);
+  const [failed, setFailed] = useState(false);
+  const loadedRef = useRef<GlobeTextures | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+    const loader = new THREE.TextureLoader();
+
+    const loadOne = (url: string) =>
+      new Promise<THREE.Texture>((resolve, reject) => {
+        loader.load(
+          url,
+          resolve,
+          undefined,
+          () => {
+            reject(new Error(`Texture load failed: ${url}`));
+          },
+        );
+      });
+
+    Promise.all(urls.map((url) => loadOne(url)))
+      .then((loaded) => {
+        if (cancelled) {
+          loaded.forEach((tex) => tex.dispose());
+          return;
+        }
+        const bundle: GlobeTextures = {
+          earthMap: loaded[0],
+          earthNormal: loaded[1],
+          earthSpecular: loaded[2],
+          earthLights: loaded[3],
+          earthClouds: loaded[4],
+        };
+        if (loadedRef.current) {
+          disposeGlobeTextures(loadedRef.current);
+        }
+        loadedRef.current = bundle;
+        setTextures(bundle);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (loadedRef.current) {
+        disposeGlobeTextures(loadedRef.current);
+        loadedRef.current = null;
+      }
+      setTextures(null);
+    };
+  }, [urls]);
+
+  return { textures, failed };
+}
+
 const GLOBE_RADIUS = 1;
 const INITIAL_CAMERA_DISTANCE = 3.85;
 const MIN_CAMERA_DISTANCE = 1.65;
@@ -34,13 +112,6 @@ const MAX_CAMERA_DISTANCE = 4.2;
 const INTRO_CAMERA_DISTANCE = 9.6;
 const INTRO_CAMERA_ANIMATION_MS = 9_800;
 const LIVE_LIGHTING_UPDATE_MS = 60_000;
-
-if (typeof window !== 'undefined') {
-  // Warm the loader cache before the user switches views so the intro can start immediately.
-  GLOBE_TEXTURE_URLS.forEach((textureUrl) => {
-    useLoader.preload(THREE.TextureLoader, textureUrl);
-  });
-}
 
 function latLonToVector3(lat: number, lon: number, radius = GLOBE_RADIUS): THREE.Vector3 {
   const phi = THREE.MathUtils.degToRad(90 - lat);
@@ -483,20 +554,18 @@ function GlobeCameraController({
 }
 
 function GlobeMesh({
+  textures,
   location,
   onGlobePick,
   referenceEpoch,
 }: {
+  textures: GlobeTextures;
   location: Location;
   onGlobePick: (lat: number, lon: number) => void;
   referenceEpoch?: number;
 }) {
   const [liveEpoch, setLiveEpoch] = useState(() => Math.floor(Date.now() / 1000));
-  const earthMap = useLoader(THREE.TextureLoader, EARTH_DAY_MAP_URL);
-  const earthNormal = useLoader(THREE.TextureLoader, EARTH_NORMAL_MAP_URL);
-  const earthSpecular = useLoader(THREE.TextureLoader, EARTH_SPECULAR_MAP_URL);
-  const earthLights = useLoader(THREE.TextureLoader, EARTH_LIGHTS_MAP_URL);
-  const earthClouds = useLoader(THREE.TextureLoader, EARTH_CLOUDS_MAP_URL);
+  const { earthMap, earthNormal, earthSpecular, earthLights, earthClouds } = textures;
   const cityPosition = useMemo(
     () => latLonToVector3(location.lat, location.lon, GLOBE_RADIUS * 1.001),
     [location.lat, location.lon]
@@ -594,6 +663,7 @@ export default function Globe3D({
   referenceEpoch,
 }: Globe3DProps) {
   const controlsRef = useRef<any>(null);
+  const { textures, failed } = useGlobeTextures(GLOBE_TEXTURE_URLS);
 
   const introStart = useMemo(
     () =>
@@ -608,6 +678,10 @@ export default function Globe3D({
     () => [introStart.x, introStart.y, introStart.z],
     [introStart]
   );
+
+  if (failed) {
+    return null;
+  }
 
   return (
     <div className={className} style={{ width: '100%', height: '100%' }}>
@@ -631,9 +705,16 @@ export default function Globe3D({
           rotateSpeed={0.6}
           zoomSpeed={0.7}
         />
-        <Suspense fallback={<GlobeFallback location={location} />}>
-          <GlobeMesh location={location} onGlobePick={onGlobePick} referenceEpoch={referenceEpoch} />
-        </Suspense>
+        {textures ? (
+          <GlobeMesh
+            textures={textures}
+            location={location}
+            onGlobePick={onGlobePick}
+            referenceEpoch={referenceEpoch}
+          />
+        ) : (
+          <GlobeFallback location={location} />
+        )}
       </Canvas>
     </div>
   );
