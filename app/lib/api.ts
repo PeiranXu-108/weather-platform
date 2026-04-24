@@ -63,6 +63,14 @@ export const favoritesApi = {
       body: JSON.stringify({ favorites }),
       credentials: 'include',
     }),
+
+  reorder: (favorites: Array<{ query: string; label?: string }>): Promise<Response> =>
+    fetch(`${BASE}/api/favorites/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ favorites }),
+      credentials: 'include',
+    }),
 };
 
 /** 使用量接口 */

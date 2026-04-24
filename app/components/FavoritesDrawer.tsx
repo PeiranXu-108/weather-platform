@@ -2,6 +2,23 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import {
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle, getTextColorTheme, readableTextShadowStyle } from '@/app/utils/textColorTheme';
@@ -10,7 +27,7 @@ import { translateLocation } from '@/app/utils/locationTranslations';
 import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
-import { weatherUrl } from '@/app/lib/api';
+import { favoritesApi, weatherUrl } from '@/app/lib/api';
 
 const WeatherBackgroundLayer = dynamic(
   () => import('@/app/backgrounds/WeatherBackgroundLayer'),
@@ -74,6 +91,7 @@ function FavoriteCityCard({
   showBackground,
   scrollContainer,
   onSelect,
+  setContainerRef,
 }: {
   fav: FavoriteCity;
   cached: CachedWeather | null;
@@ -82,8 +100,9 @@ function FavoriteCityCard({
   showBackground: boolean;
   scrollContainer: HTMLDivElement | null;
   onSelect: () => void;
+  setContainerRef?: (node: HTMLDivElement | null) => void;
 }) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -124,14 +143,16 @@ function FavoriteCityCard({
 
   return (
     <div
-      ref={cardRef}
-      className={`group relative min-h-[100px] sm:min-h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${
-        hasBg
+      ref={(node) => {
+        cardRef.current = node;
+        setContainerRef?.(node);
+      }}
+      className={`group relative min-h-[100px] sm:min-h-[15vh] rounded-2xl border shadow-lg overflow-hidden transition-all ${hasBg
           ? 'border-white/15'
           : cardIsDark
             ? 'border-white/10 bg-white/5 hover:bg-white/10'
             : 'border-white/60 bg-white/30 hover:bg-white/50'
-      }`}
+        }`}
     >
       {hasBg && <WeatherBackgroundLayer weather={weatherData} layout="embedded" show />}
       <button
@@ -164,6 +185,7 @@ interface FavoritesDrawerProps {
   onChangeFavorites: (next: FavoriteCity[]) => void;
   onSelectCity: (query: string) => void;
   showBackground?: boolean;
+  isAuthenticated?: boolean;
   liveWeather?: {
     query: string;
     data: WeatherResponse | null;
@@ -177,6 +199,7 @@ export default function FavoritesDrawer({
   onChangeFavorites,
   onSelectCity,
   showBackground = true,
+  isAuthenticated = false,
   liveWeather,
 }: FavoritesDrawerProps) {
   const [open, setOpen] = useState(false);
@@ -185,8 +208,14 @@ export default function FavoritesDrawer({
   const cacheRef = useRef<Record<string, CachedWeather>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const isDark = textColorTheme.backgroundType === 'dark';
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+  );
 
   // preload cache on mount
   useEffect(() => {
@@ -226,7 +255,7 @@ export default function FavoritesDrawer({
     saveWeatherCache(cacheRef.current);
   }, [liveWeather?.query, liveWeather?.data, favorites]);
 
-  // fetch when opened
+  // fetch when opened — always refresh (ignore TTL) so card backgrounds match current conditions
   useEffect(() => {
     if (!open || favorites.length === 0) return;
 
@@ -236,9 +265,6 @@ export default function FavoritesDrawer({
 
     async function fetchOne(query: string) {
       if (inFlightRef.current.has(query)) return;
-      const cached = cacheRef.current[query];
-      const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
-      if (isFresh) return;
 
       inFlightRef.current.add(query);
       setLoadingQueries((prev) => ({ ...prev, [query]: true }));
@@ -297,6 +323,86 @@ export default function FavoritesDrawer({
     saveFavoritesToStorage(next);
   };
 
+  async function persistReorderedFavorites(next: FavoriteCity[]) {
+    saveFavoritesToStorage(next);
+    if (!isAuthenticated) return;
+    try {
+      const res = await favoritesApi.reorder(next);
+      if (!res.ok) throw new Error('Failed to reorder favorites');
+    } catch {
+      // best-effort: keep UI order, but resync from DB so it doesn't drift
+      favoritesApi
+        .list()
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => {
+          if (Array.isArray(data)) onChangeFavorites(data);
+        })
+        .catch(() => { });
+    }
+  }
+
+  const onDragStart = ({ active }: { active: { id: unknown } }) => {
+    setActiveDragId(String(active.id));
+  };
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
+
+    const oldIndex = favorites.findIndex((f) => f.query === activeId);
+    const newIndex = favorites.findIndex((f) => f.query === overId);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const next = arrayMove(favorites, oldIndex, newIndex);
+    onChangeFavorites(next);
+    void persistReorderedFavorites(next);
+  };
+
+  function SortableFavoriteCard({
+    fav,
+  }: {
+    fav: FavoriteCity;
+  }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: fav.query });
+
+    const style: React.CSSProperties = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      touchAction: 'manipulation',
+      opacity: isDragging ? 0.6 : 1,
+    };
+
+    return (
+      <div style={style} {...attributes} {...listeners}>
+        <FavoriteCityCard
+          fav={fav}
+          cached={weatherByQuery[fav.query] ?? null}
+          isLoading={!!loadingQueries[fav.query]}
+          fallbackTheme={textColorTheme}
+          showBackground={showBackground && open}
+          scrollContainer={scrollContainerRef.current}
+          setContainerRef={setNodeRef}
+          onSelect={() => {
+            if (isDragging) return;
+            onSelectCity(fav.query);
+            setOpen(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Entry button: shown on page left when drawer is closed */}
@@ -304,9 +410,8 @@ export default function FavoritesDrawer({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`fixed z-[85] rounded-xl p-2 transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
-            isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
-          }`}
+          className={`fixed z-[85] rounded-xl p-2 transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
+            }`}
           style={{ top: 'max(1rem, env(safe-area-inset-top, 0px))', left: 'max(1rem, env(safe-area-inset-left, 0px))' }}
           aria-label="打开收藏城市抽屉"
           title="收藏城市"
@@ -328,9 +433,8 @@ export default function FavoritesDrawer({
         />
 
         <aside
-          className={`absolute left-0 top-0 h-full w-[85vw] max-w-[320px] sm:w-[40vw] sm:max-w-xs md:max-w-sm transition-transform duration-300 ease-out ${
-            open ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`absolute left-0 top-0 h-full w-[85vw] max-w-[320px] sm:w-[40vw] sm:max-w-xs md:max-w-sm transition-transform duration-300 ease-out ${open ? 'translate-x-0' : '-translate-x-full'
+            }`}
         >
           <div className={`h-full ${getCardStyle(textColorTheme.backgroundType)} ${isDark ? 'bg-gray-900/70' : 'bg-white/30'} backdrop-blur-2xl border-r ${isDark ? 'border-white/10' : 'border-white/50'} shadow-2xl`}>
             <div className="p-5 flex items-center justify-between">
@@ -353,23 +457,32 @@ export default function FavoritesDrawer({
                   暂无收藏城市
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {favorites.map((fav) => (
-                    <FavoriteCityCard
-                      key={fav.query}
-                      fav={fav}
-                      cached={weatherByQuery[fav.query] ?? null}
-                      isLoading={!!loadingQueries[fav.query]}
-                      fallbackTheme={textColorTheme}
-                      showBackground={showBackground && open}
-                      scrollContainer={scrollContainerRef.current}
-                      onSelect={() => {
-                        onSelectCity(fav.query);
-                        setOpen(false);
-                      }}
-                    />
-                  ))}
-                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                >
+                  <SortableContext
+                    items={favorites.map((f) => f.query)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-4">
+                      {favorites.map((fav) => (
+                        <SortableFavoriteCard key={fav.query} fav={fav} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeDragId ? (
+                      <div className="rounded-2xl border border-white/20 bg-black/20 backdrop-blur-2xl shadow-2xl p-4">
+                        <div className={`text-base font-semibold ${textColorTheme.textColor.primary}`}>
+                          {favorites.find((f) => f.query === activeDragId)?.label || activeDragId}
+                        </div>
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
               )}
             </div>
           </div>

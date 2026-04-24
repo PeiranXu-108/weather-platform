@@ -440,6 +440,7 @@ export default function Home() {
           onChangeFavorites={setFavorites}
           onSelectCity={handleSelectFavorite}
           showBackground={showBackground}
+          isAuthenticated={status === 'authenticated'}
           liveWeather={liveFavoriteWeather}
         />
       <div className={`relative z-10 max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
