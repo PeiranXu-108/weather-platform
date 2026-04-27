@@ -19,6 +19,7 @@ import { useSyncFavorites } from './hooks/useSyncFavorites';
 import { useSession } from 'next-auth/react';
 import { fetchWeatherByCity, fetchWeatherByCoords, favoritesApi } from './lib/api';
 import ChatBot from './components/ChatBot/ChatBot';
+import type { ChatLayoutMode } from './components/ChatBot/types';
 
 // 动态导入 Three.js 组件，禁用 SSR
 const CloudyWeatherBackground = dynamic(
@@ -94,6 +95,7 @@ export default function Home() {
   const [opacity, setOpacity] = useState(0);
   const [showBackground, setShowBackground] = useState(true);
   const [uiHidden, setUiHidden] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatLayoutMode>('closed');
   const [modalConfig, setModalConfig] = useState<{ isOpen: boolean; message: string }>({
     isOpen: false,
     message: '',
@@ -418,9 +420,19 @@ export default function Home() {
     () => ({ query: currentCityQuery, data: weatherData }),
     [currentCityQuery, weatherData]
   );
+  const isChatDocked = chatMode === 'docked';
+  const primaryGridClass = isChatDocked
+    ? 'grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6'
+    : 'grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6';
+  const secondaryGridClass = isChatDocked
+    ? 'grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6'
+    : 'grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6';
 
   return (
-    <main className="min-h-screen p-4 md:p-8 pb-20 relative" style={{ paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}>
+    <main
+      className={`min-h-screen relative ${isChatDocked ? 'md:h-screen md:overflow-hidden' : ''}`}
+      style={{ paddingBottom: isChatDocked ? undefined : 'max(5rem, env(safe-area-inset-bottom, 0px))' }}
+    >
       {/* Backgrounds */}
       {showBackground && isSnowy && <SnowyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} isDay={weatherData?.current.is_day} />}
       {showBackground && isRainy && <RainyWeatherBackground sunsetTime={sunsetTime} currentTime={currentTime} precipMm={weatherData?.current.precip_mm} isDay={weatherData?.current.is_day} />}
@@ -433,115 +445,130 @@ export default function Home() {
       {!showBackground && <div className="fixed inset-0 z-0 bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50" />}
 
       <div className={uiHidden ? 'invisible pointer-events-none' : ''}>
-        <FavoritesDrawer
-          textColorTheme={textColorTheme}
-          currentCityQuery={currentCityQuery}
-          favorites={favorites}
-          onChangeFavorites={setFavorites}
-          onSelectCity={handleSelectFavorite}
-          showBackground={showBackground}
-          isAuthenticated={status === 'authenticated'}
-          liveWeather={liveFavoriteWeather}
-        />
-      <div className={`relative z-10 max-w-7xl mx-auto space-y-6 ${textColorTheme.textColor.primary}`}>
-        {/* Header with Search - Always visible */}
-        <Header
-          onCitySelect={handleCitySelect}
-          onLocationSelect={handleLocationSelect}
-          currentCity={currentCity}
-          isLocating={isLocating}
-          textColorTheme={textColorTheme}
-          opacity={opacity}
-          onOpacityChange={setOpacity}
-          showBackground={showBackground}
-          onShowBackgroundChange={setShowBackground}
-        />
-
-        <Suspense fallback={<WeatherSkeleton />}>
-          {loading || !weatherData ? (
-            <WeatherSkeleton />
-          ) : (
-            <div className="space-y-6 animate-in fade-in duration-500">
-              {/* Current Weather and 24h Forecast */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                <div className="lg:col-span-1">
-                  <CurrentWeather
-                    location={weatherData.location}
-                    current={weatherData.current}
-                    textColorTheme={textColorTheme}
-                    enhanceReadableText={enhanceReadableText}
-                    cityQuery={currentCityQuery}
-                    isFavorite={favorites.some((f) => f.query === currentCityQuery)}
-                    onToggleFavorite={handleToggleFavorite}
-                    opacity={opacity}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <HourlyForecast24h
-                    hourlyData={allHourlyData}
-                    currentTime={weatherData.location.localtime}
-                    currentTimeEpoch={weatherData.location.localtime_epoch}
-                    textColorTheme={textColorTheme}
-                    enhanceReadableText={enhanceReadableText}
-                    opacity={opacity}
-                    astro={weatherData.forecast.forecastday[0]?.astro ?? null}
-                    astroNextDay={weatherData.forecast.forecastday[1]?.astro ?? null}
-                  />
-                </div>
-              </div>
-
-              {/* Temperature Chart and Metrics Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                <div className="lg:col-span-2">
-                  <TemperatureChart
-                    location={{
-                      lat: Number(weatherData.location.lat.toFixed(2)),
-                      lon: Number(weatherData.location.lon.toFixed(2))
-                    }}
-                    textColorTheme={textColorTheme}
-                    enhanceReadableText={enhanceReadableText}
-                    opacity={opacity}
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  <WeatherMetrics
-                    current={weatherData.current}
-                    textColorTheme={textColorTheme}
-                    enhanceReadableText={enhanceReadableText}
-                    opacity={opacity}
-                  />
-                </div>
-              </div>
-
-              {/* Hourly Forecast */}
-              <HourlyChart
-                hourlyData={allHourlyData}
+        <div className={`relative z-10 ${isChatDocked ? 'md:flex md:min-h-screen' : ''}`}>
+          <div className={`min-w-0 ${isChatDocked ? 'flex-1 md:h-screen md:overflow-y-auto' : ''}`}>
+            <div
+              className={`${isChatDocked ? 'px-4 pt-4 pb-8 md:px-8 md:pt-8' : 'p-4 md:p-8'} ${isChatDocked ? '' : 'pb-20'}`}
+              style={isChatDocked ? undefined : { paddingBottom: 'max(5rem, env(safe-area-inset-bottom, 0px))' }}
+            >
+              <FavoritesDrawer
                 textColorTheme={textColorTheme}
-                enhanceReadableText={enhanceReadableText}
-                opacity={opacity}
+                currentCityQuery={currentCityQuery}
+                favorites={favorites}
+                onChangeFavorites={setFavorites}
+                onSelectCity={handleSelectFavorite}
+                showBackground={showBackground}
+                isAuthenticated={status === 'authenticated'}
+                liveWeather={liveFavoriteWeather}
               />
+              <div className={`w-full mx-auto space-y-6 ${isChatDocked ? 'max-w-none' : 'max-w-7xl'} ${textColorTheme.textColor.primary}`}>
+                {/* Header with Search - Always visible */}
+                <Header
+                  onCitySelect={handleCitySelect}
+                  onLocationSelect={handleLocationSelect}
+                  currentCity={currentCity}
+                  isLocating={isLocating}
+                  textColorTheme={textColorTheme}
+                  opacity={opacity}
+                  onOpacityChange={setOpacity}
+                  showBackground={showBackground}
+                  onShowBackgroundChange={setShowBackground}
+                />
 
-              <WeatherMap
-                location={weatherData.location}
-                textColorTheme={textColorTheme}
-                enhanceReadableText={enhanceReadableText}
-                opacity={opacity}
-                onGoToLocation={handleLocationSelect}
-              />
+                <Suspense fallback={<WeatherSkeleton />}>
+                  {loading || !weatherData ? (
+                    <WeatherSkeleton />
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in duration-500">
+                      {/* Current Weather and 24h Forecast */}
+                      <div className={primaryGridClass}>
+                        <div className="lg:col-span-1">
+                          <CurrentWeather
+                            location={weatherData.location}
+                            current={weatherData.current}
+                            textColorTheme={textColorTheme}
+                            enhanceReadableText={enhanceReadableText}
+                            cityQuery={currentCityQuery}
+                            isFavorite={favorites.some((f) => f.query === currentCityQuery)}
+                            onToggleFavorite={handleToggleFavorite}
+                            opacity={opacity}
+                          />
+                        </div>
+                        <div className="lg:col-span-2">
+                          <HourlyForecast24h
+                            hourlyData={allHourlyData}
+                            currentTime={weatherData.location.localtime}
+                            currentTimeEpoch={weatherData.location.localtime_epoch}
+                            textColorTheme={textColorTheme}
+                            enhanceReadableText={enhanceReadableText}
+                            opacity={opacity}
+                            astro={weatherData.forecast.forecastday[0]?.astro ?? null}
+                            astroNextDay={weatherData.forecast.forecastday[1]?.astro ?? null}
+                          />
+                        </div>
+                      </div>
 
-              {/* Footer */}
-              <footer className="text-center pt-8 pb-4">
-                <p
-                  className="text-sm text-white-100 opacity-80"
-                  style={readableTextShadowStyle('secondary', enhanceReadableText)}
-                >
-                  数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
-                </p>
-              </footer>
+                      {/* Temperature Chart and Metrics Row */}
+                      <div className={secondaryGridClass}>
+                        <div className="lg:col-span-2">
+                          <TemperatureChart
+                            location={{
+                              lat: Number(weatherData.location.lat.toFixed(2)),
+                              lon: Number(weatherData.location.lon.toFixed(2))
+                            }}
+                            textColorTheme={textColorTheme}
+                            enhanceReadableText={enhanceReadableText}
+                            opacity={opacity}
+                          />
+                        </div>
+                        <div className="lg:col-span-1">
+                          <WeatherMetrics
+                            current={weatherData.current}
+                            textColorTheme={textColorTheme}
+                            enhanceReadableText={enhanceReadableText}
+                            opacity={opacity}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Hourly Forecast */}
+                      <HourlyChart
+                        hourlyData={allHourlyData}
+                        textColorTheme={textColorTheme}
+                        enhanceReadableText={enhanceReadableText}
+                        opacity={opacity}
+                      />
+
+                      <WeatherMap
+                        location={weatherData.location}
+                        textColorTheme={textColorTheme}
+                        enhanceReadableText={enhanceReadableText}
+                        opacity={opacity}
+                        onGoToLocation={handleLocationSelect}
+                      />
+
+                      {/* Footer */}
+                      <footer className="text-center pt-8 pb-4">
+                        <p
+                          className="text-sm text-white-100 opacity-80"
+                          style={readableTextShadowStyle('secondary', enhanceReadableText)}
+                        >
+                          数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
+                        </p>
+                      </footer>
+                    </div>
+                  )}
+                </Suspense>
+              </div>
             </div>
-          )}
-        </Suspense>
-      </div>
+          </div>
+
+          <ChatBot
+            textColorTheme={textColorTheme}
+            mode={chatMode}
+            onModeChange={setChatMode}
+          />
+        </div>
 
         {/* Custom Modal */}
         <Modal
@@ -550,9 +577,6 @@ export default function Home() {
           message={modalConfig.message}
           textColorTheme={textColorTheme}
         />
-
-        {/* AI 天气助手 ChatBot */}
-        <ChatBot textColorTheme={textColorTheme} />
       </div>
     </main>
   );

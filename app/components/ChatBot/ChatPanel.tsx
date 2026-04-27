@@ -4,10 +4,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MessageBubble, { type ChatMessage } from './MessageBubble';
 import ChatInput from './ChatInput';
 import { fetchChat } from '@/app/lib/api';
+import type { ChatLayoutMode } from './types';
 
 interface ChatPanelProps {
   isDark: boolean;
   onClose: () => void;
+  mode: Exclude<ChatLayoutMode, 'closed'>;
+  onToggleDock: () => void;
 }
 
 // 快捷问题池
@@ -45,7 +48,7 @@ function genId() {
   return `msg-${Date.now()}-${++msgIdCounter}`;
 }
 
-export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
+export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -239,13 +242,27 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
     sendMessage(q);
   }, [sendMessage]);
 
+  const isFloating = mode === 'floating';
+  const isFullscreenMobile = mode === 'fullscreen-mobile';
+  const dockButtonLabel = isFloating ? '放大聊天窗口' : '还原聊天窗口';
+
   return (
     <div
-      className={`flex flex-col w-full h-full rounded-2xl overflow-hidden border shadow-2xl ${
-        isDark
-          ? 'border-white/15 bg-gray-900/80 shadow-black/30'
-          : 'border-white/50 bg-white/85 shadow-black/10'
-      } backdrop-blur-2xl`}
+      className={`flex flex-col w-full h-full overflow-hidden ${
+        isFloating
+          ? `rounded-2xl border shadow-2xl ${
+              isDark
+                ? 'border-white/15 bg-gray-900/80 shadow-black/30'
+                : 'border-white/50 bg-white/85 shadow-black/10'
+            } backdrop-blur-2xl`
+          : isFullscreenMobile
+            ? isDark
+              ? 'bg-gray-950/95 backdrop-blur-2xl'
+              : 'bg-white/95 backdrop-blur-2xl'
+          : isDark
+            ? 'border-l border-white/10 bg-gray-950/90 shadow-2xl shadow-black/25 backdrop-blur-2xl'
+            : 'border-l border-gray-200/70 bg-white/92 shadow-2xl shadow-slate-300/25 backdrop-blur-2xl'
+      }`}
     >
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 border-b ${
@@ -262,19 +279,40 @@ export default function ChatPanel({ isDark, onClose }: ChatPanelProps) {
             AI
           </span>
         </div>
-        <button
-          onClick={onClose}
-          className={`w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
-            isDark
-              ? 'hover:bg-white/10 text-gray-400 hover:text-white'
-              : 'hover:bg-black/5 text-gray-500 hover:text-gray-700'
-          }`}
-          title="关闭"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onToggleDock}
+            className={`group w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
+              isDark
+                ? 'hover:bg-white/10 text-gray-400 hover:text-white'
+                : 'hover:bg-black/5 text-gray-500 hover:text-gray-700'
+            }`}
+            title={dockButtonLabel}
+            aria-label={dockButtonLabel}
+          >
+            <img
+              src="/icons/sidebar.svg"
+              alt=""
+              aria-hidden
+              className={`w-4 h-4 pointer-events-none transition-[filter,opacity,transform] duration-150 ${
+                isDark ? 'invert opacity-80 group-hover:opacity-100 group-hover:brightness-110' : 'opacity-80 group-hover:opacity-100'
+              } ${isFloating ? '' : 'rotate-180'}`}
+            />
+          </button>
+          <button
+            onClick={onClose}
+            className={`w-9 h-9 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
+              isDark
+                ? 'hover:bg-white/10 text-gray-400 hover:text-white'
+                : 'hover:bg-black/5 text-gray-500 hover:text-gray-700'
+            }`}
+            title="关闭"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Messages Area */}
