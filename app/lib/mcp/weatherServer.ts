@@ -8,11 +8,202 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getEnglishCityName, searchCities } from '@/app/utils/citySearch';
+import type {
+  CitySearchPanel,
+  CurrentForecastPanel,
+  Forecast30dPanel,
+  WeatherAssistantPanel,
+  WeatherErrorPanel,
+} from '@/app/components/ChatBot/types';
 
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL;
 const QWEATHER_API_KEY = process.env.QWEATHER_API_KEY;
 const QWEATHER_API_BASE = process.env.QWEATHER_API_BASE;
+const SCHEMA_VERSION = 'weather.assistant.v1' as const;
+const MIN_FORECAST_DAYS = 1;
+const WEATHER_API_DAYS = 3;
+const MAX_FORECAST_DAYS = 30;
+
+function panelId(kind: WeatherAssistantPanel['kind']): string {
+  return `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function textContent(panel: WeatherAssistantPanel) {
+  return [{ type: 'text' as const, text: JSON.stringify(panel) }];
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeForecastDays(days: unknown): number {
+  const n = Math.round(toNumber(days, 3));
+  return Math.min(MAX_FORECAST_DAYS, Math.max(MIN_FORECAST_DAYS, n));
+}
+
+function currentForecastTitle(prefix: string, days: number): string {
+  return `${prefix}与未来${days}天预报`;
+}
+
+function forecastTitle(days: number): string {
+  return `未来${days}天天气预报`;
+}
+
+function buildErrorPanel(title: string, message: string, toolName?: string): WeatherErrorPanel {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: panelId('error'),
+    kind: 'error',
+    title,
+    message,
+    toolName,
+  };
+}
+
+function buildCurrentForecastPanel(
+  data: any,
+  title: string,
+  requestedDays: number
+): CurrentForecastPanel {
+  const current = data.current ?? {};
+  const location = data.location ?? {};
+  const forecast = Array.isArray(data.forecast?.forecastday) ? data.forecast.forecastday : [];
+  const todayHours = Array.isArray(forecast[0]?.hour) ? forecast[0].hour : [];
+  const currentEpoch = toNumber(location.localtime_epoch ?? current.last_updated_epoch);
+
+  const hourly = todayHours
+    .filter((hour: any) => toNumber(hour.time_epoch) >= currentEpoch)
+    .slice(0, 8)
+    .map((hour: any) => ({
+      time: String(hour.time ?? ''),
+      tempC: toNumber(hour.temp_c),
+      condition: String(hour.condition?.text ?? ''),
+      icon: hour.condition?.icon ? String(hour.condition.icon) : undefined,
+      rainChance: toNumber(hour.chance_of_rain),
+    }));
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: panelId('current_forecast'),
+    kind: 'current_forecast',
+    title,
+    requestedDays,
+    location: {
+      name: String(location.name ?? ''),
+      region: location.region ? String(location.region) : undefined,
+      country: location.country ? String(location.country) : undefined,
+      lat: typeof location.lat === 'number' ? location.lat : undefined,
+      lon: typeof location.lon === 'number' ? location.lon : undefined,
+      localtime: location.localtime ? String(location.localtime) : undefined,
+    },
+    current: {
+      tempC: toNumber(current.temp_c),
+      feelsLikeC: toNumber(current.feelslike_c),
+      condition: String(current.condition?.text ?? ''),
+      icon: current.condition?.icon ? String(current.condition.icon) : undefined,
+      humidity: toNumber(current.humidity),
+      windKph: toNumber(current.wind_kph),
+      windDir: String(current.wind_dir ?? ''),
+      pressureMb: toNumber(current.pressure_mb),
+      visibilityKm: toNumber(current.vis_km),
+      uv: toNumber(current.uv),
+      cloud: toNumber(current.cloud),
+      precipMm: toNumber(current.precip_mm),
+      lastUpdated: current.last_updated ? String(current.last_updated) : undefined,
+    },
+    daily: forecast.slice(0, requestedDays).map((day: any) => ({
+      date: String(day.date ?? ''),
+      condition: String(day.day?.condition?.text ?? ''),
+      icon: day.day?.condition?.icon ? String(day.day.condition.icon) : undefined,
+      minTempC: toNumber(day.day?.mintemp_c),
+      maxTempC: toNumber(day.day?.maxtemp_c),
+      rainChance: toNumber(day.day?.daily_chance_of_rain),
+      humidity: toNumber(day.day?.avghumidity),
+      uv: toNumber(day.day?.uv),
+    })),
+    hourly,
+  };
+}
+
+function buildForecast30dPanel(
+  data: any,
+  longitude: number,
+  latitude: number,
+  requestedDays: number,
+  locationName?: { name?: string; region?: string; country?: string }
+): Forecast30dPanel {
+  const daily = Array.isArray(data.daily) ? data.daily : [];
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: panelId('forecast_30d'),
+    kind: 'forecast_30d',
+    title: forecastTitle(requestedDays),
+    requestedDays,
+    location: {
+      longitude,
+      latitude,
+      name: locationName?.name,
+      region: locationName?.region,
+      country: locationName?.country,
+    },
+    updateTime: data.updateTime ? String(data.updateTime) : undefined,
+    daily: daily.slice(0, requestedDays).map((day: any) => ({
+      date: String(day.fxDate ?? ''),
+      textDay: String(day.textDay ?? ''),
+      textNight: String(day.textNight ?? ''),
+      tempMinC: toNumber(day.tempMin),
+      tempMaxC: toNumber(day.tempMax),
+      humidity: toNumber(day.humidity),
+      precipMm: toNumber(day.precip),
+      windDirDay: String(day.windDirDay ?? ''),
+      windScaleDay: String(day.windScaleDay ?? ''),
+      uvIndex: toNumber(day.uvIndex),
+    })),
+  };
+}
+
+async function fetchWeatherApiForecast(query: string) {
+  if (!API_KEY || !API_BASE_URL) {
+    throw new Error('天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL');
+  }
+
+  const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=${WEATHER_API_DAYS}&aqi=no&alerts=no&lang=zh`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`天气查询失败，HTTP 状态码: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+async function fetchQWeather30d(longitude: number, latitude: number) {
+  if (!QWEATHER_API_KEY || !QWEATHER_API_BASE) {
+    throw new Error('和风天气 API 未配置，请检查环境变量 QWEATHER_API_KEY 和 QWEATHER_API_BASE');
+  }
+
+  const location = `${longitude.toFixed(2)},${latitude.toFixed(2)}`;
+  const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
+  const response = await fetch(url, {
+    headers: {
+      'X-QW-Api-Key': QWEATHER_API_KEY,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`30天预报查询失败，HTTP 状态码: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (data.code !== '200') {
+    throw new Error(`30天预报查询失败，错误码: ${data.code}`);
+  }
+
+  return data;
+}
 
 /**
  * 创建并配置 MCP Weather Server
@@ -24,76 +215,55 @@ export function createWeatherServer(): McpServer {
   });
 
   // ============================================================
-  // Tool 1: get_current_weather - 获取实时天气 + 3天预报
+  // Tool 1: get_current_weather - 获取实时天气 + 可变天数预报
   // ============================================================
   server.registerTool(
     'get_current_weather',
     {
-      description: '获取指定城市的实时天气信息和未来3天预报。支持中文和英文城市名。返回温度、体感温度、天气状况、湿度、风速、气压、能见度、紫外线等详细信息。',
+      description: '获取指定城市的天气预报，支持未来1到30天。内部兼容策略：1到3天使用3天接口并截取；4到30天使用30天接口并截取。用户问未来一周时传 days=7，问未来5天时传 days=5，未说明天数时传 days=3。',
       inputSchema: {
         city: z.string().describe('城市名称，支持中文（如"杭州"、"北京"）或英文（如"hangzhou"、"beijing"）'),
+        days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
       },
     },
-    async ({ city }) => {
+    async ({ city, days }) => {
       try {
-        if (!API_KEY || !API_BASE_URL) {
-          return {
-            content: [{ type: 'text' as const, text: '天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL' }],
-            isError: true,
-          };
-        }
+        const forecastDays = normalizeForecastDays(days);
 
         // 将中文城市名转为英文
         const englishCity = getEnglishCityName(city);
-        const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(englishCity)}&days=3&aqi=no&alerts=no&lang=zh`;
-
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          return {
-            content: [{ type: 'text' as const, text: `天气查询失败，HTTP 状态码: ${response.status}` }],
-            isError: true,
-          };
-        }
-
-        const data = await response.json();
-
-        // 格式化当前天气
-        const current = data.current;
-        const location = data.location;
-        const forecast = data.forecast?.forecastday || [];
-
-        let result = `📍 ${location.name}（${location.country}）\n`;
-        result += `🕐 当地时间：${location.localtime}\n\n`;
-        result += `【当前天气】\n`;
-        result += `天气：${current.condition.text}\n`;
-        result += `温度：${current.temp_c}°C（体感 ${current.feelslike_c}°C）\n`;
-        result += `湿度：${current.humidity}%\n`;
-        result += `风速：${current.wind_kph} km/h（${current.wind_dir}）\n`;
-        result += `气压：${current.pressure_mb} hPa\n`;
-        result += `能见度：${current.vis_km} km\n`;
-        result += `紫外线指数：${current.uv}\n`;
-        result += `云量：${current.cloud}%\n`;
-        result += `降水量：${current.precip_mm} mm\n`;
-
-        // 格式化未来3天预报
-        if (forecast.length > 0) {
-          result += `\n【未来${forecast.length}天预报】\n`;
-          for (const day of forecast) {
-            result += `\n${day.date}：${day.day.condition.text}\n`;
-            result += `  温度：${day.day.mintemp_c}°C ~ ${day.day.maxtemp_c}°C\n`;
-            result += `  降雨概率：${day.day.daily_chance_of_rain}%\n`;
-            result += `  湿度：${day.day.avghumidity}%\n`;
-            result += `  紫外线：${day.day.uv}\n`;
-          }
-        }
+        const weatherData = await fetchWeatherApiForecast(englishCity);
+        const location = weatherData.location ?? {};
+        const panel =
+          forecastDays <= WEATHER_API_DAYS
+            ? buildCurrentForecastPanel(
+                weatherData,
+                currentForecastTitle('实时天气', forecastDays),
+                forecastDays
+              )
+            : buildForecast30dPanel(
+                await fetchQWeather30d(toNumber(location.lon), toNumber(location.lat)),
+                toNumber(location.lon),
+                toNumber(location.lat),
+                forecastDays,
+                {
+                  name: location.name ? String(location.name) : undefined,
+                  region: location.region ? String(location.region) : undefined,
+                  country: location.country ? String(location.country) : undefined,
+                }
+              );
 
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: textContent(panel),
         };
       } catch (error) {
+        const panel = buildErrorPanel(
+          '天气查询出错',
+          `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'get_current_weather'
+        );
         return {
-          content: [{ type: 'text' as const, text: `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}` }],
+          content: textContent(panel),
           isError: true,
         };
       }
@@ -106,65 +276,34 @@ export function createWeatherServer(): McpServer {
   server.registerTool(
     'get_forecast_30d',
     {
-      description: '获取指定位置未来30天的天气预报。需要提供经度和纬度坐标。返回每日最高温、最低温、天气状况、风力、湿度等信息。',
+      description: '获取指定位置未来1到30天的天气预报。需要提供经度和纬度坐标。返回每日最高温、最低温、天气状况、风力、湿度等信息。',
       inputSchema: {
         longitude: z.number().describe('经度，如 120.15'),
         latitude: z.number().describe('纬度，如 30.28'),
+        days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未说明默认30。'),
       },
     },
-    async ({ longitude, latitude }) => {
+    async ({ longitude, latitude, days }) => {
       try {
-        if (!QWEATHER_API_KEY || !QWEATHER_API_BASE) {
-          return {
-            content: [{ type: 'text' as const, text: '和风天气 API 未配置，请检查环境变量 QWEATHER_API_KEY 和 QWEATHER_API_BASE' }],
-            isError: true,
-          };
-        }
-
-        // 和风天气 location 格式为 "经度,纬度"
-        const location = `${longitude.toFixed(2)},${latitude.toFixed(2)}`;
-        const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
-
-        const response = await fetch(url, {
-          headers: {
-            'X-QW-Api-Key': QWEATHER_API_KEY,
-          },
-        });
-
-        if (!response.ok) {
-          return {
-            content: [{ type: 'text' as const, text: `30天预报查询失败，HTTP 状态码: ${response.status}` }],
-            isError: true,
-          };
-        }
-
-        const data = await response.json();
-
-        if (data.code !== '200') {
-          return {
-            content: [{ type: 'text' as const, text: `30天预报查询失败，错误码: ${data.code}` }],
-            isError: true,
-          };
-        }
-
-        const daily = data.daily || [];
-        let result = `📅 未来30天天气预报（经度: ${longitude}, 纬度: ${latitude}）\n\n`;
-
-        // 只显示关键信息，避免过长
-        for (const day of daily.slice(0, 15)) {
-          result += `${day.fxDate}：${day.textDay}/${day.textNight}，${day.tempMin}°C~${day.tempMax}°C，湿度${day.humidity}%，${day.windDirDay}${day.windScaleDay}级\n`;
-        }
-
-        if (daily.length > 15) {
-          result += `\n...（共${daily.length}天数据，已显示前15天）`;
-        }
+        const forecastDays = normalizeForecastDays(days ?? 30);
+        const panel = buildForecast30dPanel(
+          await fetchQWeather30d(longitude, latitude),
+          longitude,
+          latitude,
+          forecastDays
+        );
 
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: textContent(panel),
         };
       } catch (error) {
+        const panel = buildErrorPanel(
+          '30天预报查询出错',
+          `30天预报查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'get_forecast_30d'
+        );
         return {
-          content: [{ type: 'text' as const, text: `30天预报查询出错: ${error instanceof Error ? error.message : '未知错误'}` }],
+          content: textContent(panel),
           isError: true,
         };
       }
@@ -177,69 +316,44 @@ export function createWeatherServer(): McpServer {
   server.registerTool(
     'get_weather_at_my_location',
     {
-      description: '根据用户提供的经纬度坐标查询当前位置的实时天气和未来3天预报。当用户询问"我这的天气"、"这里的天气"、"当前位置天气"、"我所在地的天气"等时使用此工具。',
+      description: '根据用户提供的经纬度坐标查询当前位置天气预报，支持未来1到30天。内部兼容策略：1到3天使用3天接口并截取；4到30天使用30天接口并截取。用户问未来一周时传 days=7，问未来5天时传 days=5。',
       inputSchema: {
         latitude: z.number().describe('纬度，如 30.28'),
         longitude: z.number().describe('经度，如 120.15'),
+        days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
       },
     },
-    async ({ latitude, longitude }) => {
+    async ({ latitude, longitude, days }) => {
       try {
-        if (!API_KEY || !API_BASE_URL) {
-          return {
-            content: [{ type: 'text' as const, text: '天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL' }],
-            isError: true,
-          };
-        }
-
+        const forecastDays = normalizeForecastDays(days);
         const query = `${latitude},${longitude}`;
-        const url = `${API_BASE_URL}?key=${API_KEY}&q=${query}&days=3&aqi=no&alerts=no&lang=zh`;
-
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          return {
-            content: [{ type: 'text' as const, text: `天气查询失败，HTTP 状态码: ${response.status}` }],
-            isError: true,
-          };
-        }
-
-        const data = await response.json();
-
-        const current = data.current;
-        const location = data.location;
-        const forecast = data.forecast?.forecastday || [];
-
-        let result = `📍 当前位置：${location.name}（${location.region}，${location.country}）\n`;
-        result += `🕐 当地时间：${location.localtime}\n\n`;
-        result += `【当前天气】\n`;
-        result += `天气：${current.condition.text}\n`;
-        result += `温度：${current.temp_c}°C（体感 ${current.feelslike_c}°C）\n`;
-        result += `湿度：${current.humidity}%\n`;
-        result += `风速：${current.wind_kph} km/h（${current.wind_dir}）\n`;
-        result += `气压：${current.pressure_mb} hPa\n`;
-        result += `能见度：${current.vis_km} km\n`;
-        result += `紫外线指数：${current.uv}\n`;
-        result += `云量：${current.cloud}%\n`;
-        result += `降水量：${current.precip_mm} mm\n`;
-
-        if (forecast.length > 0) {
-          result += `\n【未来${forecast.length}天预报】\n`;
-          for (const day of forecast) {
-            result += `\n${day.date}：${day.day.condition.text}\n`;
-            result += `  温度：${day.day.mintemp_c}°C ~ ${day.day.maxtemp_c}°C\n`;
-            result += `  降雨概率：${day.day.daily_chance_of_rain}%\n`;
-            result += `  湿度：${day.day.avghumidity}%\n`;
-            result += `  紫外线：${day.day.uv}\n`;
-          }
-        }
+        const weatherData =
+          forecastDays <= WEATHER_API_DAYS ? await fetchWeatherApiForecast(query) : null;
+        const panel =
+          forecastDays <= WEATHER_API_DAYS && weatherData
+            ? buildCurrentForecastPanel(
+                weatherData,
+                currentForecastTitle('当前位置天气', forecastDays),
+                forecastDays
+              )
+            : buildForecast30dPanel(
+                await fetchQWeather30d(longitude, latitude),
+                longitude,
+                latitude,
+                forecastDays
+              );
 
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: textContent(panel),
         };
       } catch (error) {
+        const panel = buildErrorPanel(
+          '当前位置天气查询出错',
+          `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'get_weather_at_my_location'
+        );
         return {
-          content: [{ type: 'text' as const, text: `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}` }],
+          content: textContent(panel),
           isError: true,
         };
       }
@@ -262,22 +376,42 @@ export function createWeatherServer(): McpServer {
         const results = searchCities(query, 10);
 
         if (results.length === 0) {
+          const panel: CitySearchPanel = {
+            schemaVersion: SCHEMA_VERSION,
+            id: panelId('city_search'),
+            kind: 'city_search',
+            title: '城市搜索',
+            query,
+            results: [],
+          };
           return {
-            content: [{ type: 'text' as const, text: `未找到匹配"${query}"的城市。请尝试使用完整的城市名或英文名。` }],
+            content: textContent(panel),
           };
         }
 
-        let result = `找到 ${results.length} 个匹配的城市：\n\n`;
-        for (const city of results) {
-          result += `• ${city.chineseName}（${city.englishName}）\n`;
-        }
+        const panel: CitySearchPanel = {
+          schemaVersion: SCHEMA_VERSION,
+          id: panelId('city_search'),
+          kind: 'city_search',
+          title: '城市搜索',
+          query,
+          results: results.map((city) => ({
+            chineseName: city.chineseName,
+            englishName: city.englishName,
+          })),
+        };
 
         return {
-          content: [{ type: 'text' as const, text: result }],
+          content: textContent(panel),
         };
       } catch (error) {
+        const panel = buildErrorPanel(
+          '城市搜索出错',
+          `城市搜索出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'search_city'
+        );
         return {
-          content: [{ type: 'text' as const, text: `城市搜索出错: ${error instanceof Error ? error.message : '未知错误'}` }],
+          content: textContent(panel),
           isError: true,
         };
       }

@@ -15,6 +15,12 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { createMcpClient, mcpToolsToOpenAITools } from '@/app/lib/mcp/createMcpClient';
+import {
+  WEATHER_ASSISTANT_SCHEMA_VERSION,
+  type ChatSSEEvent,
+  type WeatherAssistantPanel,
+  type WeatherErrorPanel,
+} from '@/app/components/ChatBot/types';
 
 // Qwen 使用 OpenAI 兼容接口
 const qwenClient = new OpenAI({
@@ -30,8 +36,11 @@ const SYSTEM_PROMPT_BASE = `你是一个专业的天气助手，名叫"天气小
 3. 回答时适当使用天气相关的 emoji 让回复更生动
 4. 如果用户询问的城市不明确，可以先使用搜索工具确认
 5. 如果用户只是闲聊或问好，友好地回应并引导他们查询天气
-6. 不要在回复中展示原始 JSON 数据，而是用自然语言描述天气情况
-7. 如果工具调用失败，友好地告知用户并建议重试`;
+6. 工具结果会以结构化 JSON 提供给系统和前端。不要在回复中展示原始 JSON、表格或长列表
+7. 用户问"未来一周"时按 7 天查询；问"未来5天/未来五天"时按 5 天查询；问"未来N天"时按 N 天查询
+8. 工具内部已做兼容：1~3 天会用3天接口截取，4~30 天会用30天接口截取。请直接传入用户要的 days，不要说只能查3天，也不要建议用户改问30天
+9. 天气查询成功后，只输出一句 30 字以内的中文结论或建议；详细天气会由前端面板展示
+10. 如果工具调用失败，友好地告知用户并建议重试`;
 
 function buildSystemPrompt(userLocation?: { latitude: number; longitude: number }): string {
   let prompt = SYSTEM_PROMPT_BASE;
@@ -43,22 +52,41 @@ function buildSystemPrompt(userLocation?: { latitude: number; longitude: number 
 - 纬度：${userLocation.latitude}
 - 经度：${userLocation.longitude}
 
-当用户询问"我这的天气"、"这里的天气"、"当前位置天气"、"我所在地的天气"、"查一下我这"等类似问题时，请调用 get_weather_at_my_location 工具，并传入上述经纬度。`;
+当用户询问"我这的天气"、"这里的天气"、"当前位置天气"、"我所在地的天气"、"查一下我这"等类似问题时，请调用 get_weather_at_my_location 工具，并传入上述经纬度。
+如果用户同时说明预报天数，也要传入对应 days。`;
   }
 
   return prompt;
 }
 
-// SSE 事件类型
-interface SSEEvent {
-  type: 'text' | 'tool_start' | 'tool_end' | 'error' | 'done';
-  content?: string;
-  name?: string;
-  args?: Record<string, unknown>;
+function formatSSE(event: ChatSSEEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
 }
 
-function formatSSE(event: SSEEvent): string {
-  return `data: ${JSON.stringify(event)}\n\n`;
+function isWeatherAssistantPanel(value: unknown): value is WeatherAssistantPanel {
+  if (!value || typeof value !== 'object') return false;
+  const panel = value as Partial<WeatherAssistantPanel>;
+  return panel.schemaVersion === WEATHER_ASSISTANT_SCHEMA_VERSION && typeof panel.kind === 'string';
+}
+
+function parseWeatherPanel(text: string): WeatherAssistantPanel | null {
+  try {
+    const parsed = JSON.parse(text);
+    return isWeatherAssistantPanel(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildErrorPanel(title: string, message: string, toolName?: string): WeatherErrorPanel {
+  return {
+    schemaVersion: WEATHER_ASSISTANT_SCHEMA_VERSION,
+    id: `error-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: 'error',
+    title,
+    message,
+    toolName,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -175,6 +203,14 @@ export async function POST(request: NextRequest) {
                   .map((c) => c.text)
                   .join('\n');
 
+                const panel = parseWeatherPanel(toolResultText);
+                if (panel) {
+                  controller.enqueue(encoder.encode(formatSSE({
+                    type: 'panel',
+                    panel,
+                  })));
+                }
+
                 // 将工具结果追加到消息
                 allMessages.push({
                   role: 'tool',
@@ -183,9 +219,18 @@ export async function POST(request: NextRequest) {
                 } as OpenAI.ChatCompletionMessageParam);
               } catch (toolError) {
                 const errorMsg = toolError instanceof Error ? toolError.message : '工具调用失败';
+                const panel = buildErrorPanel(
+                  '工具调用失败',
+                  errorMsg,
+                  toolName
+                );
+                controller.enqueue(encoder.encode(formatSSE({
+                  type: 'panel',
+                  panel,
+                })));
                 allMessages.push({
                   role: 'tool',
-                  content: `工具调用失败: ${errorMsg}`,
+                  content: JSON.stringify(panel),
                   tool_call_id: toolCall.id,
                 } as OpenAI.ChatCompletionMessageParam);
               }

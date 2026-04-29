@@ -2,14 +2,10 @@
 
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import WeatherPanel from './WeatherPanel';
+import type { ChatMessage } from './types';
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  toolName?: string;
-  toolStatus?: 'calling' | 'done';
-}
+export type { ChatMessage } from './types';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -56,6 +52,7 @@ function ToolCallIndicator({ toolName, status, isDark }: { toolName: string; sta
 export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isTool = message.role === 'tool';
+  const hasPanels = !isUser && !!message.panels?.length;
 
   // 工具状态指示器
   if (isTool && message.toolName) {
@@ -73,7 +70,7 @@ export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+        className={`${hasPanels ? 'max-w-[96%]' : 'max-w-[85%]'} rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
           isUser
             ? 'bg-sky-500 text-white rounded-br-md'
             : isDark
@@ -82,8 +79,9 @@ export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
         }`}
       >
         {/* 使用 ReactMarkdown 渲染 Markdown 格式 */}
-        <ReactMarkdown
-          components={{
+        {message.content && (
+          <ReactMarkdown
+            components={{
             // 段落 - 减少默认间距
             p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
             
@@ -252,13 +250,22 @@ export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
                 {children}
               </td>
             ),
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+        )}
+
+        {hasPanels && (
+          <div className={message.content ? 'mt-2' : ''}>
+            {message.panels?.map((panel) => (
+              <WeatherPanel key={panel.id} panel={panel} isDark={isDark} />
+            ))}
+          </div>
+        )}
         
         {/* 助手消息流式加载时的闪烁光标 */}
-        {!isUser && message.content === '' && (
+        {!isUser && message.content === '' && !hasPanels && (
           <span className="inline-block w-1.5 h-4 bg-current animate-pulse rounded-sm" />
         )}
       </div>

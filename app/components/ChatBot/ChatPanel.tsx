@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import MessageBubble, { type ChatMessage } from './MessageBubble';
+import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import { fetchChat } from '@/app/lib/api';
-import type { ChatLayoutMode } from './types';
+import type { ChatLayoutMode, ChatMessage, ChatSSEEvent } from './types';
 
 interface ChatPanelProps {
   isDark: boolean;
@@ -161,7 +161,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
           if (!data) continue;
 
           try {
-            const event = JSON.parse(data);
+            const event = JSON.parse(data) as ChatSSEEvent;
 
             switch (event.type) {
               case 'text':
@@ -170,6 +170,16 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                   prev.map((m) =>
                     m.id === assistantId
                       ? { ...m, content: m.content + (event.content || '') }
+                      : m
+                  )
+                );
+                break;
+
+              case 'panel':
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, panels: [...(m.panels ?? []), event.panel] }
                       : m
                   )
                 );
@@ -204,7 +214,11 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId
-                      ? { ...m, content: event.content || '抱歉，出现了错误，请稍后再试。' }
+                      ? {
+                          ...m,
+                          content: event.content || '抱歉，出现了错误，请稍后再试。',
+                          panels: event.panel ? [...(m.panels ?? []), event.panel] : m.panels,
+                        }
                       : m
                   )
                 );
