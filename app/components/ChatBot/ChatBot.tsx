@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import ChatPanel from './ChatPanel';
 import type { ChatLayoutMode } from './types';
@@ -14,12 +14,19 @@ interface ChatBotProps {
 export default function ChatBot({ textColorTheme, mode, onModeChange }: ChatBotProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [hasOpenedPanel, setHasOpenedPanel] = useState(false);
 
   const isDark = textColorTheme.backgroundType === 'dark';
   const isOpen = mode !== 'closed';
   const isFloating = mode === 'floating';
   const isDocked = mode === 'docked';
   const isFullscreenMobile = mode === 'fullscreen-mobile';
+
+  useEffect(() => {
+    if (isOpen) {
+      setHasOpenedPanel(true);
+    }
+  }, [isOpen]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -83,53 +90,34 @@ export default function ChatBot({ textColorTheme, mode, onModeChange }: ChatBotP
     onModeChange(isDocked ? 'floating' : 'docked');
   };
 
+  const panelContainerClass = isDocked
+    ? 'hidden md:block shrink-0 h-[100dvh] relative z-[80]'
+    : isFullscreenMobile
+      ? 'fixed inset-0 z-[100] md:hidden'
+      : `fixed right-4 md:right-6 z-[90] transition-all duration-300 ease-out ${
+          isFloating
+            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+            : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+        }`;
+
+  const panelContainerStyle = isDocked
+    ? { width: 'clamp(440px, 32vw, 520px)' }
+    : isFullscreenMobile
+      ? undefined
+      : {
+          width: 'min(380px, calc(100vw - 2rem))',
+          height: 'min(520px, calc(100vh - 2rem))',
+          bottom: 'max(6rem, calc(env(safe-area-inset-bottom, 0px) + 4rem))',
+        };
+
   return (
     <>
-      {!isDocked && !isFullscreenMobile && (
-        <div
-          ref={panelRef}
-          className={`fixed right-4 md:right-6 z-[90] transition-all duration-300 ease-out ${
-            isFloating
-              ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
-              : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
-          }`}
-          style={{
-            width: 'min(380px, calc(100vw - 2rem))',
-            height: 'min(520px, calc(100vh - 2rem))',
-            bottom: 'max(6rem, calc(env(safe-area-inset-bottom, 0px) + 4rem))',
-          }}
-        >
-          {isFloating && (
+      {hasOpenedPanel && (
+        <div ref={panelRef} className={panelContainerClass} style={panelContainerStyle}>
+          <div className="h-full">
             <ChatPanel
               isDark={isDark}
-              mode="floating"
-              onClose={() => onModeChange('closed')}
-              onToggleDock={handleToggleDock}
-            />
-          )}
-        </div>
-      )}
-
-      {isDocked && (
-        <aside
-          className="hidden md:block shrink-0 h-[100dvh] relative z-[80]"
-          style={{ width: 'clamp(440px, 32vw, 520px)' }}
-        >
-          <ChatPanel
-            isDark={isDark}
-            mode="docked"
-            onClose={() => onModeChange('closed')}
-            onToggleDock={handleToggleDock}
-          />
-        </aside>
-      )}
-
-      {isFullscreenMobile && (
-        <div className="fixed inset-0 z-[100] md:hidden">
-          <div className="h-[100dvh]">
-            <ChatPanel
-              isDark={isDark}
-              mode="fullscreen-mobile"
+              mode={isOpen ? mode : 'floating'}
               onClose={() => onModeChange('closed')}
               onToggleDock={handleToggleDock}
             />

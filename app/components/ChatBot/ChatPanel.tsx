@@ -90,6 +90,12 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
     );
   }, []);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   // 自动滚动到底部
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
