@@ -15,6 +15,8 @@ interface ChatPanelProps {
 
 // 快捷问题池
 const QUICK_QUESTIONS = [
+  '中国哪里在下雪？',
+  '浙江哪里在下雨？',
   '北京明天会下雨吗？',
   '上海未来一周天气预报',
   '杭州今天天气怎么样？',
@@ -189,6 +191,60 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                       : m
                   )
                 );
+                break;
+
+              case 'agent_plan':
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: genId(),
+                    role: 'tool',
+                    content: event.content,
+                    toolName: 'agent_plan',
+                    toolStatus: 'done',
+                  },
+                ]);
+                break;
+
+              case 'agent_step':
+                setMessages((prev) => {
+                  if (event.status === 'done' && event.toolName) {
+                    let updated = false;
+                    const nextMessages = prev.map((m) => {
+                      if (!updated && m.role === 'tool' && m.toolName === event.toolName && m.toolStatus === 'calling') {
+                        updated = true;
+                        return { ...m, content: event.title, toolStatus: 'done' as const };
+                      }
+                      return m;
+                    });
+
+                    if (updated) return nextMessages;
+                  }
+
+                  return [
+                    ...prev.filter((m) => !(m.role === 'tool' && m.toolName === event.toolName && m.content === event.title)),
+                    {
+                      id: genId(),
+                      role: 'tool',
+                      content: event.title,
+                      toolName: event.toolName || 'agent_step',
+                      toolStatus: event.status === 'running' ? 'calling' : 'done',
+                    },
+                  ];
+                });
+                break;
+
+              case 'agent_observation':
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: genId(),
+                    role: 'tool',
+                    content: event.content,
+                    toolName: 'agent_observation',
+                    toolStatus: 'done',
+                  },
+                ]);
                 break;
 
               case 'tool_start':

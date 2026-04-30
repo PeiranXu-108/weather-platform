@@ -3,6 +3,7 @@
 import React from 'react';
 import type {
   CitySearchPanel,
+  ConditionSearchPanel,
   CurrentForecastPanel,
   Forecast30dPanel,
   WeatherAssistantPanel,
@@ -244,6 +245,89 @@ function CitySearchCard({ panel, isDark }: { panel: CitySearchPanel; isDark: boo
   );
 }
 
+function conditionLabel(condition: ConditionSearchPanel['condition']): string {
+  const labels: Record<ConditionSearchPanel['condition'], string> = {
+    snow: '降雪',
+    rain: '降雨',
+    hot: '高温',
+    cold: '低温',
+    wind: '大风',
+    clear: '晴好',
+    cloudy: '多云',
+    overcast: '阴天',
+    fog: '雾',
+    haze: '霾',
+    thunder: '雷雨',
+    humid: '潮湿',
+    dry: '干燥',
+    comfortable: '舒适',
+    adverse: '恶劣天气',
+  };
+  return labels[condition];
+}
+
+function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; isDark: boolean }) {
+  const scopeLabel = panel.scope === 'province' && panel.province ? panel.province : '全国主要城市';
+
+  return (
+    <PanelShell isDark={isDark}>
+      <div className={`p-3 ${isDark ? 'bg-cyan-500/10' : 'bg-cyan-50/90'}`}>
+        <div className={`text-[11px] font-medium ${isDark ? 'text-cyan-200' : 'text-cyan-700'}`}>
+          {panel.title}
+        </div>
+        <div className="mt-1 text-sm font-semibold">
+          {scopeLabel} · {conditionLabel(panel.condition)}
+        </div>
+        <div className={`mt-0.5 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          已检查 {panel.checkedCount} 个城市{panel.failedCount > 0 ? `，${panel.failedCount} 个失败` : ''}
+          {panel.updatedAt ? ` · 更新 ${panel.updatedAt}` : ''}
+        </div>
+      </div>
+
+      <div className="max-h-72 overflow-y-auto p-3">
+        {panel.matchedLocations.length === 0 ? (
+          <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-white/[0.06] text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
+            暂未在已检查城市中发现匹配地点。
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {panel.matchedLocations.map((location) => (
+              <div
+                key={`${location.province ?? ''}-${location.name}-${location.updatedAt ?? ''}`}
+                className={`rounded-xl px-2.5 py-2 ${isDark ? 'bg-white/[0.06]' : 'bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-16 shrink-0 font-semibold">{location.name}</span>
+                  <span className={`min-w-0 flex-1 truncate ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {location.province || scopeLabel}
+                  </span>
+                  {typeof location.temperatureC === 'number' && Number.isFinite(location.temperatureC) && (
+                    <span className="shrink-0 font-semibold">{Math.round(location.temperatureC)}°</span>
+                  )}
+                </div>
+                <div className={`mt-1 text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                  {location.conditionText}
+                  {typeof location.precipMm === 'number' ? ` · 降水 ${location.precipMm} mm` : ''}
+                  {typeof location.windKph === 'number' ? ` · 风速 ${Math.round(location.windKph)} km/h` : ''}
+                </div>
+                {location.updatedAt && (
+                  <div className={`mt-1 text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                    更新 {location.updatedAt}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={`border-t px-3 py-2 text-[10px] ${isDark ? 'border-white/10 text-slate-400' : 'border-slate-200/80 text-slate-500'}`}>
+        {panel.confidenceNote}
+      </div>
+    </PanelShell>
+  );
+}
+
 function ErrorCard({ panel, isDark }: { panel: WeatherErrorPanel; isDark: boolean }) {
   return (
     <PanelShell isDark={isDark}>
@@ -271,6 +355,9 @@ export default function WeatherPanel({ panel, isDark }: WeatherPanelProps) {
   }
   if (panel.kind === 'city_search') {
     return <CitySearchCard panel={panel} isDark={isDark} />;
+  }
+  if (panel.kind === 'condition_search') {
+    return <ConditionSearchCard panel={panel} isDark={isDark} />;
   }
   return <ErrorCard panel={panel} isDark={isDark} />;
 }

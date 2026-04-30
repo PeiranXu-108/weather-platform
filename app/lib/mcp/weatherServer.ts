@@ -8,8 +8,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getEnglishCityName, searchCities } from '@/app/utils/citySearch';
+import { listChinaWeatherLocations } from '@/app/lib/weather/chinaLocations';
 import type {
   CitySearchPanel,
+  ConditionSearchPanel,
   CurrentForecastPanel,
   Forecast30dPanel,
   WeatherAssistantPanel,
@@ -24,6 +26,53 @@ const SCHEMA_VERSION = 'weather.assistant.v1' as const;
 const MIN_FORECAST_DAYS = 1;
 const WEATHER_API_DAYS = 3;
 const MAX_FORECAST_DAYS = 30;
+const configuredBatchConcurrency = Number(process.env.WEATHER_BATCH_CONCURRENCY);
+const DEFAULT_BATCH_CONCURRENCY = Number.isFinite(configuredBatchConcurrency)
+  ? Math.max(1, Math.round(configuredBatchConcurrency))
+  : 5;
+const MAX_CONDITION_SEARCH_LIMIT = 300;
+const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEARCH_LIMIT);
+const DEFAULT_CONDITION_SEARCH_LIMIT = Number.isFinite(configuredConditionSearchLimit)
+  ? Math.min(MAX_CONDITION_SEARCH_LIMIT, Math.max(1, Math.round(configuredConditionSearchLimit)))
+  : 150;
+const WEATHER_CONDITION_VALUES = [
+  'snow',
+  'rain',
+  'hot',
+  'cold',
+  'wind',
+  'clear',
+  'cloudy',
+  'overcast',
+  'fog',
+  'haze',
+  'thunder',
+  'humid',
+  'dry',
+  'comfortable',
+  'adverse',
+] as const;
+
+type WeatherConditionIntent = ConditionSearchPanel['condition'];
+
+interface BatchWeatherLocation {
+  name: string;
+  province?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface BatchWeatherResult {
+  name: string;
+  province?: string;
+  temperatureC?: number;
+  conditionText: string;
+  precipMm?: number;
+  windKph?: number;
+  updatedAt?: string;
+  isMatch: boolean;
+  error?: string;
+}
 
 function panelId(kind: WeatherAssistantPanel['kind']): string {
   return `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -49,6 +98,27 @@ function currentForecastTitle(prefix: string, days: number): string {
 
 function forecastTitle(days: number): string {
   return `未来${days}天天气预报`;
+}
+
+function conditionTitle(condition: WeatherConditionIntent, scope: string): string {
+  const conditionLabel: Record<WeatherConditionIntent, string> = {
+    snow: '降雪',
+    rain: '降雨',
+    hot: '高温',
+    cold: '低温',
+    wind: '大风',
+    clear: '晴好',
+    cloudy: '多云',
+    overcast: '阴天',
+    fog: '雾',
+    haze: '霾',
+    thunder: '雷雨',
+    humid: '潮湿',
+    dry: '干燥',
+    comfortable: '舒适',
+    adverse: '恶劣天气',
+  };
+  return `${scope}${conditionLabel[condition]}检索`;
 }
 
 function buildErrorPanel(title: string, message: string, toolName?: string): WeatherErrorPanel {
@@ -178,6 +248,191 @@ async function fetchWeatherApiForecast(query: string) {
   }
 
   return response.json();
+}
+
+function weatherQueryForLocation(location: BatchWeatherLocation): string {
+  if (typeof location.latitude === 'number' && typeof location.longitude === 'number') {
+    return `${location.latitude},${location.longitude}`;
+  }
+  return getEnglishCityName(location.name);
+}
+
+function matchWeatherCondition(data: any, condition: WeatherConditionIntent): boolean {
+  const current = data.current ?? {};
+  const conditionText = String(current.condition?.text ?? '').toLowerCase();
+  const tempC = toNumber(current.temp_c, Number.NaN);
+  const precipMm = toNumber(current.precip_mm, 0);
+  const windKph = toNumber(current.wind_kph, 0);
+  const humidity = toNumber(current.humidity, Number.NaN);
+  const hasPrecipitation = precipMm > 0.2 || /雨|雪|rain|shower|drizzle|snow|sleet/.test(conditionText);
+  const hasStrongWind = /大风|强风|wind|gale/.test(conditionText) || windKph >= 39;
+
+  if (condition === 'snow') {
+    return /雪|snow|sleet|blizzard|freezing rain/.test(conditionText);
+  }
+  if (condition === 'rain') {
+    return /雨|rain|shower|drizzle|storm/.test(conditionText) || precipMm > 0.2;
+  }
+  if (condition === 'hot') {
+    return Number.isFinite(tempC) && tempC >= 35;
+  }
+  if (condition === 'cold') {
+    return Number.isFinite(tempC) && tempC <= 0;
+  }
+  if (condition === 'wind') {
+    return hasStrongWind;
+  }
+  if (condition === 'cloudy') {
+    return /多云|少云|cloudy|partly cloudy|mostly cloudy/.test(conditionText);
+  }
+  if (condition === 'overcast') {
+    return /阴|阴天|阴沉|overcast/.test(conditionText);
+  }
+  if (condition === 'fog') {
+    return /雾|fog|mist/.test(conditionText);
+  }
+  if (condition === 'haze') {
+    return /霾|雾霾|沙尘|haze|smog|dust/.test(conditionText);
+  }
+  if (condition === 'thunder') {
+    return /雷|thunder|storm/.test(conditionText);
+  }
+  if (condition === 'humid') {
+    return Number.isFinite(humidity) && humidity >= 80;
+  }
+  if (condition === 'dry') {
+    return Number.isFinite(humidity) && humidity <= 35;
+  }
+  if (condition === 'comfortable') {
+    return (
+      !hasPrecipitation &&
+      !hasStrongWind &&
+      (!Number.isFinite(tempC) || (tempC >= 10 && tempC <= 28)) &&
+      (!Number.isFinite(humidity) || (humidity >= 35 && humidity <= 75)) &&
+      !/霾|雾霾|沙尘|haze|smog|dust|雷|thunder|storm/.test(conditionText)
+    );
+  }
+  if (condition === 'adverse') {
+    return (
+      hasPrecipitation ||
+      hasStrongWind ||
+      /霾|雾霾|沙尘|haze|smog|dust|雾|fog|mist|雷|thunder|storm|blizzard/.test(conditionText) ||
+      (Number.isFinite(tempC) && (tempC >= 35 || tempC <= 0))
+    );
+  }
+  return (
+    /晴|少云|局部多云|sunny|clear|partly cloudy/.test(conditionText) &&
+    precipMm <= 0.2 &&
+    windKph < 39 &&
+    (!Number.isFinite(tempC) || (tempC > 0 && tempC < 35))
+  );
+}
+
+function normalizeBatchWeatherResult(
+  location: BatchWeatherLocation,
+  data: any,
+  condition: WeatherConditionIntent
+): BatchWeatherResult {
+  const current = data.current ?? {};
+  const weatherLocation = data.location ?? {};
+
+  return {
+    name: location.name || String(weatherLocation.name ?? ''),
+    province: location.province,
+    temperatureC: toNumber(current.temp_c, Number.NaN),
+    conditionText: String(current.condition?.text ?? '未知'),
+    precipMm: toNumber(current.precip_mm, 0),
+    windKph: toNumber(current.wind_kph, 0),
+    updatedAt: current.last_updated ? String(current.last_updated) : undefined,
+    isMatch: matchWeatherCondition(data, condition),
+  };
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await worker(items[index]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, runWorker);
+  await Promise.all(workers);
+  return results;
+}
+
+async function fetchBatchCurrentWeather(
+  locations: BatchWeatherLocation[],
+  condition: WeatherConditionIntent,
+  concurrency = DEFAULT_BATCH_CONCURRENCY
+): Promise<BatchWeatherResult[]> {
+  return mapWithConcurrency(locations, concurrency, async (location) => {
+    try {
+      const query = weatherQueryForLocation(location);
+      const data = await fetchWeatherApiForecast(query);
+      return normalizeBatchWeatherResult(location, data, condition);
+    } catch (firstError) {
+      try {
+        const query = weatherQueryForLocation(location);
+        const data = await fetchWeatherApiForecast(query);
+        return normalizeBatchWeatherResult(location, data, condition);
+      } catch (secondError) {
+        return {
+          name: location.name,
+          province: location.province,
+          conditionText: '查询失败',
+          isMatch: false,
+          error: secondError instanceof Error
+            ? secondError.message
+            : firstError instanceof Error
+              ? firstError.message
+              : '未知错误',
+        };
+      }
+    }
+  });
+}
+
+function buildConditionSearchPanel(params: {
+  condition: WeatherConditionIntent;
+  scope: 'china' | 'province';
+  province?: string;
+  results: BatchWeatherResult[];
+}): ConditionSearchPanel {
+  const checked = params.results.filter((result) => !result.error);
+  const matched = checked.filter((result) => result.isMatch);
+  const scopeLabel = params.scope === 'province' && params.province ? params.province : '全国主要城市';
+  const updatedAt = checked.find((result) => result.updatedAt)?.updatedAt;
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    id: panelId('condition_search'),
+    kind: 'condition_search',
+    title: conditionTitle(params.condition, scopeLabel),
+    condition: params.condition,
+    scope: params.scope,
+    province: params.province,
+    checkedCount: checked.length,
+    failedCount: params.results.length - checked.length,
+    updatedAt,
+    confidenceNote: `结果基于已检查的${scopeLabel}候选城市实时天气，不代表雷达级全域覆盖。`,
+    matchedLocations: matched.map((result) => ({
+      name: result.name,
+      province: result.province,
+      temperatureC: result.temperatureC,
+      conditionText: result.conditionText,
+      precipMm: result.precipMm,
+      windKph: result.windKph,
+      updatedAt: result.updatedAt,
+    })),
+  };
 }
 
 async function fetchQWeather30d(longitude: number, latitude: number) {
@@ -409,6 +664,164 @@ export function createWeatherServer(): McpServer {
           '城市搜索出错',
           `城市搜索出错: ${error instanceof Error ? error.message : '未知错误'}`,
           'search_city'
+        );
+        return {
+          content: textContent(panel),
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================================
+  // Tool 5: list_china_weather_locations - 获取中国天气检索候选城市
+  // ============================================================
+  server.registerTool(
+    'list_china_weather_locations',
+    {
+      description: '列出中国区域天气检索使用的候选城市。可按省份过滤，返回城市中文名、英文名、省份、经纬度和优先级。',
+      inputSchema: {
+        scope: z.enum(['china', 'province']).optional().describe('检索范围，默认 china'),
+        province: z.string().optional().describe('省份名称，如"浙江"、"新疆"。scope=province 时使用。'),
+      },
+    },
+    async ({ scope, province }) => {
+      try {
+        const locations = listChinaWeatherLocations(scope === 'province' ? province : undefined);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              scope: scope ?? 'china',
+              province,
+              count: locations.length,
+              locations: locations.map((location) => ({
+                name: location.nameZh,
+                englishName: location.nameEn,
+                province: location.province,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                priority: location.priority,
+              })),
+            }),
+          }],
+        };
+      } catch (error) {
+        const panel = buildErrorPanel(
+          '候选城市查询出错',
+          `候选城市查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'list_china_weather_locations'
+        );
+        return {
+          content: textContent(panel),
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================================
+  // Tool 6: batch_get_current_weather - 批量获取实时天气
+  // ============================================================
+  server.registerTool(
+    'batch_get_current_weather',
+    {
+      description: '批量获取多个城市或坐标的实时天气，并可按指定天气条件标记是否匹配。适合区域推理，不适合单城市查询。',
+      inputSchema: {
+        locations: z.array(z.object({
+          name: z.string().describe('城市中文名或英文名'),
+          province: z.string().optional().describe('省份名称'),
+          latitude: z.number().optional().describe('纬度'),
+          longitude: z.number().optional().describe('经度'),
+        })).min(1).max(MAX_CONDITION_SEARCH_LIMIT).describe('待查询城市列表'),
+        condition: z.enum(WEATHER_CONDITION_VALUES).optional().describe('需要筛选的天气条件。clear=晴朗/天晴；comfortable=天气好/舒适/适合出门；adverse=天气差/恶劣天气；hot 仅表示高温。'),
+      },
+    },
+    async ({ locations, condition }) => {
+      try {
+        const weatherCondition = (condition ?? 'snow') as WeatherConditionIntent;
+        const results = await fetchBatchCurrentWeather(locations, weatherCondition);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              condition: weatherCondition,
+              checkedCount: results.filter((result) => !result.error).length,
+              failedCount: results.filter((result) => result.error).length,
+              results,
+            }),
+          }],
+        };
+      } catch (error) {
+        const panel = buildErrorPanel(
+          '批量天气查询出错',
+          `批量天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'batch_get_current_weather'
+        );
+        return {
+          content: textContent(panel),
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================================
+  // Tool 7: search_weather_by_condition - 区域条件天气检索
+  // ============================================================
+  server.registerTool(
+    'search_weather_by_condition',
+    {
+      description: '在中国全国或指定省份候选城市中检索指定天气条件，如下雪、下雨、高温、低温、大风、晴朗、多云、阴天、雾、霾、雷雨、潮湿、干燥、舒适宜出门、天气较差。注意：天气好/适合出门应使用 comfortable；天晴/晴朗使用 clear；不要把这些问题归为 hot。返回结构化结果面板。',
+      inputSchema: {
+        scope: z.enum(['china', 'province']).optional().describe('检索范围，默认 china'),
+        province: z.string().optional().describe('省份名称，如"浙江"。scope=province 时使用。'),
+        condition: z.enum(WEATHER_CONDITION_VALUES).describe('天气条件。clear=晴朗/天晴；comfortable=天气好/舒适/适合出门；adverse=天气差/恶劣天气；hot=高温，只有用户明确问热/高温时使用。'),
+        limit: z.number().min(1).max(MAX_CONDITION_SEARCH_LIMIT).optional().describe(`最多检查的候选城市数量，默认${DEFAULT_CONDITION_SEARCH_LIMIT}，最高${MAX_CONDITION_SEARCH_LIMIT}`),
+      },
+    },
+    async ({ scope, province, condition, limit }) => {
+      try {
+        const normalizedScope = scope ?? (province ? 'province' : 'china');
+        const searchLimit = Math.min(
+          MAX_CONDITION_SEARCH_LIMIT,
+          Math.max(1, Math.round(toNumber(limit, DEFAULT_CONDITION_SEARCH_LIMIT)))
+        );
+        const locations = listChinaWeatherLocations(normalizedScope === 'province' ? province : undefined)
+          .slice(0, searchLimit)
+          .map((location) => ({
+            name: location.nameZh,
+            province: location.province,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          }));
+
+        if (locations.length === 0) {
+          const panel = buildConditionSearchPanel({
+            condition,
+            scope: normalizedScope,
+            province,
+            results: [],
+          });
+          return { content: textContent(panel) };
+        }
+
+        const results = await fetchBatchCurrentWeather(locations, condition);
+        const panel = buildConditionSearchPanel({
+          condition,
+          scope: normalizedScope,
+          province,
+          results,
+        });
+
+        return {
+          content: textContent(panel),
+        };
+      } catch (error) {
+        const panel = buildErrorPanel(
+          '区域天气检索出错',
+          `区域天气检索出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          'search_weather_by_condition'
         );
         return {
           content: textContent(panel),

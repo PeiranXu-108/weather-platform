@@ -18,11 +18,28 @@ const TOOL_NAME_MAP: Record<string, string> = {
   get_forecast_30d: '30天预报',
   get_weather_at_my_location: '当前位置天气',
   search_city: '城市搜索',
+  list_china_weather_locations: '候选城市',
+  batch_get_current_weather: '批量天气',
+  search_weather_by_condition: '区域天气检索',
+  agent_plan: 'Agent 计划',
+  agent_step: 'Agent 步骤',
+  agent_observation: 'Agent 观察',
 };
 
-function ToolCallIndicator({ toolName, status, isDark }: { toolName: string; status: 'calling' | 'done'; isDark: boolean }) {
+function ToolCallIndicator({
+  toolName,
+  status,
+  isDark,
+  content,
+}: {
+  toolName: string;
+  status: 'calling' | 'done';
+  isDark: boolean;
+  content?: string;
+}) {
   const displayName = TOOL_NAME_MAP[toolName] || toolName;
   const isCalling = status === 'calling';
+  const label = content || (isCalling ? `正在查询${displayName}...` : `${displayName}查询完成`);
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${
@@ -35,14 +52,14 @@ function ToolCallIndicator({ toolName, status, isDark }: { toolName: string; sta
           <svg className="w-3 h-3 animate-spin" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
           </svg>
-          <span>正在查询{displayName}...</span>
+          <span className="min-w-0 whitespace-normal text-left">{label}</span>
         </>
       ) : (
         <>
           <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
             <path fillRule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm3.844-8.791a.75.75 0 0 0-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 1 0-1.114 1.004l2.25 2.5a.75.75 0 0 0 1.15-.043l4.25-5.5Z" clipRule="evenodd" />
           </svg>
-          <span>{displayName}查询完成</span>
+          <span className="min-w-0 whitespace-normal text-left">{label}</span>
         </>
       )}
     </div>
@@ -62,6 +79,7 @@ export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
           toolName={message.toolName}
           status={message.toolStatus || 'done'}
           isDark={isDark}
+          content={message.content}
         />
       </div>
     );

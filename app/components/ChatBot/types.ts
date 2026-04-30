@@ -91,6 +91,42 @@ export interface CitySearchPanel extends WeatherPanelBase {
   }>;
 }
 
+export interface ConditionSearchPanel extends WeatherPanelBase {
+  kind: 'condition_search';
+  title: string;
+  condition:
+    | 'snow'
+    | 'rain'
+    | 'hot'
+    | 'cold'
+    | 'wind'
+    | 'clear'
+    | 'cloudy'
+    | 'overcast'
+    | 'fog'
+    | 'haze'
+    | 'thunder'
+    | 'humid'
+    | 'dry'
+    | 'comfortable'
+    | 'adverse';
+  scope: 'china' | 'province';
+  province?: string;
+  checkedCount: number;
+  failedCount: number;
+  updatedAt?: string;
+  confidenceNote: string;
+  matchedLocations: Array<{
+    name: string;
+    province?: string;
+    temperatureC?: number;
+    conditionText: string;
+    precipMm?: number;
+    windKph?: number;
+    updatedAt?: string;
+  }>;
+}
+
 export interface WeatherErrorPanel extends WeatherPanelBase {
   kind: 'error';
   title: string;
@@ -101,12 +137,16 @@ export interface WeatherErrorPanel extends WeatherPanelBase {
 export type WeatherAssistantPanel =
   | CurrentForecastPanel
   | Forecast30dPanel
+  | ConditionSearchPanel
   | CitySearchPanel
   | WeatherErrorPanel;
 
 export type ChatSSEEvent =
   | { type: 'text'; content: string }
   | { type: 'panel'; panel: WeatherAssistantPanel }
+  | { type: 'agent_plan'; content: string }
+  | { type: 'agent_step'; title: string; toolName?: string; status: 'running' | 'done' }
+  | { type: 'agent_observation'; content: string }
   | { type: 'tool_start'; name: string; args?: Record<string, unknown> }
   | { type: 'tool_end'; name: string }
   | { type: 'error'; content: string; panel?: WeatherErrorPanel }
