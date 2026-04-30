@@ -9,13 +9,17 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createWeatherServer } from './weatherServer';
 
+interface CreateMcpClientOptions {
+  signal?: AbortSignal;
+}
+
 /**
  * 创建一个已连接到 MCP Weather Server 的 Client
  * 
  * 使用 InMemoryTransport 实现进程内通信，适合 serverless 环境。
  * 每次请求创建新的 client-server 对，保证无状态。
  */
-export async function createMcpClient(): Promise<Client> {
+export async function createMcpClient(options: CreateMcpClientOptions = {}): Promise<Client> {
   const server = createWeatherServer();
 
   // 创建内存传输层的成对链接
@@ -29,7 +33,7 @@ export async function createMcpClient(): Promise<Client> {
     version: '1.0.0',
   });
 
-  await client.connect(clientTransport);
+  await client.connect(clientTransport, { signal: options.signal });
 
   return client;
 }

@@ -4,11 +4,13 @@ import type { WeatherResponse } from '@/app/types/weather';
 
 import { authOptions } from '@/app/lib/auth';
 import { recordApiUsage } from '@/app/lib/apiUsage';
+import { isTimeoutError, withTimeoutSignal } from '@/app/lib/abort';
 
 export const dynamic = 'force-dynamic';
 
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL;
+const WEATHER_API_TIMEOUT_MS = 8_000;
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,10 +31,17 @@ export async function GET(request: NextRequest) {
     }
     
     const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=3&aqi=no&alerts=no&lang=zh`;
-    
-    const response = await fetch(url, {
-      next: { revalidate: 1800 } // Cache for 30 minutes
-    });
+    const timeout = withTimeoutSignal(request.signal, WEATHER_API_TIMEOUT_MS, 'WeatherAPI request timed out');
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
+        signal: timeout.signal,
+        next: { revalidate: 1800 } // Cache for 30 minutes
+      });
+    } finally {
+      timeout.cleanup();
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -50,11 +59,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
+    if (request.signal.aborted) {
+      return new Response(null, { status: 499 });
+    }
+
     console.error('Error fetching weather data:', error);
     return NextResponse.json(
       { error: 'Failed to fetch weather data' },
-      { status: 500 }
+      { status: isTimeoutError(error) ? 504 : 500 }
     );
   }
 }
-

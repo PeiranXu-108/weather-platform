@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { createMcpClient, mcpToolsToOpenAITools } from '@/app/lib/mcp/createMcpClient';
+import { isAbortError, throwIfAborted } from '@/app/lib/abort';
 import {
   WEATHER_ASSISTANT_SCHEMA_VERSION,
   type ChatSSEEvent,
@@ -14,7 +15,11 @@ interface RunWeatherAgentOptions {
   userLocation?: { latitude: number; longitude: number };
   qwenClient: OpenAI;
   emit: AgentEmit;
+  signal?: AbortSignal;
 }
+
+const QWEN_NON_STREAM_TIMEOUT_MS = 30_000;
+const QWEN_STREAM_TIMEOUT_MS = 60_000;
 
 const MAX_CONDITION_SEARCH_LIMIT = 300;
 const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEARCH_LIMIT);
@@ -129,8 +134,10 @@ function emitEvent(emit: AgentEmit, event: ChatSSEEvent) {
 async function summarizeAreaConditionResult(
   qwenClient: OpenAI,
   userMessage: string,
-  toolResultText: string
+  toolResultText: string,
+  signal?: AbortSignal
 ): Promise<string> {
+  throwIfAborted(signal);
   const completion = await qwenClient.chat.completions.create({
     model: 'qwen-plus',
     messages: [
@@ -141,6 +148,9 @@ async function summarizeAreaConditionResult(
       },
     ],
     stream: false,
+  }, {
+    signal,
+    timeout: QWEN_NON_STREAM_TIMEOUT_MS,
   });
 
   return completion.choices[0]?.message?.content || '已完成区域天气检索，详细结果见面板。';
@@ -150,12 +160,14 @@ async function runAreaConditionSearch(
   options: RunWeatherAgentOptions,
   intent: AreaConditionIntent
 ) {
-  const mcpClient = await createMcpClient();
+  throwIfAborted(options.signal);
+  const mcpClient = await createMcpClient({ signal: options.signal });
   const userMessage = latestUserMessage(options.messages);
   const scopeLabel = intent.scope === 'province' && intent.province ? intent.province : '全国主要城市';
   const toolName = 'search_weather_by_condition';
 
   try {
+    throwIfAborted(options.signal);
     emitEvent(options.emit, {
       type: 'agent_plan',
       content: `识别为区域天气检索：扫描${scopeLabel}，筛选正在${intent.phrase}的地点。`,
@@ -175,7 +187,8 @@ async function runAreaConditionSearch(
         condition: intent.condition,
         limit: DEFAULT_CONDITION_SEARCH_LIMIT,
       },
-    });
+    }, undefined, { signal: options.signal });
+    throwIfAborted(options.signal);
 
     const toolResultText = (result.content as Array<{ type: string; text: string }>)
       .filter((content) => content.type === 'text')
@@ -193,7 +206,13 @@ async function runAreaConditionSearch(
       }
     }
 
-    const summary = await summarizeAreaConditionResult(options.qwenClient, userMessage, toolResultText);
+    const summary = await summarizeAreaConditionResult(
+      options.qwenClient,
+      userMessage,
+      toolResultText,
+      options.signal
+    );
+    throwIfAborted(options.signal);
     options.emit({ type: 'text', content: summary });
     options.emit({
       type: 'agent_step',
@@ -202,6 +221,7 @@ async function runAreaConditionSearch(
       status: 'done',
     });
   } catch (error) {
+    if (isAbortError(error) || options.signal?.aborted) throw error;
     const errorMsg = error instanceof Error ? error.message : '区域天气检索失败';
     options.emit({
       type: 'panel',
@@ -220,10 +240,11 @@ async function runAreaConditionSearch(
 }
 
 async function runToolCallingChat(options: RunWeatherAgentOptions) {
-  const mcpClient = await createMcpClient();
+  throwIfAborted(options.signal);
+  const mcpClient = await createMcpClient({ signal: options.signal });
 
   try {
-    const { tools: mcpTools } = await mcpClient.listTools();
+    const { tools: mcpTools } = await mcpClient.listTools(undefined, { signal: options.signal });
     const openaiTools = mcpToolsToOpenAITools(mcpTools);
     const systemPrompt = buildSystemPrompt(options.userLocation);
     const allMessages: OpenAI.ChatCompletionMessageParam[] = [
@@ -238,13 +259,18 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
     const maxToolRounds = 5;
 
     while (toolCallRound < maxToolRounds) {
+      throwIfAborted(options.signal);
       const completion = await options.qwenClient.chat.completions.create({
         model: 'qwen-plus',
         messages: allMessages,
         tools: openaiTools as OpenAI.ChatCompletionTool[],
         stream: false,
+      }, {
+        signal: options.signal,
+        timeout: QWEN_NON_STREAM_TIMEOUT_MS,
       });
 
+      throwIfAborted(options.signal);
       const responseMessage = completion.choices[0]?.message;
       if (!responseMessage) break;
 
@@ -263,6 +289,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
       } as OpenAI.ChatCompletionMessageParam);
 
       for (const toolCall of responseMessage.tool_calls) {
+        throwIfAborted(options.signal);
         if (toolCall.type !== 'function') continue;
         const fnToolCall = toolCall as OpenAI.Chat.Completions.ChatCompletionMessageFunctionToolCall;
         const toolName = fnToolCall.function.name;
@@ -280,7 +307,8 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
           const result = await mcpClient.callTool({
             name: toolName,
             arguments: toolArgs,
-          });
+          }, undefined, { signal: options.signal });
+          throwIfAborted(options.signal);
           const toolResultText = (result.content as Array<{ type: string; text: string }>)
             .filter((content) => content.type === 'text')
             .map((content) => content.text)
@@ -297,6 +325,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
             tool_call_id: toolCall.id,
           } as OpenAI.ChatCompletionMessageParam);
         } catch (toolError) {
+          if (isAbortError(toolError) || options.signal?.aborted) throw toolError;
           const errorMsg = toolError instanceof Error ? toolError.message : '工具调用失败';
           const panel = buildErrorPanel('工具调用失败', errorMsg, toolName);
           options.emit({ type: 'panel', panel });
@@ -317,9 +346,13 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
       model: 'qwen-plus',
       messages: allMessages,
       stream: true,
+    }, {
+      signal: options.signal,
+      timeout: QWEN_STREAM_TIMEOUT_MS,
     });
 
     for await (const chunk of finalStream) {
+      throwIfAborted(options.signal);
       const delta = chunk.choices[0]?.delta;
       if (delta?.content) {
         options.emit({ type: 'text', content: delta.content });
@@ -331,6 +364,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
 }
 
 export async function runWeatherAgent(options: RunWeatherAgentOptions) {
+  throwIfAborted(options.signal);
   const userMessage = latestUserMessage(options.messages);
   const areaConditionIntent = detectAreaConditionIntent(userMessage);
 

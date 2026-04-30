@@ -8,6 +8,7 @@
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { runWeatherAgent } from '@/app/lib/agent/weatherAgent';
+import { createAbortError, isAbortError } from '@/app/lib/abort';
 import type { ChatSSEEvent } from '@/app/components/ChatBot/types';
 
 const qwenClient = new OpenAI({
@@ -42,10 +43,38 @@ export async function POST(request: NextRequest) {
     }
 
     const encoder = new TextEncoder();
+    const abortController = new AbortController();
+    const abortFromRequest = () => {
+      abortController.abort(request.signal.reason ?? createAbortError());
+    };
+
+    if (request.signal.aborted) {
+      abortFromRequest();
+    } else {
+      request.signal.addEventListener('abort', abortFromRequest, { once: true });
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
+        let closed = false;
+        const close = () => {
+          if (closed) return;
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // The client may have already closed the stream.
+          }
+        };
+
         const emit = (event: ChatSSEEvent) => {
-          controller.enqueue(encoder.encode(formatSSE(event)));
+          if (closed || abortController.signal.aborted) return;
+          try {
+            controller.enqueue(encoder.encode(formatSSE(event)));
+          } catch (error) {
+            closed = true;
+            abortController.abort(error);
+          }
         };
 
         try {
@@ -59,11 +88,17 @@ export async function POST(request: NextRequest) {
                 : undefined,
             qwenClient,
             emit,
+            signal: abortController.signal,
           });
 
           emit({ type: 'done' });
-          controller.close();
+          close();
         } catch (error) {
+          if (isAbortError(error) || abortController.signal.aborted) {
+            close();
+            return;
+          }
+
           console.error('Chat stream error:', error);
           const errorMsg = error instanceof Error ? error.message : '未知错误';
           emit({
@@ -71,8 +106,16 @@ export async function POST(request: NextRequest) {
             content: `处理请求时出错: ${errorMsg}`,
           });
           emit({ type: 'done' });
-          controller.close();
+          close();
+        } finally {
+          request.signal.removeEventListener('abort', abortFromRequest);
         }
+      },
+      cancel(reason) {
+        if (!abortController.signal.aborted) {
+          abortController.abort(reason ?? createAbortError());
+        }
+        request.signal.removeEventListener('abort', abortFromRequest);
       },
     });
 

@@ -9,6 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getEnglishCityName, searchCities } from '@/app/utils/citySearch';
 import { listChinaWeatherLocations } from '@/app/lib/weather/chinaLocations';
+import { isAbortError, isTimeoutError, throwIfAborted, withTimeoutSignal } from '@/app/lib/abort';
 import type {
   CitySearchPanel,
   ConditionSearchPanel,
@@ -35,6 +36,8 @@ const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEAR
 const DEFAULT_CONDITION_SEARCH_LIMIT = Number.isFinite(configuredConditionSearchLimit)
   ? Math.min(MAX_CONDITION_SEARCH_LIMIT, Math.max(1, Math.round(configuredConditionSearchLimit)))
   : 150;
+const WEATHER_API_TIMEOUT_MS = 8_000;
+const QWEATHER_API_TIMEOUT_MS = 10_000;
 const WEATHER_CONDITION_VALUES = [
   'snow',
   'rain',
@@ -235,13 +238,21 @@ function buildForecast30dPanel(
   };
 }
 
-async function fetchWeatherApiForecast(query: string) {
+async function fetchWeatherApiForecast(query: string, signal?: AbortSignal) {
   if (!API_KEY || !API_BASE_URL) {
     throw new Error('天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL');
   }
 
+  throwIfAborted(signal);
   const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=${WEATHER_API_DAYS}&aqi=no&alerts=no&lang=zh`;
-  const response = await fetch(url);
+  const timeout = withTimeoutSignal(signal, WEATHER_API_TIMEOUT_MS, 'WeatherAPI request timed out');
+  let response: Response;
+
+  try {
+    response = await fetch(url, { signal: timeout.signal });
+  } finally {
+    timeout.cleanup();
+  }
 
   if (!response.ok) {
     throw new Error(`天气查询失败，HTTP 状态码: ${response.status}`);
@@ -348,16 +359,36 @@ function normalizeBatchWeatherResult(
   };
 }
 
+function buildFailedBatchWeatherResult(
+  location: BatchWeatherLocation,
+  error: unknown,
+  fallbackError?: unknown
+): BatchWeatherResult {
+  return {
+    name: location.name,
+    province: location.province,
+    conditionText: '查询失败',
+    isMatch: false,
+    error: error instanceof Error
+      ? error.message
+      : fallbackError instanceof Error
+        ? fallbackError.message
+        : '未知错误',
+  };
+}
+
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
-  worker: (item: T) => Promise<R>
+  worker: (item: T) => Promise<R>,
+  signal?: AbortSignal
 ): Promise<R[]> {
   const results: R[] = [];
   let nextIndex = 0;
 
   async function runWorker() {
     while (nextIndex < items.length) {
+      throwIfAborted(signal);
       const index = nextIndex++;
       results[index] = await worker(items[index]);
     }
@@ -371,33 +402,31 @@ async function mapWithConcurrency<T, R>(
 async function fetchBatchCurrentWeather(
   locations: BatchWeatherLocation[],
   condition: WeatherConditionIntent,
-  concurrency = DEFAULT_BATCH_CONCURRENCY
+  concurrency = DEFAULT_BATCH_CONCURRENCY,
+  signal?: AbortSignal
 ): Promise<BatchWeatherResult[]> {
   return mapWithConcurrency(locations, concurrency, async (location) => {
+    throwIfAborted(signal);
     try {
       const query = weatherQueryForLocation(location);
-      const data = await fetchWeatherApiForecast(query);
+      const data = await fetchWeatherApiForecast(query, signal);
       return normalizeBatchWeatherResult(location, data, condition);
     } catch (firstError) {
+      if (isAbortError(firstError) || signal?.aborted) throw firstError;
+      if (isTimeoutError(firstError)) {
+        return buildFailedBatchWeatherResult(location, firstError);
+      }
       try {
+        throwIfAborted(signal);
         const query = weatherQueryForLocation(location);
-        const data = await fetchWeatherApiForecast(query);
+        const data = await fetchWeatherApiForecast(query, signal);
         return normalizeBatchWeatherResult(location, data, condition);
       } catch (secondError) {
-        return {
-          name: location.name,
-          province: location.province,
-          conditionText: '查询失败',
-          isMatch: false,
-          error: secondError instanceof Error
-            ? secondError.message
-            : firstError instanceof Error
-              ? firstError.message
-              : '未知错误',
-        };
+        if (isAbortError(secondError) || signal?.aborted) throw secondError;
+        return buildFailedBatchWeatherResult(location, secondError, firstError);
       }
     }
-  });
+  }, signal);
 }
 
 function buildConditionSearchPanel(params: {
@@ -435,18 +464,27 @@ function buildConditionSearchPanel(params: {
   };
 }
 
-async function fetchQWeather30d(longitude: number, latitude: number) {
+async function fetchQWeather30d(longitude: number, latitude: number, signal?: AbortSignal) {
   if (!QWEATHER_API_KEY || !QWEATHER_API_BASE) {
     throw new Error('和风天气 API 未配置，请检查环境变量 QWEATHER_API_KEY 和 QWEATHER_API_BASE');
   }
 
+  throwIfAborted(signal);
   const location = `${longitude.toFixed(2)},${latitude.toFixed(2)}`;
   const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
-  const response = await fetch(url, {
-    headers: {
-      'X-QW-Api-Key': QWEATHER_API_KEY,
-    },
-  });
+  const timeout = withTimeoutSignal(signal, QWEATHER_API_TIMEOUT_MS, 'QWeather request timed out');
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        'X-QW-Api-Key': QWEATHER_API_KEY,
+      },
+      signal: timeout.signal,
+    });
+  } finally {
+    timeout.cleanup();
+  }
 
   if (!response.ok) {
     throw new Error(`30天预报查询失败，HTTP 状态码: ${response.status}`);
@@ -481,13 +519,14 @@ export function createWeatherServer(): McpServer {
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
       },
     },
-    async ({ city, days }) => {
+    async ({ city, days }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const forecastDays = normalizeForecastDays(days);
 
         // 将中文城市名转为英文
         const englishCity = getEnglishCityName(city);
-        const weatherData = await fetchWeatherApiForecast(englishCity);
+        const weatherData = await fetchWeatherApiForecast(englishCity, extra.signal);
         const location = weatherData.location ?? {};
         const panel =
           forecastDays <= WEATHER_API_DAYS
@@ -497,7 +536,7 @@ export function createWeatherServer(): McpServer {
                 forecastDays
               )
             : buildForecast30dPanel(
-                await fetchQWeather30d(toNumber(location.lon), toNumber(location.lat)),
+                await fetchQWeather30d(toNumber(location.lon), toNumber(location.lat), extra.signal),
                 toNumber(location.lon),
                 toNumber(location.lat),
                 forecastDays,
@@ -512,6 +551,7 @@ export function createWeatherServer(): McpServer {
           content: textContent(panel),
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '天气查询出错',
           `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -538,11 +578,12 @@ export function createWeatherServer(): McpServer {
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未说明默认30。'),
       },
     },
-    async ({ longitude, latitude, days }) => {
+    async ({ longitude, latitude, days }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const forecastDays = normalizeForecastDays(days ?? 30);
         const panel = buildForecast30dPanel(
-          await fetchQWeather30d(longitude, latitude),
+          await fetchQWeather30d(longitude, latitude, extra.signal),
           longitude,
           latitude,
           forecastDays
@@ -552,6 +593,7 @@ export function createWeatherServer(): McpServer {
           content: textContent(panel),
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '30天预报查询出错',
           `30天预报查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -578,12 +620,13 @@ export function createWeatherServer(): McpServer {
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
       },
     },
-    async ({ latitude, longitude, days }) => {
+    async ({ latitude, longitude, days }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const forecastDays = normalizeForecastDays(days);
         const query = `${latitude},${longitude}`;
         const weatherData =
-          forecastDays <= WEATHER_API_DAYS ? await fetchWeatherApiForecast(query) : null;
+          forecastDays <= WEATHER_API_DAYS ? await fetchWeatherApiForecast(query, extra.signal) : null;
         const panel =
           forecastDays <= WEATHER_API_DAYS && weatherData
             ? buildCurrentForecastPanel(
@@ -592,7 +635,7 @@ export function createWeatherServer(): McpServer {
                 forecastDays
               )
             : buildForecast30dPanel(
-                await fetchQWeather30d(longitude, latitude),
+                await fetchQWeather30d(longitude, latitude, extra.signal),
                 longitude,
                 latitude,
                 forecastDays
@@ -602,6 +645,7 @@ export function createWeatherServer(): McpServer {
           content: textContent(panel),
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '当前位置天气查询出错',
           `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -626,8 +670,9 @@ export function createWeatherServer(): McpServer {
         query: z.string().describe('搜索关键词，如"杭"、"shang"、"北京"'),
       },
     },
-    async ({ query }) => {
+    async ({ query }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const results = searchCities(query, 10);
 
         if (results.length === 0) {
@@ -660,6 +705,7 @@ export function createWeatherServer(): McpServer {
           content: textContent(panel),
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '城市搜索出错',
           `城市搜索出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -685,8 +731,9 @@ export function createWeatherServer(): McpServer {
         province: z.string().optional().describe('省份名称，如"浙江"、"新疆"。scope=province 时使用。'),
       },
     },
-    async ({ scope, province }) => {
+    async ({ scope, province }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const locations = listChinaWeatherLocations(scope === 'province' ? province : undefined);
         return {
           content: [{
@@ -707,6 +754,7 @@ export function createWeatherServer(): McpServer {
           }],
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '候选城市查询出错',
           `候选城市查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -737,10 +785,11 @@ export function createWeatherServer(): McpServer {
         condition: z.enum(WEATHER_CONDITION_VALUES).optional().describe('需要筛选的天气条件。clear=晴朗/天晴；comfortable=天气好/舒适/适合出门；adverse=天气差/恶劣天气；hot 仅表示高温。'),
       },
     },
-    async ({ locations, condition }) => {
+    async ({ locations, condition }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const weatherCondition = (condition ?? 'snow') as WeatherConditionIntent;
-        const results = await fetchBatchCurrentWeather(locations, weatherCondition);
+        const results = await fetchBatchCurrentWeather(locations, weatherCondition, DEFAULT_BATCH_CONCURRENCY, extra.signal);
         return {
           content: [{
             type: 'text' as const,
@@ -753,6 +802,7 @@ export function createWeatherServer(): McpServer {
           }],
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '批量天气查询出错',
           `批量天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
@@ -780,8 +830,9 @@ export function createWeatherServer(): McpServer {
         limit: z.number().min(1).max(MAX_CONDITION_SEARCH_LIMIT).optional().describe(`最多检查的候选城市数量，默认${DEFAULT_CONDITION_SEARCH_LIMIT}，最高${MAX_CONDITION_SEARCH_LIMIT}`),
       },
     },
-    async ({ scope, province, condition, limit }) => {
+    async ({ scope, province, condition, limit }, extra) => {
       try {
+        throwIfAborted(extra.signal);
         const normalizedScope = scope ?? (province ? 'province' : 'china');
         const searchLimit = Math.min(
           MAX_CONDITION_SEARCH_LIMIT,
@@ -806,7 +857,7 @@ export function createWeatherServer(): McpServer {
           return { content: textContent(panel) };
         }
 
-        const results = await fetchBatchCurrentWeather(locations, condition);
+        const results = await fetchBatchCurrentWeather(locations, condition, DEFAULT_BATCH_CONCURRENCY, extra.signal);
         const panel = buildConditionSearchPanel({
           condition,
           scope: normalizedScope,
@@ -818,6 +869,7 @@ export function createWeatherServer(): McpServer {
           content: textContent(panel),
         };
       } catch (error) {
+        if (isAbortError(error) || extra.signal.aborted) throw error;
         const panel = buildErrorPanel(
           '区域天气检索出错',
           `区域天气检索出错: ${error instanceof Error ? error.message : '未知错误'}`,

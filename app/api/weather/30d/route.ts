@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 
 import { authOptions } from '@/app/lib/auth';
 import { recordApiUsage } from '@/app/lib/apiUsage';
+import { isTimeoutError, withTimeoutSignal } from '@/app/lib/abort';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,7 @@ export interface QWeather30DayResponse {
 
 const QWEATHER_API_KEY = process.env.QWEATHER_API_KEY;
 const QWEATHER_API_BASE = process.env.QWEATHER_API_BASE;
+const QWEATHER_API_TIMEOUT_MS = 10_000;
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,13 +57,20 @@ export async function GET(request: NextRequest) {
     const location = searchParams.get('location')
     
     const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'X-QW-Api-Key': QWEATHER_API_KEY || ''
-      },
-      next: { revalidate: 3600 } // Cache for 1 hour
-    });
+    const timeout = withTimeoutSignal(request.signal, QWEATHER_API_TIMEOUT_MS, 'QWeather request timed out');
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
+        headers: {
+          'X-QW-Api-Key': QWEATHER_API_KEY || ''
+        },
+        signal: timeout.signal,
+        next: { revalidate: 3600 } // Cache for 1 hour
+      });
+    } finally {
+      timeout.cleanup();
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -84,10 +93,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
+    if (request.signal.aborted) {
+      return new Response(null, { status: 499 });
+    }
+
     console.error('Error fetching 30-day weather data:', error);
     return NextResponse.json(
       { error: 'Failed to fetch 30-day weather data' },
-      { status: 500 }
+      { status: isTimeoutError(error) ? 504 : 500 }
     );
   }
 }
