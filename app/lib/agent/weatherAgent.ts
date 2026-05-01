@@ -20,6 +20,13 @@ interface RunWeatherAgentOptions {
 
 const QWEN_NON_STREAM_TIMEOUT_MS = 30_000;
 const QWEN_STREAM_TIMEOUT_MS = 60_000;
+const FOLLOWUP_QUESTIONS_PROMPT = `你是天气助手的推荐问题生成器。
+根据用户与助手的历史对话，以及助手刚刚给出的回答，生成 1-3 个用户最可能继续追问的问题。
+要求：
+- 只输出 JSON 数组，例如 ["明天还会下雨吗？","周末适合户外活动吗？"]
+- 问题必须简短、自然、可点击后直接发送
+- 优先围绕当前地点、时间、天气风险、穿衣、出行、未来趋势继续追问
+- 不要重复用户刚问过的问题，不要输出解释文字`;
 
 const MAX_CONDITION_SEARCH_LIMIT = 300;
 const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEARCH_LIMIT);
@@ -79,6 +86,82 @@ function parseWeatherPanel(text: string): WeatherAssistantPanel | null {
 
 function latestUserMessage(messages: Array<{ role: string; content: string }>): string {
   return [...messages].reverse().find((message) => message.role === 'user')?.content ?? '';
+}
+
+function parseFollowupQuestions(text: string): string[] {
+  const trimmed = text.trim();
+  const jsonText = trimmed.match(/\[[\s\S]*\]/)?.[0] ?? trimmed;
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    if (!Array.isArray(parsed)) return [];
+
+    const seen = new Set<string>();
+    return parsed
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0 && item.length <= 40)
+      .filter((item) => {
+        if (seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      })
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+async function generateFollowupQuestions(
+  qwenClient: OpenAI,
+  messages: Array<{ role: string; content: string }>,
+  assistantAnswer: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  if (!assistantAnswer.trim()) return [];
+
+  throwIfAborted(signal);
+  const recentMessages = messages.slice(-8);
+  const completion = await qwenClient.chat.completions.create({
+    model: 'qwen-plus',
+    messages: [
+      { role: 'system', content: FOLLOWUP_QUESTIONS_PROMPT },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          history: recentMessages,
+          assistantAnswer,
+        }),
+      },
+    ],
+    stream: false,
+  }, {
+    signal,
+    timeout: QWEN_NON_STREAM_TIMEOUT_MS,
+  });
+
+  return parseFollowupQuestions(completion.choices[0]?.message?.content ?? '');
+}
+
+async function emitFollowupQuestions(
+  options: RunWeatherAgentOptions,
+  assistantAnswer: string
+) {
+  try {
+    const questions = await generateFollowupQuestions(
+      options.qwenClient,
+      options.messages,
+      assistantAnswer,
+      options.signal
+    );
+
+    if (questions.length > 0) {
+      options.emit({ type: 'followup_questions', questions });
+    }
+  } catch (error) {
+    if (isAbortError(error) || options.signal?.aborted) throw error;
+    console.warn('Failed to generate follow-up questions:', error);
+  }
 }
 
 function detectCondition(text: string): WeatherConditionIntent | null {
@@ -214,6 +297,7 @@ async function runAreaConditionSearch(
     );
     throwIfAborted(options.signal);
     options.emit({ type: 'text', content: summary });
+    await emitFollowupQuestions(options, summary);
     options.emit({
       type: 'agent_step',
       title: '区域天气检索完成',
@@ -277,6 +361,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
       if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
         if (responseMessage.content) {
           options.emit({ type: 'text', content: responseMessage.content });
+          await emitFollowupQuestions(options, responseMessage.content);
           return;
         }
         break;
@@ -351,13 +436,17 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
       timeout: QWEN_STREAM_TIMEOUT_MS,
     });
 
+    let assistantAnswer = '';
     for await (const chunk of finalStream) {
       throwIfAborted(options.signal);
       const delta = chunk.choices[0]?.delta;
       if (delta?.content) {
+        assistantAnswer += delta.content;
         options.emit({ type: 'text', content: delta.content });
       }
     }
+
+    await emitFollowupQuestions(options, assistantAnswer);
   } finally {
     await mcpClient.close();
   }

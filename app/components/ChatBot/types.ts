@@ -144,6 +144,7 @@ export type WeatherAssistantPanel =
 export type ChatSSEEvent =
   | { type: 'text'; content: string }
   | { type: 'panel'; panel: WeatherAssistantPanel }
+  | { type: 'followup_questions'; questions: string[] }
   | { type: 'agent_plan'; content: string }
   | { type: 'agent_step'; title: string; toolName?: string; status: 'running' | 'done' }
   | { type: 'agent_observation'; content: string }

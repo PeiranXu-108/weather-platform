@@ -29,6 +29,7 @@ const QUICK_QUESTIONS = [
   '苏州空气质量怎么样？',
   '厦门海边风大吗？',
   '青岛适合去玩吗？',
+  '今天上海的天气怎么样？',
 ];
 
 // 需要定位的快捷问题（当有 userLocation 时加入候选池）
@@ -54,6 +55,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [followupQuestions, setFollowupQuestions] = useState<string[]>([]);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -118,6 +120,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    setFollowupQuestions([]);
     setInput('');
     setIsLoading(true);
 
@@ -191,6 +194,10 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                       : m
                   )
                 );
+                break;
+
+              case 'followup_questions':
+                setFollowupQuestions(event.questions.slice(0, 3));
                 break;
 
               case 'agent_plan':
@@ -315,6 +322,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
   }, [input, sendMessage]);
 
   const handleQuickQuestion = useCallback((q: string) => {
+    setFollowupQuestions([]);
     sendMessage(q);
   }, [sendMessage]);
 
@@ -436,6 +444,29 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} isDark={isDark} />
             ))}
+            {followupQuestions.length > 0 && !isLoading && (
+              <div className="mb-3 flex justify-start">
+                <div className="max-w-[96%] overflow-hidden">
+                  <div className="flex gap-1.5 overflow-x-auto custom-scrollbar">
+                    {followupQuestions.map((question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        onClick={() => handleQuickQuestion(question)}
+                        className={`shrink-0 max-w-[11rem] truncate rounded-full border px-2.5 py-1.5 text-xs transition-all active:scale-[0.98] ${
+                          isDark
+                            ? 'border-white/10 bg-white/[0.04] text-white/55 hover:bg-white/[0.07] hover:text-white/75'
+                            : 'border-gray-200/60 bg-white/35 text-gray-500 hover:bg-white/60 hover:text-gray-700'
+                        }`}
+                        title={question}
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </>
         )}

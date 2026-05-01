@@ -281,7 +281,7 @@ export default function MessageBubble({ message, isDark }: MessageBubbleProps) {
             ))}
           </div>
         )}
-        
+
         {/* 助手消息流式加载时的闪烁光标 */}
         {!isUser && message.content === '' && !hasPanels && (
           <span className="inline-block w-1.5 h-4 bg-current animate-pulse rounded-sm" />
