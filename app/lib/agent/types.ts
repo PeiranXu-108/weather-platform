@@ -1,4 +1,5 @@
 import type { ChatSSEEvent } from '@/app/components/ChatBot/types';
+import type { WeatherConditionIntent } from './weatherConditions';
 
 export type AgentTaskType =
   | 'single_location_weather'
@@ -6,23 +7,6 @@ export type AgentTaskType =
   | 'comparison'
   | 'advice'
   | 'smalltalk';
-
-export type WeatherConditionIntent =
-  | 'snow'
-  | 'rain'
-  | 'hot'
-  | 'cold'
-  | 'wind'
-  | 'clear'
-  | 'cloudy'
-  | 'overcast'
-  | 'fog'
-  | 'haze'
-  | 'thunder'
-  | 'humid'
-  | 'dry'
-  | 'comfortable'
-  | 'adverse';
 
 export interface AgentPlan {
   taskType: AgentTaskType;

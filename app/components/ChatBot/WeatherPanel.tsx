@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getWeatherConditionLabel } from '@/app/lib/agent/weatherConditions';
 import type {
   CitySearchPanel,
   ConditionSearchPanel,
@@ -246,24 +247,7 @@ function CitySearchCard({ panel, isDark }: { panel: CitySearchPanel; isDark: boo
 }
 
 function conditionLabel(condition: ConditionSearchPanel['condition']): string {
-  const labels: Record<ConditionSearchPanel['condition'], string> = {
-    snow: '降雪',
-    rain: '降雨',
-    hot: '高温',
-    cold: '低温',
-    wind: '大风',
-    clear: '晴好',
-    cloudy: '多云',
-    overcast: '阴天',
-    fog: '雾',
-    haze: '霾',
-    thunder: '雷雨',
-    humid: '潮湿',
-    dry: '干燥',
-    comfortable: '舒适',
-    adverse: '恶劣天气',
-  };
-  return labels[condition];
+  return getWeatherConditionLabel(condition);
 }
 
 function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; isDark: boolean }) {

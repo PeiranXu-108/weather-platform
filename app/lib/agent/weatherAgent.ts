@@ -8,7 +8,11 @@ import {
   type WeatherErrorPanel,
 } from '@/app/components/ChatBot/types';
 import { AREA_CONDITION_SUMMARY_PROMPT, buildSystemPrompt } from './prompts';
-import type { AgentEmit, AreaConditionIntent, WeatherConditionIntent } from './types';
+import type { AgentEmit, AreaConditionIntent } from './types';
+import {
+  detectWeatherConditionIntent,
+  getWeatherConditionLabel,
+} from './weatherConditions';
 
 interface RunWeatherAgentOptions {
   messages: Array<{ role: string; content: string }>;
@@ -33,24 +37,6 @@ const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEAR
 const DEFAULT_CONDITION_SEARCH_LIMIT = Number.isFinite(configuredConditionSearchLimit)
   ? Math.min(MAX_CONDITION_SEARCH_LIMIT, Math.max(1, Math.round(configuredConditionSearchLimit)))
   : 150;
-
-const CONDITION_PHRASES: Record<WeatherConditionIntent, string> = {
-  snow: '下雪',
-  rain: '下雨',
-  hot: '高温',
-  cold: '低温',
-  wind: '大风',
-  clear: '晴好',
-  cloudy: '多云',
-  overcast: '阴天',
-  fog: '有雾',
-  haze: '有霾',
-  thunder: '雷雨',
-  humid: '潮湿',
-  dry: '干燥',
-  comfortable: '舒适宜出行',
-  adverse: '天气较差',
-};
 
 const PROVINCES = [
   '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽',
@@ -164,31 +150,12 @@ async function emitFollowupQuestions(
   }
 }
 
-function detectCondition(text: string): WeatherConditionIntent | null {
-  if (/(天气好|好天气|适合出门|适合户外|适合玩|舒适|舒服|宜人|comfortable|pleasant)/i.test(text)) return 'comfortable';
-  if (/(恶劣|糟糕|不好|不适合出门|天气差|坏天气|bad weather|severe|adverse)/i.test(text)) return 'adverse';
-  if (/(雷|雷雨|雷阵雨|雷暴|thunder|storm)/i.test(text)) return 'thunder';
-  if (/(雪|降雪|下雪|snow|sleet|blizzard)/i.test(text)) return 'snow';
-  if (/(雨|降雨|下雨|暴雨|rain|shower|drizzle)/i.test(text)) return 'rain';
-  if (/(雾|大雾|有雾|fog|mist)/i.test(text)) return 'fog';
-  if (/(霾|雾霾|空气差|沙尘|haze|smog|dust)/i.test(text)) return 'haze';
-  if (/(天晴|晴天|晴朗|晴好|sunny|clear)/i.test(text)) return 'clear';
-  if (/(多云|少云|云多|cloudy|partly cloudy|mostly cloudy)/i.test(text)) return 'cloudy';
-  if (/(阴天|阴沉|阴云|overcast)/i.test(text)) return 'overcast';
-  if (/(潮湿|湿度大|湿热|闷热|humid|muggy)/i.test(text)) return 'humid';
-  if (/(干燥|太干|dry)/i.test(text)) return 'dry';
-  if (/(高温|炎热|酷热|很热|哪里热|hot)/i.test(text)) return 'hot';
-  if (/(低温|寒冷|严寒|很冷|哪里冷|cold|freezing)/i.test(text)) return 'cold';
-  if (/(大风|风大|强风|windy|gale)/i.test(text)) return 'wind';
-  return null;
-}
-
 function detectProvince(text: string): string | undefined {
   return PROVINCES.find((province) => text.includes(province));
 }
 
 function detectAreaConditionIntent(text: string): AreaConditionIntent | null {
-  const condition = detectCondition(text);
+  const condition = detectWeatherConditionIntent(text);
   if (!condition) return null;
 
   const asksForArea =
@@ -206,7 +173,7 @@ function detectAreaConditionIntent(text: string): AreaConditionIntent | null {
     condition,
     scope: province ? 'province' : 'china',
     province,
-    phrase: CONDITION_PHRASES[condition],
+    phrase: getWeatherConditionLabel(condition),
   };
 }
 
@@ -253,7 +220,7 @@ async function runAreaConditionSearch(
     throwIfAborted(options.signal);
     emitEvent(options.emit, {
       type: 'agent_plan',
-      content: `识别为区域天气检索：扫描${scopeLabel}，筛选正在${intent.phrase}的地点。`,
+      content: `识别为区域天气检索：扫描${scopeLabel}，筛选天气满足“${intent.phrase}”的地点。`,
     });
     emitEvent(options.emit, {
       type: 'agent_step',

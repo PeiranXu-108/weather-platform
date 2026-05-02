@@ -1,3 +1,5 @@
+import type { WeatherConditionIntent } from '@/app/lib/agent/weatherConditions';
+
 export type ChatLayoutMode = 'closed' | 'floating' | 'docked' | 'fullscreen-mobile';
 
 export const WEATHER_ASSISTANT_SCHEMA_VERSION = 'weather.assistant.v1' as const;
@@ -94,22 +96,7 @@ export interface CitySearchPanel extends WeatherPanelBase {
 export interface ConditionSearchPanel extends WeatherPanelBase {
   kind: 'condition_search';
   title: string;
-  condition:
-    | 'snow'
-    | 'rain'
-    | 'hot'
-    | 'cold'
-    | 'wind'
-    | 'clear'
-    | 'cloudy'
-    | 'overcast'
-    | 'fog'
-    | 'haze'
-    | 'thunder'
-    | 'humid'
-    | 'dry'
-    | 'comfortable'
-    | 'adverse';
+  condition: WeatherConditionIntent;
   scope: 'china' | 'province';
   province?: string;
   checkedCount: number;
