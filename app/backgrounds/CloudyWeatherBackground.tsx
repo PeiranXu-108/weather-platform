@@ -222,6 +222,7 @@ export default function CloudyWeatherBackground({
         gl={{
           alpha: true,
           antialias: false,
+          preserveDrawingBuffer: true,
           powerPreference: 'high-performance',
           stencil: false,
         }}

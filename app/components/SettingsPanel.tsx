@@ -7,75 +7,225 @@ import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { useI18n } from '@/app/i18n';
 
-/**
- * 从元素中获取含 gradient 的背景值（兼容浏览器对 background 短属性的拆解）。
- * 优先读 inline style，回退到 computedStyle。
- */
-function getElementGradient(el: HTMLElement): string {
-  for (const src of [
-    el.style.backgroundImage,
-    el.style.background,
-    window.getComputedStyle(el).backgroundImage,
-  ]) {
-    if (src && src.includes('gradient')) return src;
+function splitTopLevelCss(value: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '(') depth++;
+    if (char === ')') depth = Math.max(0, depth - 1);
+    if (char === ',' && depth === 0) {
+      parts.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
   }
-  return '';
+
+  const tail = value.slice(start).trim();
+  if (tail) parts.push(tail);
+  return parts;
+}
+
+function parseCssColorStop(stop: string): { color: string; pos: number | null } | null {
+  const match = stop.match(/^((?:rgba?|hsla?)\([^)]+\)|#[\da-fA-F]{3,8}|[a-zA-Z]+)\s*(.*)$/);
+  if (!match) return null;
+
+  const posMatch = match[2].match(/(-?[\d.]+)%/);
+  return {
+    color: match[1],
+    pos: posMatch ? Math.max(0, Math.min(1, parseFloat(posMatch[1]) / 100)) : null,
+  };
+}
+
+function normalizeColorStops(stops: Array<{ color: string; pos: number | null }>) {
+  if (stops.length === 0) return stops;
+
+  if (stops[0].pos === null) stops[0].pos = 0;
+  if (stops[stops.length - 1].pos === null) stops[stops.length - 1].pos = 1;
+
+  for (let i = 1; i < stops.length - 1; i++) {
+    if (stops[i].pos !== null) continue;
+
+    const start = i - 1;
+    let end = i + 1;
+    while (end < stops.length && stops[end].pos === null) end++;
+
+    const startPos = stops[start].pos ?? 0;
+    const endPos = stops[end]?.pos ?? 1;
+    const span = end - start;
+    for (let j = i; j < end; j++) {
+      stops[j].pos = startPos + ((endPos - startPos) * (j - start)) / span;
+    }
+    i = end - 1;
+  }
+
+  return stops;
+}
+
+function addColorStops(
+  gradient: CanvasGradient,
+  rawStops: string[],
+) {
+  const stops = normalizeColorStops(
+    rawStops
+      .map(parseCssColorStop)
+      .filter((stop): stop is { color: string; pos: number | null } => Boolean(stop)),
+  );
+
+  for (const stop of stops) {
+    gradient.addColorStop(stop.pos ?? 0, stop.color);
+  }
+
+  return stops.length > 0;
+}
+
+function getLinearGradientLine(direction: string, x: number, y: number, w: number, h: number) {
+  if (direction.startsWith('to ')) {
+    const toTop = direction.includes('top');
+    const toRight = direction.includes('right');
+    const toBottom = direction.includes('bottom');
+    const toLeft = direction.includes('left');
+
+    return {
+      x0: toRight ? x : toLeft ? x + w : x + w / 2,
+      y0: toBottom ? y : toTop ? y + h : y + h / 2,
+      x1: toRight ? x + w : toLeft ? x : x + w / 2,
+      y1: toBottom ? y + h : toTop ? y : y + h / 2,
+    };
+  }
+
+  const angleMatch = direction.match(/^(-?[\d.]+)deg$/);
+  const angle = angleMatch ? parseFloat(angleMatch[1]) : 180;
+  const rad = (angle * Math.PI) / 180;
+  const dx = Math.sin(rad);
+  const dy = -Math.cos(rad);
+  const length = Math.abs(w * dx) + Math.abs(h * dy);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  return {
+    x0: cx - (dx * length) / 2,
+    y0: cy - (dy * length) / 2,
+    x1: cx + (dx * length) / 2,
+    y1: cy + (dy * length) / 2,
+  };
+}
+
+function isRenderableGradient(value: string) {
+  return value.includes('linear-gradient') || value.includes('radial-gradient');
+}
+
+function getBackgroundLayers(style: CSSStyleDeclaration) {
+  if (!style.backgroundImage || style.backgroundImage === 'none') return [];
+  return splitTopLevelCss(style.backgroundImage).filter(isRenderableGradient);
+}
+
+function isTransparentColor(color: string) {
+  return !color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)';
 }
 
 /** 将 CSS gradient 字符串绘制到 2D canvas 上（支持 linear / radial） */
 function drawCssGradient(
   ctx: CanvasRenderingContext2D,
   bg: string,
+  x: number,
+  y: number,
   w: number,
-  h: number
+  h: number,
 ) {
-  const stopRe = /(rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+(?:\s*,\s*[\d.]+)?\s*\))\s+([\d.]+)%/g;
+  const open = bg.indexOf('(');
+  const close = bg.lastIndexOf(')');
+  if (open === -1 || close === -1 || close <= open) return;
+
+  const args = splitTopLevelCss(bg.slice(open + 1, close));
+  if (args.length === 0) return;
 
   if (bg.includes('linear-gradient')) {
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    let m;
-    let found = false;
-    while ((m = stopRe.exec(bg))) {
-      grad.addColorStop(parseFloat(m[2]) / 100, m[1]);
-      found = true;
-    }
-    if (found) {
+    const firstArgIsDirection = args[0].startsWith('to ') || /^-?[\d.]+deg$/.test(args[0]);
+    const direction = firstArgIsDirection ? args[0] : '180deg';
+    const stops = firstArgIsDirection ? args.slice(1) : args;
+    const line = getLinearGradientLine(direction, x, y, w, h);
+    const grad = ctx.createLinearGradient(line.x0, line.y0, line.x1, line.y1);
+
+    if (addColorStops(grad, stops)) {
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(x, y, w, h);
     }
     return;
   }
 
   if (bg.includes('radial-gradient')) {
     const centerMatch = bg.match(/circle\s+at\s+([\d.]+)%\s+([\d.]+)%/);
-    const cx = centerMatch ? (parseFloat(centerMatch[1]) / 100) * w : w / 2;
-    const cy = centerMatch ? (parseFloat(centerMatch[2]) / 100) * h : h / 2;
-    const radius = Math.max(w, h);
+    const cx = centerMatch ? x + (parseFloat(centerMatch[1]) / 100) * w : x + w / 2;
+    const cy = centerMatch ? y + (parseFloat(centerMatch[2]) / 100) * h : y + h / 2;
+    const radius = Math.hypot(Math.max(cx - x, x + w - cx), Math.max(cy - y, y + h - cy));
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    const stops = args[0].includes(' at ') || args[0] === 'circle' || args[0] === 'ellipse'
+      ? args.slice(1)
+      : args;
 
-    const colorRe = /(rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+(?:\s*,\s*[\d.]+)?\s*\))(?:\s+([\d.]+)%)?/g;
-    const stops: { color: string; pos: number | null }[] = [];
-    let sm;
-    while ((sm = colorRe.exec(bg))) {
-      stops.push({ color: sm[1], pos: sm[2] != null ? parseFloat(sm[2]) / 100 : null });
-    }
-    if (stops.length > 0) {
-      if (stops[0].pos === null) stops[0].pos = 0;
-      if (stops[stops.length - 1].pos === null) stops[stops.length - 1].pos = 1;
-      for (let i = 1; i < stops.length - 1; i++) {
-        if (stops[i].pos !== null) continue;
-        let next = i + 1;
-        while (next < stops.length && stops[next].pos === null) next++;
-        const prev = i - 1;
-        stops[i].pos =
-          stops[prev].pos! +
-          ((stops[next].pos! - stops[prev].pos!) * (i - prev)) / (next - prev);
-      }
-      for (const s of stops) grad.addColorStop(s.pos!, s.color);
+    if (addColorStops(grad, stops)) {
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(x, y, w, h);
     }
   }
+}
+
+function drawElementBackground(
+  ctx: CanvasRenderingContext2D,
+  el: HTMLElement,
+  style: CSSStyleDeclaration,
+) {
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  if (!isTransparentColor(style.backgroundColor)) {
+    ctx.fillStyle = style.backgroundColor;
+    ctx.fillRect(rect.left, rect.top, rect.width, rect.height);
+  }
+
+  const layers = getBackgroundLayers(style);
+  for (let i = layers.length - 1; i >= 0; i--) {
+    drawCssGradient(ctx, layers[i], rect.left, rect.top, rect.width, rect.height);
+  }
+}
+
+function drawCanvasElement(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0 || canvas.width <= 0 || canvas.height <= 0) return;
+  ctx.drawImage(canvas, rect.left, rect.top, rect.width, rect.height);
+}
+
+function drawWeatherBackgroundNode(
+  ctx: CanvasRenderingContext2D,
+  node: Element,
+  inheritedAlpha = 1,
+) {
+  if (!(node instanceof HTMLElement)) return;
+
+  const style = window.getComputedStyle(node);
+  if (style.display === 'none' || style.visibility === 'hidden') return;
+
+  const opacity = Number.parseFloat(style.opacity);
+  const alpha = inheritedAlpha * (Number.isFinite(opacity) ? opacity : 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  if (node instanceof HTMLCanvasElement) {
+    drawCanvasElement(ctx, node);
+  } else {
+    drawElementBackground(ctx, node, style);
+    for (const child of Array.from(node.children)) {
+      drawWeatherBackgroundNode(ctx, child, alpha);
+    }
+  }
+
+  ctx.restore();
 }
 
 interface SettingsPanelProps {
@@ -145,6 +295,12 @@ export default function SettingsPanel({
     try {
       const bgEl = document.querySelector('[data-weather-bg]') as HTMLElement | null;
       if (!bgEl) throw new Error('No background element');
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+        throw new Error('Clipboard image writing is not supported');
+      }
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -156,20 +312,7 @@ export default function SettingsPanel({
       const ctx = offscreen.getContext('2d')!;
       ctx.scale(dpr, dpr);
 
-      // 按 DOM 顺序绘制所有 CSS 渐变层（兼容浏览器对 background 短属性的拆解）
-      const childDivs = Array.from(bgEl.querySelectorAll<HTMLElement>('div'));
-      for (const div of childDivs) {
-        const bg = getElementGradient(div);
-        if (bg) {
-          drawCssGradient(ctx, bg, w, h);
-        }
-      }
-
-      // 在渐变之上绘制 Three.js WebGL canvas
-      const glCanvas = bgEl.querySelector('canvas');
-      if (glCanvas) {
-        ctx.drawImage(glCanvas, 0, 0, w, h);
-      }
+      drawWeatherBackgroundNode(ctx, bgEl);
 
       const blob = await new Promise<Blob>((resolve, reject) => {
         offscreen.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');

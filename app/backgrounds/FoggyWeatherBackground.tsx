@@ -684,6 +684,7 @@ export default function FoggyWeatherBackground({
         gl={{
           alpha: true,
           antialias: false,
+          preserveDrawingBuffer: true,
           powerPreference: 'high-performance',
           stencil: false,
         }}
