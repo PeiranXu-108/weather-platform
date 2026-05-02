@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import NightSkyEffects from './NightSky';
 import SunEffect from './SunEffect';
 import MoonEffect from './MoonEffect';
+import Fireworks from './Fireworks';
 import { getDaytimeProgress, getLiveLocalDate, getTimeState, type TimeState } from '../utils/solarTime';
 
 const DAY_SUN_COLOR = new THREE.Color(1.0, 0.96, 0.82);
@@ -49,6 +50,7 @@ function NightScene({
       <directionalLight position={[5, 10, 5]} intensity={0.2} color={0x8888aa} />
       <MoonEffect moonPhase={moonPhase} moonIllumination={moonIllumination} zDepth={-17} />
       <NightSkyEffects layout={layout} />
+      {layout === 'fullscreen' && <Fireworks />}
       <fog attach="fog" args={[0x0a0a1a, 10, 30]} />
     </>
   );

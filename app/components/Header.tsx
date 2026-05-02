@@ -21,9 +21,10 @@ interface HeaderProps {
   onOpacityChange?: (opacity: number) => void;
   showBackground?: boolean;
   onShowBackgroundChange?: (show: boolean) => void;
+  showFireworksAction?: boolean;
 }
 
-export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme, opacity = 0, onOpacityChange, showBackground = true, onShowBackgroundChange }: HeaderProps) {
+export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme, opacity = 0, onOpacityChange, showBackground = true, onShowBackgroundChange, showFireworksAction = false }: HeaderProps) {
   const { data: session } = useSession();
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -184,6 +185,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
             onOpacityChange={onOpacityChange}
             showBackground={showBackground}
             onShowBackgroundChange={onShowBackgroundChange}
+            showFireworksAction={showFireworksAction}
           />
         )}
         {session?.user ? (

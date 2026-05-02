@@ -473,6 +473,11 @@ export default function Home() {
                   onOpacityChange={setOpacity}
                   showBackground={showBackground}
                   onShowBackgroundChange={setShowBackground}
+                  showFireworksAction={
+                    showBackground &&
+                    isNight &&
+                    (isSunny || isPartlyCloudy)
+                  }
                 />
 
                 <Suspense fallback={<WeatherSkeleton />}>

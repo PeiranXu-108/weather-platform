@@ -83,7 +83,11 @@ interface SettingsPanelProps {
   onOpacityChange: (opacity: number) => void;
   showBackground: boolean;
   onShowBackgroundChange: (show: boolean) => void;
+  /** 是否展示「看烟花」入口（仅在「晴天 + 夜晚」且开启背景渲染时显示） */
+  showFireworksAction?: boolean;
 }
+
+const FIREWORKS_DURATION_MS = 7000;
 
 export default function SettingsPanel({
   textColorTheme,
@@ -91,12 +95,47 @@ export default function SettingsPanel({
   onOpacityChange,
   showBackground,
   onShowBackgroundChange,
+  showFireworksAction = false,
 }: SettingsPanelProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureStatus, setCaptureStatus] = useState<'success' | 'error' | null>(null);
+  const [fireworksFiring, setFireworksFiring] = useState(false);
+  const fireworksTimerRef = useRef<number | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const handleLaunchFireworks = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (fireworksTimerRef.current !== null) {
+      window.clearTimeout(fireworksTimerRef.current);
+    }
+    window.dispatchEvent(new CustomEvent('weather:fireworks-start'));
+    setFireworksFiring(true);
+    fireworksTimerRef.current = window.setTimeout(() => {
+      setFireworksFiring(false);
+      fireworksTimerRef.current = null;
+    }, FIREWORKS_DURATION_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (fireworksTimerRef.current !== null) {
+        window.clearTimeout(fireworksTimerRef.current);
+      }
+    };
+  }, []);
+
+  // 当用户关闭背景渲染或切换到非晴天夜晚时，重置点击态
+  useEffect(() => {
+    if (!showFireworksAction || !showBackground) {
+      if (fireworksTimerRef.current !== null) {
+        window.clearTimeout(fireworksTimerRef.current);
+        fireworksTimerRef.current = null;
+      }
+      setFireworksFiring(false);
+    }
+  }, [showFireworksAction, showBackground]);
 
   const handleCaptureBackground = useCallback(async () => {
     setCapturing(true);
@@ -300,6 +339,46 @@ export default function SettingsPanel({
                     ? '截取失败'
                     : '截取壁纸'}
             </button>
+
+            {showFireworksAction && (
+              <button
+                onClick={handleLaunchFireworks}
+                disabled={!showBackground || fireworksFiring}
+                className={`mt-2 w-full px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                  !showBackground || fireworksFiring
+                    ? isDark
+                      ? 'bg-white/5 text-white/40 cursor-not-allowed'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : isDark
+                      ? 'bg-gradient-to-r from-fuchsia-500/20 via-amber-400/20 to-sky-400/20 hover:from-fuchsia-500/30 hover:via-amber-400/30 hover:to-sky-400/30 text-white border border-white/15 active:scale-[0.98]'
+                      : 'bg-gradient-to-r from-fuchsia-500/15 via-amber-400/15 to-sky-400/15 hover:from-fuchsia-500/25 hover:via-amber-400/25 hover:to-sky-400/25 text-fuchsia-700 border border-fuchsia-200 active:scale-[0.98]'
+                }`}
+                title={fireworksFiring ? '烟花绽放中…' : '点击燃放一场约 7 秒的烟花'}
+                aria-label="燃放烟花"
+              >
+                {/* Sparkle icon */}
+                <svg
+                  className={`w-4 h-4 ${fireworksFiring ? 'animate-pulse' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3v3" />
+                  <path d="M12 18v3" />
+                  <path d="M3 12h3" />
+                  <path d="M18 12h3" />
+                  <path d="M5.6 5.6l2.1 2.1" />
+                  <path d="M16.3 16.3l2.1 2.1" />
+                  <path d="M5.6 18.4l2.1-2.1" />
+                  <path d="M16.3 7.7l2.1-2.1" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                {fireworksFiring ? '绽放中…' : '看烟花'}
+              </button>
+            )}
           </div>
         </div>
       )}
