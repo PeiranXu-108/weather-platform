@@ -28,6 +28,7 @@ import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { favoritesApi, weatherUrl } from '@/app/lib/api';
+import { useTranslatedText } from '@/app/hooks/useTranslatedText';
 
 const WeatherBackgroundLayer = dynamic(
   () => import('@/app/backgrounds/WeatherBackgroundLayer'),
@@ -122,9 +123,22 @@ function FavoriteCityCard({
   const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
   const weatherData = cached?.data ?? null;
 
+  const fallbackRawName = fav.label || fav.query;
+  const fallbackTranslatedName = useTranslatedText(fallbackRawName);
+
+  const weatherGeo = weatherData
+    ? {
+      country: weatherData.location.country ?? undefined,
+      region: weatherData.location.region ?? undefined,
+      city: weatherData.location.name ?? undefined,
+    }
+    : undefined;
+  const weatherNameFromHook = useTranslatedText(weatherData?.location.name ?? '', weatherGeo);
+  const weatherNameStatic = weatherData ? translateLocation(weatherData.location).name : '';
+
   const displayName = weatherData
-    ? translateLocation(weatherData.location).name
-    : (fav.label || fav.query);
+    ? (weatherNameStatic !== weatherData.location.name ? weatherNameStatic : weatherNameFromHook)
+    : fallbackTranslatedName;
   const temp = weatherData ? `${weatherData.current.temp_c.toFixed(0)}°C` : '--';
   const cond = weatherData
     ? translateWeatherCondition(weatherData.current.condition)

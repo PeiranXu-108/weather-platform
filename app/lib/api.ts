@@ -4,6 +4,7 @@
  */
 
 const BASE = '';
+export type TranslateGeo = { country?: string; region?: string; city?: string };
 
 /** 根据 query（城市名或 "lat,lon"）生成天气接口 URL */
 export function weatherUrl(query: string): string {
@@ -98,6 +99,19 @@ export function fetchChat(
         userLocation: options.userLocation,
       }),
     }),
+    ...(options?.signal && { signal: options.signal }),
+  });
+}
+
+export function fetchTranslate(
+  body: ({ text: string; texts?: never } | { texts: string[]; text?: never }) & TranslateGeo,
+  options?: { signal?: AbortSignal }
+): Promise<Response> {
+  return fetch(`${BASE}/api/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'include',
     ...(options?.signal && { signal: options.signal }),
   });
 }

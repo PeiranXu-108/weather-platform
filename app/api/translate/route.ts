@@ -5,6 +5,9 @@
 
 import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
+import { checkInMemoryRateLimit } from '@/app/lib/rateLimit';
 
 const qwenClient = new OpenAI({
   apiKey: process.env.DASHSCOPE_API_KEY || '',
@@ -33,6 +36,38 @@ function buildSystemPrompt(geo?: { country?: string; region?: string; city?: str
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as { id?: string })?.id;
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown';
+    const userLimit = checkInMemoryRateLimit(`translate:user:${userId}`, 60, 60_000);
+    if (!userLimit.allowed) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(userLimit.retryAfterSec),
+        },
+      });
+    }
+    const ipLimit = checkInMemoryRateLimit(`translate:ip:${ip}`, 120, 60_000);
+    if (!ipLimit.allowed) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(ipLimit.retryAfterSec),
+        },
+      });
+    }
+
     const body = await request.json();
     const { text, texts, country, region, city } = body as {
       text?: string;
@@ -52,6 +87,18 @@ export async function POST(request: NextRequest) {
     const list = Array.isArray(texts) ? texts : typeof text === 'string' ? [text] : [];
     if (list.length === 0) {
       return new Response(JSON.stringify({ error: '请提供 text 或 texts' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (list.length > 20) {
+      return new Response(JSON.stringify({ error: '批量翻译最多支持 20 条' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (list.some((item) => typeof item !== 'string' || item.length > 120)) {
+      return new Response(JSON.stringify({ error: '单条翻译文本过长或格式不正确' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });

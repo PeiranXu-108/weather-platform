@@ -8,6 +8,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getEnglishCityName, searchCities } from '@/app/utils/citySearch';
+import { translateLocationName } from '@/app/utils/locationTranslations';
+import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { listChinaWeatherLocations } from '@/app/lib/weather/chinaLocations';
 import { isAbortError, isTimeoutError, throwIfAborted, withTimeoutSignal } from '@/app/lib/abort';
 import {
@@ -83,6 +85,13 @@ function normalizeForecastDays(days: unknown): number {
   return Math.min(MAX_FORECAST_DAYS, Math.max(MIN_FORECAST_DAYS, n));
 }
 
+function toChineseCondition(conditionLike: any): string {
+  return translateWeatherCondition({
+    code: toNumber(conditionLike?.code, -1),
+    text: String(conditionLike?.text ?? ''),
+  });
+}
+
 function currentForecastTitle(prefix: string, days: number): string {
   return `${prefix}与未来${days}天预报`;
 }
@@ -116,6 +125,9 @@ function buildCurrentForecastPanel(
   const forecast = Array.isArray(data.forecast?.forecastday) ? data.forecast.forecastday : [];
   const todayHours = Array.isArray(forecast[0]?.hour) ? forecast[0].hour : [];
   const currentEpoch = toNumber(location.localtime_epoch ?? current.last_updated_epoch);
+  const translatedLocationName = translateLocationName(String(location.name ?? ''), 'city');
+  const translatedRegion = translateLocationName(String(location.region ?? ''), 'region');
+  const translatedCountry = translateLocationName(String(location.country ?? ''), 'country');
 
   const hourly = todayHours
     .filter((hour: any) => toNumber(hour.time_epoch) >= currentEpoch)
@@ -123,7 +135,7 @@ function buildCurrentForecastPanel(
     .map((hour: any) => ({
       time: String(hour.time ?? ''),
       tempC: toNumber(hour.temp_c),
-      condition: String(hour.condition?.text ?? ''),
+      condition: toChineseCondition(hour.condition),
       icon: hour.condition?.icon ? String(hour.condition.icon) : undefined,
       rainChance: toNumber(hour.chance_of_rain),
     }));
@@ -135,9 +147,9 @@ function buildCurrentForecastPanel(
     title,
     requestedDays,
     location: {
-      name: String(location.name ?? ''),
-      region: location.region ? String(location.region) : undefined,
-      country: location.country ? String(location.country) : undefined,
+      name: translatedLocationName || String(location.name ?? ''),
+      region: translatedRegion || (location.region ? String(location.region) : undefined),
+      country: translatedCountry || (location.country ? String(location.country) : undefined),
       lat: typeof location.lat === 'number' ? location.lat : undefined,
       lon: typeof location.lon === 'number' ? location.lon : undefined,
       localtime: location.localtime ? String(location.localtime) : undefined,
@@ -145,7 +157,7 @@ function buildCurrentForecastPanel(
     current: {
       tempC: toNumber(current.temp_c),
       feelsLikeC: toNumber(current.feelslike_c),
-      condition: String(current.condition?.text ?? ''),
+      condition: toChineseCondition(current.condition),
       icon: current.condition?.icon ? String(current.condition.icon) : undefined,
       humidity: toNumber(current.humidity),
       windKph: toNumber(current.wind_kph),
@@ -159,7 +171,7 @@ function buildCurrentForecastPanel(
     },
     daily: forecast.slice(0, requestedDays).map((day: any) => ({
       date: String(day.date ?? ''),
-      condition: String(day.day?.condition?.text ?? ''),
+      condition: toChineseCondition(day.day?.condition),
       icon: day.day?.condition?.icon ? String(day.day.condition.icon) : undefined,
       minTempC: toNumber(day.day?.mintemp_c),
       maxTempC: toNumber(day.day?.maxtemp_c),
@@ -189,9 +201,9 @@ function buildForecast30dPanel(
     location: {
       longitude,
       latitude,
-      name: locationName?.name,
-      region: locationName?.region,
-      country: locationName?.country,
+      name: locationName?.name ? translateLocationName(locationName.name, 'city') : undefined,
+      region: locationName?.region ? translateLocationName(locationName.region, 'region') : undefined,
+      country: locationName?.country ? translateLocationName(locationName.country, 'country') : undefined,
     },
     updateTime: data.updateTime ? String(data.updateTime) : undefined,
     daily: daily.slice(0, requestedDays).map((day: any) => ({
@@ -268,7 +280,7 @@ function normalizeBatchWeatherResult(
     name: location.name || String(weatherLocation.name ?? ''),
     province: location.province,
     temperatureC: toNumber(current.temp_c, Number.NaN),
-    conditionText: String(current.condition?.text ?? '未知'),
+    conditionText: toChineseCondition(current.condition) || '未知',
     precipMm: toNumber(current.precip_mm, 0),
     windKph: toNumber(current.wind_kph, 0),
     updatedAt: current.last_updated ? String(current.last_updated) : undefined,
