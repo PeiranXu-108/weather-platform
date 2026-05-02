@@ -5,6 +5,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 interface ModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface ModalProps {
 }
 
 export default function Modal({ isOpen, onClose, title, message, textColorTheme }: ModalProps) {
+  const { t } = useI18n();
   // Prevent scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -49,7 +51,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
         
         <div className="flex flex-col items-center text-center py-4">
           <div className={`mb-6 p-4 rounded-full ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-500'}`}>
-            <Icon src={ICONS.alert} className="w-12 h-12" title="提示" />
+            <Icon src={ICONS.alert} className="w-12 h-12" title={t('common.confirm')} />
           </div>
           
           <div className={`text-lg font-medium mb-8 ${textColorTheme.textColor.primary} whitespace-pre-wrap`}>
@@ -65,7 +67,7 @@ export default function Modal({ isOpen, onClose, title, message, textColorTheme 
               : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-200'
           }`}
         >
-          确定
+          {t('common.confirm')}
         </button>
       </div>
     </div>

@@ -82,6 +82,8 @@ export function fetchUsage(): Promise<Response> {
 export interface ChatRequestOptions {
   /** 用户当前位置（经纬度），用于回答"我这的天气"等查询 */
   userLocation?: { latitude: number; longitude: number };
+  /** 当前界面语言，用于约束 AI 回复语言 */
+  locale?: 'zh' | 'en';
   /** 用于取消请求的 AbortSignal */
   signal?: AbortSignal;
 }
@@ -95,6 +97,7 @@ export function fetchChat(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: historyMessages,
+      locale: options?.locale,
       ...(options?.userLocation && {
         userLocation: options.userLocation,
       }),

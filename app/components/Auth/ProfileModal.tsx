@@ -9,6 +9,7 @@ import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { fetchUsage } from '@/app/lib/api';
+import { useI18n } from '@/app/i18n';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export default function ProfileModal({
   textColorTheme,
   session,
 }: ProfileModalProps) {
+  const { locale, t } = useI18n();
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -62,7 +64,7 @@ export default function ProfileModal({
     const daily = usage?.daily ?? [];
     const dates = daily.map((d) => {
       const date = new Date(d.date);
-      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' });
     });
     const counts = daily.map((d) => d.count);
 
@@ -73,7 +75,7 @@ export default function ProfileModal({
           if (!params?.[0]) return '';
           const idx = params[0].axisValue ? dates.indexOf(params[0].axisValue) : -1;
           const dateStr = idx >= 0 && daily[idx] ? daily[idx].date : params[0].axisValue ?? '';
-          return `${dateStr}<br/>API 调用：${params[0].data} 次`;
+          return `${dateStr}<br/>${t('profile.apiCalls', { count: params[0].data })}`;
         },
       },
       grid: {
@@ -96,7 +98,7 @@ export default function ProfileModal({
       },
       yAxis: {
         type: 'value',
-        name: '次数',
+        name: t('profile.countAxis'),
         nameTextStyle: { color: axisColor },
         axisLabel: { color: axisColor },
         axisLine: { lineStyle: { color: axisColor } },
@@ -106,7 +108,7 @@ export default function ProfileModal({
       },
       series: [
         {
-          name: 'API 用量',
+          name: t('profile.apiUsage'),
           type: 'line',
           data: counts,
           smooth: true,
@@ -130,7 +132,7 @@ export default function ProfileModal({
         },
       ],
     };
-  }, [usage?.daily, isDark, titleColor, axisColor]);
+  }, [usage?.daily, isDark, titleColor, axisColor, locale, t]);
 
   if (!isOpen) return null;
   if (!session?.user) return null;
@@ -149,7 +151,7 @@ export default function ProfileModal({
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-black/5 transition-colors"
         >
-          <Icon src={ICONS.close} className={`w-5 h-5 ${textColorTheme.textColor.muted}`} title="关闭" />
+          <Icon src={ICONS.close} className={`w-5 h-5 ${textColorTheme.textColor.muted}`} title={t('common.close')} />
         </button>
 
         {/* 头像 + 邮箱 */}
@@ -171,19 +173,19 @@ export default function ProfileModal({
 
         {/* API 总用量 */}
         <div className={`mb-4 px-3 py-2 rounded-lg ${getCardStyle(textColorTheme.backgroundType)}`}>
-          <span className={`text-sm ${textColorTheme.textColor.secondary}`}>API 总用量：</span>
+          <span className={`text-sm ${textColorTheme.textColor.secondary}`}>{t('profile.totalApiUsage')}</span>
           <span className={`font-bold ${textColorTheme.textColor.primary}`}>
-            {loading ? '...' : usage?.total ?? 0} 次
+            {loading ? '...' : t('common.times', { count: usage?.total ?? 0 })}
           </span>
         </div>
 
         {/* 折线图 - 过去 30 天 */}
         <div className="mb-5">
-          <p className={`text-sm font-medium mb-2 ${textColorTheme.textColor.primary}`}>过去 30 天 API 用量</p>
+          <p className={`text-sm font-medium mb-2 ${textColorTheme.textColor.primary}`}>{t('profile.last30DaysUsage')}</p>
           <div className="h-48">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <Icon src={ICONS.spinner} className="w-8 h-8 animate-spin text-sky-500" title="加载中" />
+                <Icon src={ICONS.spinner} className="w-8 h-8 animate-spin text-sky-500" title={t('common.loading')} />
               </div>
             ) : (
               <ReactECharts
@@ -206,7 +208,7 @@ export default function ProfileModal({
             isDark ? 'bg-sky-600 hover:bg-sky-500 text-white' : 'bg-sky-500 hover:bg-sky-400 text-white shadow-sky-200'
           }`}
         >
-          退出登录
+          {t('profile.signOut')}
         </button>
       </div>
     </div>

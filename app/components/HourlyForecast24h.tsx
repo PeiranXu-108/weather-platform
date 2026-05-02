@@ -3,11 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import type { Hour, Astro } from '@/app/types/weather';
 import Image from 'next/image';
-import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import { localizeWeatherCondition } from '@/app/utils/weatherTranslations';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle, getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { getDayOfWeekLabel, useI18n } from '@/app/i18n';
 
 interface HourlyForecast24hProps {
   hourlyData: Hour[];
@@ -23,6 +24,7 @@ interface HourlyForecast24hProps {
 }
 
 export default function HourlyForecast24h({ hourlyData, currentTime, currentTimeEpoch: providedEpoch, textColorTheme, enhanceReadableText = false, opacity = 100, astro, astroNextDay }: HourlyForecast24hProps) {
+  const { locale, t } = useI18n();
   const [selectedHour, setSelectedHour] = useState<Hour | null>(null);
   // Parse current time correctly (format: "YYYY-MM-DD HH:mm")
   // Use provided epoch if available (more accurate), otherwise parse from string
@@ -139,6 +141,10 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
     const hour = date.getHours();
     const minute = date.getMinutes();
 
+    if (locale === 'en') {
+      return date.toLocaleTimeString('en', { hour: 'numeric', hour12: true });
+    }
+
     let period = '';
     let displayHour = hour;
 
@@ -163,8 +169,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   const getDayOfWeek = (timeString: string) => {
     // Parse local time string (already in local timezone)
     const date = new Date(timeString.replace(' ', 'T'));
-    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return days[date.getDay()];
+    return getDayOfWeekLabel(date, locale);
   };
 
   const formatFullDateTime = (timeString: string) => {
@@ -173,7 +178,9 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
     const day = String(date.getDate()).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${month}月${day}日 ${getDayOfWeek(timeString)} ${hours}:${minutes}`;
+    return locale === 'en'
+      ? `${date.toLocaleDateString('en', { month: 'short', day: 'numeric' })} ${getDayOfWeek(timeString)} ${hours}:${minutes}`
+      : `${month}月${day}日 ${getDayOfWeek(timeString)} ${hours}:${minutes}`;
   };
 
   useEffect(() => {
@@ -210,7 +217,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
   return (
     <div className={`rounded-2xl shadow-xl p-4 h-full flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <h2 className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-4`} style={rs('primary')}>
-        未来24小时
+        {t('weather.next24Hours')}
       </h2>
       <div className="overflow-x-auto flex-1">
         <div className="flex gap-3 min-w-max pb-2 pr-1">
@@ -226,14 +233,14 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                       ? `${textColorTheme.backgroundType === 'dark' ? 'ring-2 ring-blue-300/70' : 'ring-2 ring-sky-400/80'}`
                       : ''
                     } ${cardInteractiveClass}`}
-                  aria-label={`查看${formatTime(hour.time)}天气详情`}
+                  aria-label={t('weather.viewHourDetails', { time: formatTime(hour.time) })}
                 >
                   <p
                     className={`text-xs mb-1 whitespace-nowrap ${isCurrent ? `${textColorTheme.textColor.accent} font-semibold` : textColorTheme.textColor.muted
                       }`}
                     style={rs('secondary')}
                   >
-                    {isCurrent ? '现在' : formatTime(hour.time)}
+                    {isCurrent ? t('common.now') : formatTime(hour.time)}
                   </p>
                   <p
                     className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`}
@@ -244,7 +251,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                   <div className="flex justify-center mb-2">
                     <Image
                       src={`https:${hour.condition.icon}`}
-                      alt={translateWeatherCondition(hour.condition)}
+                      alt={localizeWeatherCondition(hour.condition, locale)}
                       width={40}
                       height={40}
                       className="w-10 h-10 transition-transform duration-200 group-hover:scale-110"
@@ -258,7 +265,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                     {hour.temp_c.toFixed(1)}°C
                   </p>
                   <p className={`text-[11px] ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
-                    体感 {hour.feelslike_c.toFixed(1)}°C
+                    {t('weather.feelsLike', { value: `${hour.feelslike_c.toFixed(1)}°C` })}
                   </p>
                 </button>
               );
@@ -268,16 +275,16 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                 <div
                   key={`sunrise-${index}`}
                   className={cardBaseClass}
-                  aria-label={`日出 ${item.time}`}
+                  aria-label={`${t('weather.sunrise')} ${item.time}`}
                 >
                   <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
-                    日出
+                    {t('weather.sunrise')}
                   </p>
                   <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`} style={rs('secondary')}>
                     —
                   </p>
                   <div className="flex justify-center mb-2">
-                    <Icon src={ICONS.sunrise} className="w-10 h-10 text-amber-500" title="日出" />
+                    <Icon src={ICONS.sunrise} className="w-10 h-10 text-amber-500" title={t('weather.sunrise')} />
                   </div>
                   <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`} style={rs('primary')}>
                     {item.time}
@@ -293,16 +300,16 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
               <div
                 key={`sunset-${index}`}
                 className={cardBaseClass}
-                aria-label={`日落 ${item.time}`}
+                aria-label={`${t('weather.sunset')} ${item.time}`}
               >
                 <p className={`text-xs mb-1 whitespace-nowrap ${textColorTheme.textColor.muted}`} style={rs('secondary')}>
-                  日落
+                  {t('weather.sunset')}
                 </p>
                 <p className={`text-[11px] font-medium ${textColorTheme.textColor.secondary} mb-1`} style={rs('secondary')}>
                   —
                 </p>
                 <div className="flex justify-center mb-2">
-                  <Icon src={ICONS.sunset} className="w-10 h-10 text-orange-500" title="日落" />
+                  <Icon src={ICONS.sunset} className="w-10 h-10 text-orange-500" title={t('weather.sunset')} />
                 </div>
                 <p className={`text-sm font-semibold ${textColorTheme.textColor.primary}`} style={rs('primary')}>
                   {item.time}
@@ -333,7 +340,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                   <div className={`p-3 rounded-2xl ${isDarkTheme ? 'bg-white/5' : 'bg-sky-50'} shadow-inner`}>
                     <Image
                       src={`https:${selectedHour.condition.icon}`}
-                      alt={translateWeatherCondition(selectedHour.condition)}
+                      alt={localizeWeatherCondition(selectedHour.condition, locale)}
                       width={72}
                       height={72}
                       className="w-14 h-14"
@@ -347,7 +354,7 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                       {selectedHour.temp_c.toFixed(1)}°C
                     </p>
                     <p className={`text-sm sm:text-base truncate ${textColorTheme.textColor.muted}`}>
-                      {translateWeatherCondition(selectedHour.condition)}
+                      {localizeWeatherCondition(selectedHour.condition, locale)}
                     </p>
                   </div>
                 </div>
@@ -355,79 +362,79 @@ export default function HourlyForecast24h({ hourlyData, currentTime, currentTime
                   type="button"
                   onClick={() => setSelectedHour(null)}
                   className={`rounded-full p-2 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0 transition hover:rotate-90 ${isDarkTheme ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                  aria-label="关闭天气详情"
+                  aria-label={t('weather.closeDetails')}
                 >
-                  <Icon src={ICONS.close} className="w-6 h-6" title="关闭" />
+                  <Icon src={ICONS.close} className="w-6 h-6" title={t('common.close')} />
                 </button>
               </div>
 
               <div className="flex flex-wrap gap-2 min-w-0">
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  {selectedHour.is_day === 1 ? '白天时段' : '夜间时段'}
+                  {selectedHour.is_day === 1 ? t('weather.dayPeriod') : t('weather.nightPeriod')}
                 </span>
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  体感 {selectedHour.feelslike_c.toFixed(1)}°C
+                  {t('weather.feelsLike', { value: `${selectedHour.feelslike_c.toFixed(1)}°C` })}
                 </span>
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  降水概率 {selectedHour.chance_of_rain ?? 0}%
+                  {t('weather.rainChance', { value: selectedHour.chance_of_rain ?? 0 })}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   {
-                    label: '降水/降雪',
+                    label: t('weather.precipSnow'),
                     value: `${selectedHour.precip_mm} mm`,
-                    sub: `雨概率 ${selectedHour.chance_of_rain ?? 0}% · 雪概率 ${selectedHour.chance_of_snow ?? 0}%`,
-                    icon: <Icon src={ICONS.precipitation} className="w-6 h-6 text-sky-400" title="降水" />
+                    sub: t('weather.rainProbability', { rain: selectedHour.chance_of_rain ?? 0, snow: selectedHour.chance_of_snow ?? 0 }),
+                    icon: <Icon src={ICONS.precipitation} className="w-6 h-6 text-sky-400" title={t('weather.precipShort')} />
                   },
                   {
-                    label: '湿度',
+                    label: t('weather.humidity'),
                     value: `${selectedHour.humidity}%`,
-                    sub: '空气相对湿度',
-                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-blue-300" title="湿度" />
+                    sub: t('weather.relativeHumidity'),
+                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-blue-300" title={t('weather.humidity')} />
                   },
                   {
-                    label: '云量',
+                    label: t('weather.cloudAmount'),
                     value: `${selectedHour.cloud}%`,
-                    sub: '天空云覆盖率',
-                    icon: <Icon src={ICONS.cloudAmount} className="w-6 h-6 text-indigo-300" title="云量" />
+                    sub: t('weather.cloudCoverage'),
+                    icon: <Icon src={ICONS.cloudAmount} className="w-6 h-6 text-indigo-300" title={t('weather.cloudAmount')} />
                   },
                   {
-                    label: '风速 / 阵风',
+                    label: t('weather.windGust'),
                     value: `${Math.round(selectedHour.wind_kph)} km/h`,
-                    sub: `阵风 ${Math.round(selectedHour.gust_kph)} km/h`,
-                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title="风" />
+                    sub: t('weather.gustValue', { value: `${Math.round(selectedHour.gust_kph)} km/h` }),
+                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title={t('chat.panel.wind')} />
                   },
                   {
-                    label: '风向',
+                    label: t('weather.windDirection'),
                     value: `${selectedHour.wind_dir}`,
                     sub: `${selectedHour.wind_degree}°`,
-                    icon: <Icon src={ICONS.windDirection} className="w-6 h-6 text-indigo-400" title="风向" />
+                    icon: <Icon src={ICONS.windDirection} className="w-6 h-6 text-indigo-400" title={t('weather.windDirection')} />
                   },
                   {
-                    label: '气压',
+                    label: t('weather.pressure'),
                     value: `${selectedHour.pressure_mb} mb`,
-                    sub: '海平面气压',
-                    icon: <Icon src={ICONS.pressure} className="w-6 h-6 text-violet-400" title="气压" />
+                    sub: t('weather.seaLevelPressure'),
+                    icon: <Icon src={ICONS.pressure} className="w-6 h-6 text-violet-400" title={t('weather.pressure')} />
                   },
                   {
-                    label: '露点',
+                    label: t('weather.dewPoint'),
                     value: `${selectedHour.dewpoint_c.toFixed(1)}°C`,
-                    sub: '空气水汽饱和温度',
-                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-cyan-400" title="露点" />
+                    sub: t('weather.dewPointSub'),
+                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-cyan-400" title={t('weather.dewPoint')} />
                   },
                   {
-                    label: '能见度',
+                    label: t('weather.visibility'),
                     value: `${selectedHour.vis_km} km`,
-                    sub: '水平能见距离',
-                    icon: <Icon src={ICONS.visibility} className="w-6 h-6 text-amber-400" title="能见度" />
+                    sub: t('weather.visibilitySub'),
+                    icon: <Icon src={ICONS.visibility} className="w-6 h-6 text-amber-400" title={t('weather.visibility')} />
                   },
                   {
-                    label: '紫外线',
+                    label: t('weather.uv'),
                     value: `${selectedHour.uv}`,
-                    sub: 'UV 指数',
-                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-500" title="紫外线" />
+                    sub: t('weather.uvIndexSub'),
+                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-500" title={t('weather.uv')} />
                   },
                 ].map(stat => (
                   <div

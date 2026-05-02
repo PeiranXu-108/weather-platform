@@ -3,6 +3,8 @@
 import { Current, Location } from "@/app/types/weather";
 import { TextColorTheme, readableTextShadowStyle } from "@/app/utils/textColorTheme";
 import { useTranslatedText } from "@/app/hooks/useTranslatedText";
+import { useI18n } from "@/app/i18n";
+import { localizeWeatherCondition } from "@/app/utils/weatherTranslations";
 
 export type InfoCardVariant = 'default' | 'globe';
 
@@ -22,6 +24,7 @@ export function WeatherCardContent({
   /** 与地图标题一致：叠在复杂背景上时为文字加阴影 */
   enhanceReadableText?: boolean;
 }) {
+  const { locale, t } = useI18n();
   const rawName = location?.name ?? "";
   const rawCondition = current.condition.text ?? "";
   const geo = {
@@ -29,8 +32,10 @@ export function WeatherCardContent({
     region: location?.region,
     city: location?.name,
   };
-  const displayLocationName = useTranslatedText(rawName, geo);
-  const displayCondition = useTranslatedText(rawCondition, geo);
+  const translatedLocationName = useTranslatedText(rawName, geo);
+  const translatedCondition = useTranslatedText(rawCondition, geo);
+  const displayLocationName = locale === 'zh' ? translatedLocationName : rawName;
+  const displayCondition = locale === 'zh' ? translatedCondition : localizeWeatherCondition(current.condition, locale);
 
   const shellClass = [
     'backdrop-blur-md rounded-xl shadow-2xl p-2 min-w-[90px] border border-white/10 relative',
@@ -56,8 +61,8 @@ export function WeatherCardContent({
             onGoToWeather();
           }}
           className={`absolute top-1.5 right-1.5 flex h-7 w-7 min-w-[28px] min-h-[28px] items-center justify-center rounded-lg transition-colors ${arrowClass}`}
-          title="查看该地点天气"
-          aria-label="查看该地点天气"
+          title={t('map.viewLocationWeather')}
+          aria-label={t('map.viewLocationWeather')}
         >
           <svg
             width="18"

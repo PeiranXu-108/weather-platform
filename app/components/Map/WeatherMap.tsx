@@ -21,6 +21,7 @@ import { fetchWeatherByCoords } from '@/app/lib/api';
 import Globe3D from './Globe3D';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { isDomesticCity } from '@/app/utils/utils';
+import { useI18n } from '@/app/i18n';
 
 interface WeatherMapProps {
   location: Location;
@@ -43,6 +44,7 @@ const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
 
 export default function WeatherMap({ location, textColorTheme, enhanceReadableText = false, opacity = 100, onGoToLocation }: WeatherMapProps) {
+  const { locale, t } = useI18n();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
@@ -116,14 +118,14 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
   );
 
   const timelineTimeLabel = useMemo(() => {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
     }).format(new Date(targetTimelineEpoch * 1000));
-  }, [targetTimelineEpoch]);
+  }, [targetTimelineEpoch, locale]);
 
   const isForeignCity = useMemo(() => !isDomesticCity(location.country ?? '', location.region ?? '', location.name ?? ''), [location.country, location.region, location.name]);
 
@@ -1175,7 +1177,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       // 添加标记点
       const marker = new window.AMap.Marker({
         position: center,
-        title: location.name || '当前位置',
+        title: location.name || t('map.currentLocation'),
         content: buildCenterMarkerContent(
           centerWeather?.current?.temp_c ?? null,
           centerWeather?.forecast?.forecastday?.[0]?.day?.mintemp_c ?? null,
@@ -1191,7 +1193,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       // 添加信息窗体（可选）
       const infoWindow = new window.AMap.InfoWindow({
         content: `<div style="padding: 10px;">
-          <div style="font-weight: bold; margin-bottom: 5px;">${location.name || '当前位置'}</div>
+          <div style="font-weight: bold; margin-bottom: 5px;">${location.name || t('map.currentLocation')}</div>
           <div style="font-size: 12px; color: #666;">${location.region || ''} ${location.country || ''}</div>
         </div>`,
         offset: new window.AMap.Pixel(0, -30),
@@ -1462,7 +1464,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     document.head.appendChild(script);
 
     return cleanup;
-  }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer]);
+  }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer, t]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
@@ -1506,7 +1508,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     <div className="rounded-2xl shadow-xl p-4 h-full flex flex-col relative" style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`} style={mapTitleShadow}>
-          地图位置
+          {t('map.title')}
         </h2>
         {!isForeignCity && (
           <SegmentedDropdown
@@ -1515,12 +1517,12 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
             positionClassName="relative z-20"
             mainButton={{
               value: mapRenderMode,
-              label: mapRenderMode === '3d' ? '地球视图' : '地图视图',
+              label: mapRenderMode === '3d' ? t('map.globeView') : t('map.mapView'),
               icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
             }}
             dropdownOptions={[
-              { value: '2d', label: '地图视图', icon: '/icons/地图.svg' },
-              { value: '3d', label: '地球视图', icon: '/icons/地球.svg' },
+              { value: '2d', label: t('map.mapView'), icon: '/icons/地图.svg' },
+              { value: '3d', label: t('map.globeView'), icon: '/icons/地球.svg' },
             ]}
             onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
           />
@@ -1618,7 +1620,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
                 className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
                 aria-expanded={layerDropdownOpen}
                 aria-haspopup="true"
-                title={anyLayerEnabled ? '图层：已开启' : '图层选项'}
+                title={anyLayerEnabled ? t('map.layersOn') : t('map.layerOptions')}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                   <rect x="3" y="7" width="14" height="14" rx="2" />
@@ -1635,7 +1637,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
                       )}
                     </span>
-                    <span>气温</span>
+                    <span>{t('map.temperatureLayer')}</span>
                   </button>
                   <button type="button" onClick={() => handleWindLayerChange(!windLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${windLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
                     <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
@@ -1648,7 +1650,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
                         </svg>
                       )}
                     </span>
-                    <span>风力</span>
+                    <span>{t('map.windLayer')}</span>
                   </button>
                   <button type="button" onClick={() => handleCloudLayerChange(!cloudLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${cloudLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
                     <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
@@ -1660,7 +1662,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
                         </svg>
                       )}
                     </span>
-                    <span>云量</span>
+                    <span>{t('map.cloudLayer')}</span>
                   </button>
                   <button type="button" onClick={() => handlePrecipLayerChange(!precipLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${precipLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
                     <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
@@ -1675,7 +1677,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
                         </svg>
                       )}
                     </span>
-                    <span>降水</span>
+                    <span>{t('map.precipLayer')}</span>
                   </button>
                 </div>
               )}
@@ -1686,8 +1688,8 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
             type="button"
             onClick={toggleFullscreen}
             className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
-            title={isFullscreen ? '退出全屏' : '全屏'}
-            aria-label={isFullscreen ? '退出全屏' : '全屏'}
+            title={isFullscreen ? t('map.exitFullscreen') : t('map.fullscreen')}
+            aria-label={isFullscreen ? t('map.exitFullscreen') : t('map.fullscreen')}
           >
             {isFullscreen ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -1707,8 +1709,8 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
               type="button"
               onClick={handleZoomOut}
               className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-              title="缩小"
-              aria-label="缩小"
+              title={t('map.zoomOut')}
+              aria-label={t('map.zoomOut')}
             >
               −
             </button>
@@ -1716,8 +1718,8 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
               type="button"
               onClick={handleZoomIn}
               className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-              title="放大"
-              aria-label="放大"
+              title={t('map.zoomIn')}
+              aria-label={t('map.zoomIn')}
             >
               +
             </button>
@@ -1744,7 +1746,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
         />
       </div>
       <div className={`mt-3 text-sm ${textColorTheme.textColor.secondary}`} style={mapFooterShadow}>
-        <p>坐标: {location.lat.toFixed(4)}, {location.lon.toFixed(4)}</p>
+        <p>{t('map.coordinates', { lat: location.lat.toFixed(4), lon: location.lon.toFixed(4) })}</p>
       </div>
     </div>
   );

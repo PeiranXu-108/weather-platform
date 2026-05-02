@@ -5,6 +5,7 @@ import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import { fetchChat } from '@/app/lib/api';
 import type { ChatLayoutMode, ChatMessage, ChatSSEEvent } from './types';
+import { useI18n } from '@/app/i18n';
 
 interface ChatPanelProps {
   isDark: boolean;
@@ -14,26 +15,26 @@ interface ChatPanelProps {
 }
 
 // 快捷问题池
-const QUICK_QUESTIONS = [
-  '中国哪里在下雪？',
-  '浙江哪里在下雨？',
-  '北京明天会下雨吗？',
-  '上海未来一周天气预报',
-  '杭州今天天气怎么样？',
-  '深圳未来3天会下雨吗？',
-  '成都的紫外线强不强？',
-  '广州现在湿度多少？',
-  '南京明天适合户外活动吗？',
-  '武汉周末天气如何？',
-  '西安最近会降温吗？',
-  '苏州空气质量怎么样？',
-  '厦门海边风大吗？',
-  '青岛适合去玩吗？',
-  '今天上海的天气怎么样？',
-];
+const QUICK_QUESTION_KEYS = [
+  'chat.quick.snowChina',
+  'chat.quick.rainZhejiang',
+  'chat.quick.beijingRainTomorrow',
+  'chat.quick.shanghaiWeek',
+  'chat.quick.hangzhouToday',
+  'chat.quick.shenzhenRain3d',
+  'chat.quick.chengduUv',
+  'chat.quick.guangzhouHumidity',
+  'chat.quick.nanjingOutdoor',
+  'chat.quick.wuhanWeekend',
+  'chat.quick.xianCooling',
+  'chat.quick.suzhouAir',
+  'chat.quick.xiamenWind',
+  'chat.quick.qingdaoTravel',
+  'chat.quick.shanghaiToday',
+] as const;
 
 // 需要定位的快捷问题（当有 userLocation 时加入候选池）
-const LOCATION_QUICK_QUESTION = '我这的天气怎么样？';
+const LOCATION_QUICK_QUESTION_KEY = 'chat.quick.localWeather';
 
 /** 打乱数组并取前 n 个 */
 function shuffleAndPick<T>(arr: T[], n: number): T[] {
@@ -52,6 +53,7 @@ function genId() {
 }
 
 export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatPanelProps) {
+  const { locale, t } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,18 +65,18 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
   // 根据 userLocation 是否开启展示快捷问题：开启时「我这的天气怎么样？」一定展示 + 随机 2 个；未开启时随机 2 或 3 个
   // 使用 useState + useEffect 避免 SSR 水合错误（random 在服务端与客户端结果不同）
   const [displayedQuestions, setDisplayedQuestions] = useState<string[]>(() =>
-    QUICK_QUESTIONS.slice(0, 3)
+    QUICK_QUESTION_KEYS.slice(0, 3).map((key) => t(key))
   );
 
   useEffect(() => {
     if (userLocation) {
-      const picked = shuffleAndPick(QUICK_QUESTIONS, 2);
-      setDisplayedQuestions([LOCATION_QUICK_QUESTION, ...picked]);
+      const picked = shuffleAndPick([...QUICK_QUESTION_KEYS], 2).map((key) => t(key));
+      setDisplayedQuestions([t(LOCATION_QUICK_QUESTION_KEY), ...picked]);
     } else {
       const count = Math.random() < 0.5 ? 2 : 3;
-      setDisplayedQuestions(shuffleAndPick(QUICK_QUESTIONS, count));
+      setDisplayedQuestions(shuffleAndPick([...QUICK_QUESTION_KEYS], count).map((key) => t(key)));
     }
-  }, [userLocation]);
+  }, [userLocation, t]);
 
   // 获取用户当前位置（打开面板时请求一次）
   useEffect(() => {
@@ -140,18 +142,19 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
       abortRef.current = new AbortController();
 
       const response = await fetchChat(historyMessages, {
+        locale,
         userLocation: userLocation ?? undefined,
         signal: abortRef.current.signal,
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '请求失败' }));
+        const errorData = await response.json().catch(() => ({ error: t('chat.requestFailed') }));
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
 
       // 读取 SSE 流
       const reader = response.body?.getReader();
-      if (!reader) throw new Error('无法读取响应流');
+      if (!reader) throw new Error(t('chat.streamReadFailed'));
 
       const decoder = new TextDecoder();
       let buffer = '';
@@ -285,7 +288,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                     m.id === assistantId
                       ? {
                           ...m,
-                          content: event.content || '抱歉，出现了错误，请稍后再试。',
+                          content: event.content || t('chat.genericAssistantError'),
                           panels: event.panel ? [...(m.panels ?? []), event.panel] : m.panels,
                         }
                       : m
@@ -307,7 +310,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: `抱歉，请求出现了问题：${(error as Error).message || '未知错误'}。请稍后再试。` }
+            ? { ...m, content: t('chat.requestProblem', { error: (error as Error).message || t('chat.unknownError') }) }
             : m
         )
       );
@@ -315,7 +318,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [isLoading, messages, userLocation]);
+  }, [isLoading, locale, messages, userLocation, t]);
 
   const handleSend = useCallback(() => {
     sendMessage(input);
@@ -328,7 +331,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
 
   const isFloating = mode === 'floating';
   const isFullscreenMobile = mode === 'fullscreen-mobile';
-  const dockButtonLabel = isFloating ? '放大聊天窗口' : '还原聊天窗口';
+  const dockButtonLabel = isFloating ? t('chat.expandWindow') : t('chat.restoreWindow');
 
   return (
     <div
@@ -355,7 +358,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isDark ? 'bg-green-400' : 'bg-green-500'}`} />
           <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
-            天气小助手
+            {t('chat.title')}
           </h3>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
             isDark ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-600'
@@ -390,7 +393,7 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
                 ? 'hover:bg-white/10 text-gray-400 hover:text-white'
                 : 'hover:bg-black/5 text-gray-500 hover:text-gray-700'
             }`}
-            title="关闭"
+            title={t('common.close')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -412,16 +415,16 @@ export default function ChatPanel({ isDark, onClose, mode, onToggleDock }: ChatP
             </div>
 
             <h4 className={`text-base font-semibold mb-1.5 ${isDark ? 'text-white' : 'text-gray-800'}`}>
-              你好，我是天气小助手
+              {t('chat.welcomeTitle')}
             </h4>
             <p className={`text-xs mb-5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              可以帮你查询全球城市的天气信息
+              {t('chat.welcomeDescription')}
             </p>
 
             {/* 快捷问题 - 根据 userLocation 随机展示 2 或 3 个 */}
             <div className="w-full space-y-2">
               <p className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                试试问我
+                {t('chat.tryAsk')}
               </p>
               {displayedQuestions.map((q) => (
                 <button

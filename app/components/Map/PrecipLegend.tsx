@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/app/i18n';
+
 const LABELS = [50, 25, 10, 5, 1, 0.1, 0];
 const COLORS = [
   'rgb(140, 60, 190)',
@@ -17,9 +19,10 @@ const gradientValue = COLORS.map((color, index) => {
 }).join(', ');
 
 export default function PrecipLegend() {
+  const { t } = useI18n();
   return (
     <div className="bg-white/70 backdrop-blur-md rounded-xl shadow-2xl px-3 py-2 border border-white/40">
-      <p className="text-xs font-medium text-gray-800 mb-2">降水量 (mm)</p>
+      <p className="text-xs font-medium text-gray-800 mb-2">{t('map.precipLegend')}</p>
       <div className="flex items-stretch gap-2">
         <div
           className="w-1 rounded-full flex-shrink-0"

@@ -7,15 +7,17 @@ import {
   type WeatherAssistantPanel,
   type WeatherErrorPanel,
 } from '@/app/components/ChatBot/types';
-import { AREA_CONDITION_SUMMARY_PROMPT, buildSystemPrompt } from './prompts';
+import { buildAreaConditionSummaryPrompt, buildSystemPrompt } from './prompts';
 import type { AgentEmit, AreaConditionIntent } from './types';
 import {
   detectWeatherConditionIntent,
   getWeatherConditionLabel,
+  type WeatherConditionIntent,
 } from './weatherConditions';
 
 interface RunWeatherAgentOptions {
   messages: Array<{ role: string; content: string }>;
+  locale?: 'zh' | 'en';
   userLocation?: { latitude: number; longitude: number };
   qwenClient: OpenAI;
   emit: AgentEmit;
@@ -24,7 +26,7 @@ interface RunWeatherAgentOptions {
 
 const QWEN_NON_STREAM_TIMEOUT_MS = 30_000;
 const QWEN_STREAM_TIMEOUT_MS = 60_000;
-const FOLLOWUP_QUESTIONS_PROMPT = `你是天气助手的推荐问题生成器。
+const FOLLOWUP_QUESTIONS_PROMPT_ZH = `你是天气助手的推荐问题生成器。
 根据用户与助手的历史对话，以及助手刚刚给出的回答，生成 1-3 个用户最可能继续追问的问题。
 要求：
 - 只输出 JSON 数组，例如 ["明天还会下雨吗？","周末适合户外活动吗？"]
@@ -32,11 +34,42 @@ const FOLLOWUP_QUESTIONS_PROMPT = `你是天气助手的推荐问题生成器。
 - 优先围绕当前地点、时间、天气风险、穿衣、出行、未来趋势继续追问
 - 不要重复用户刚问过的问题，不要输出解释文字`;
 
+const FOLLOWUP_QUESTIONS_PROMPT_EN = `You generate suggested follow-up questions for a weather assistant.
+Based on the user-assistant conversation history and the assistant's latest answer, generate 1-3 questions the user is most likely to ask next.
+Requirements:
+- Output only a JSON array, for example ["Will it rain tomorrow?","Is the weekend good for outdoor activities?"]
+- Questions must be short, natural, and ready to send when clicked.
+- Prefer follow-ups about the current location, time, weather risks, clothing, travel, and future trends.
+- Do not repeat questions the user already asked. Do not output explanatory text.
+- All questions must be in English.`;
+
+function buildFollowupQuestionsPrompt(locale: 'zh' | 'en' = 'zh'): string {
+  return locale === 'en' ? FOLLOWUP_QUESTIONS_PROMPT_EN : FOLLOWUP_QUESTIONS_PROMPT_ZH;
+}
+
 const MAX_CONDITION_SEARCH_LIMIT = 300;
 const configuredConditionSearchLimit = Number(process.env.WEATHER_CONDITION_SEARCH_LIMIT);
 const DEFAULT_CONDITION_SEARCH_LIMIT = Number.isFinite(configuredConditionSearchLimit)
   ? Math.min(MAX_CONDITION_SEARCH_LIMIT, Math.max(1, Math.round(configuredConditionSearchLimit)))
   : 150;
+
+const WEATHER_CONDITION_LABELS_EN: Record<WeatherConditionIntent, string> = {
+  snow: 'snow',
+  rain: 'rain',
+  hot: 'hot weather',
+  cold: 'cold weather',
+  wind: 'strong wind',
+  clear: 'clear weather',
+  cloudy: 'cloudy weather',
+  overcast: 'overcast skies',
+  fog: 'fog',
+  haze: 'haze',
+  thunder: 'thunderstorms',
+  humid: 'humid weather',
+  dry: 'dry weather',
+  comfortable: 'comfortable weather',
+  adverse: 'adverse weather',
+};
 
 const PROVINCES = [
   '北京', '天津', '上海', '重庆', '河北', '山西', '辽宁', '吉林', '黑龙江', '江苏', '浙江', '安徽',
@@ -102,6 +135,7 @@ async function generateFollowupQuestions(
   qwenClient: OpenAI,
   messages: Array<{ role: string; content: string }>,
   assistantAnswer: string,
+  locale: 'zh' | 'en' = 'zh',
   signal?: AbortSignal
 ): Promise<string[]> {
   if (!assistantAnswer.trim()) return [];
@@ -111,7 +145,7 @@ async function generateFollowupQuestions(
   const completion = await qwenClient.chat.completions.create({
     model: 'qwen-plus',
     messages: [
-      { role: 'system', content: FOLLOWUP_QUESTIONS_PROMPT },
+      { role: 'system', content: buildFollowupQuestionsPrompt(locale) },
       {
         role: 'user',
         content: JSON.stringify({
@@ -138,6 +172,7 @@ async function emitFollowupQuestions(
       options.qwenClient,
       options.messages,
       assistantAnswer,
+      options.locale ?? 'zh',
       options.signal
     );
 
@@ -185,16 +220,19 @@ async function summarizeAreaConditionResult(
   qwenClient: OpenAI,
   userMessage: string,
   toolResultText: string,
+  locale: 'zh' | 'en' = 'zh',
   signal?: AbortSignal
 ): Promise<string> {
   throwIfAborted(signal);
   const completion = await qwenClient.chat.completions.create({
     model: 'qwen-plus',
     messages: [
-      { role: 'system', content: AREA_CONDITION_SUMMARY_PROMPT },
+      { role: 'system', content: buildAreaConditionSummaryPrompt(locale) },
       {
         role: 'user',
-        content: `用户问题：${userMessage}\n\n工具结果：${toolResultText}`,
+        content: locale === 'en'
+          ? `User question: ${userMessage}\n\nTool result: ${toolResultText}`
+          : `用户问题：${userMessage}\n\n工具结果：${toolResultText}`,
       },
     ],
     stream: false,
@@ -203,7 +241,11 @@ async function summarizeAreaConditionResult(
     timeout: QWEN_NON_STREAM_TIMEOUT_MS,
   });
 
-  return completion.choices[0]?.message?.content || '已完成区域天气检索，详细结果见面板。';
+  return completion.choices[0]?.message?.content || (
+    locale === 'en'
+      ? 'Regional weather search is complete. See the panel for details.'
+      : '已完成区域天气检索，详细结果见面板。'
+  );
 }
 
 async function runAreaConditionSearch(
@@ -211,20 +253,28 @@ async function runAreaConditionSearch(
   intent: AreaConditionIntent
 ) {
   throwIfAborted(options.signal);
+  const locale = options.locale ?? 'zh';
   const mcpClient = await createMcpClient({ signal: options.signal });
   const userMessage = latestUserMessage(options.messages);
-  const scopeLabel = intent.scope === 'province' && intent.province ? intent.province : '全国主要城市';
+  const scopeLabel = intent.scope === 'province' && intent.province
+    ? intent.province
+    : (locale === 'en' ? 'major cities in China' : '全国主要城市');
+  const conditionPhrase = locale === 'en'
+    ? WEATHER_CONDITION_LABELS_EN[intent.condition]
+    : intent.phrase;
   const toolName = 'search_weather_by_condition';
 
   try {
     throwIfAborted(options.signal);
     emitEvent(options.emit, {
       type: 'agent_plan',
-      content: `识别为区域天气检索：扫描${scopeLabel}，筛选天气满足“${intent.phrase}”的地点。`,
+      content: locale === 'en'
+        ? `Detected a regional weather search: scanning ${scopeLabel} for locations matching "${conditionPhrase}".`
+        : `识别为区域天气检索：扫描${scopeLabel}，筛选天气满足“${conditionPhrase}”的地点。`,
     });
     emitEvent(options.emit, {
       type: 'agent_step',
-      title: '检索候选城市并批量查询实时天气',
+      title: locale === 'en' ? 'Search candidate cities and query current weather' : '检索候选城市并批量查询实时天气',
       toolName,
       status: 'running',
     });
@@ -236,6 +286,7 @@ async function runAreaConditionSearch(
         province: intent.province,
         condition: intent.condition,
         limit: DEFAULT_CONDITION_SEARCH_LIMIT,
+        locale,
       },
     }, undefined, { signal: options.signal });
     throwIfAborted(options.signal);
@@ -251,7 +302,9 @@ async function runAreaConditionSearch(
       if (panel.kind === 'condition_search') {
         options.emit({
           type: 'agent_observation',
-          content: `已检查 ${panel.checkedCount} 个城市，发现 ${panel.matchedLocations.length} 个匹配地点。`,
+          content: locale === 'en'
+            ? `Checked ${panel.checkedCount} cities and found ${panel.matchedLocations.length} matching locations.`
+            : `已检查 ${panel.checkedCount} 个城市，发现 ${panel.matchedLocations.length} 个匹配地点。`,
         });
       }
     }
@@ -260,6 +313,7 @@ async function runAreaConditionSearch(
       options.qwenClient,
       userMessage,
       toolResultText,
+      locale,
       options.signal
     );
     throwIfAborted(options.signal);
@@ -267,21 +321,26 @@ async function runAreaConditionSearch(
     await emitFollowupQuestions(options, summary);
     options.emit({
       type: 'agent_step',
-      title: '区域天气检索完成',
+      title: locale === 'en' ? 'Regional weather search complete' : '区域天气检索完成',
       toolName,
       status: 'done',
     });
   } catch (error) {
     if (isAbortError(error) || options.signal?.aborted) throw error;
-    const errorMsg = error instanceof Error ? error.message : '区域天气检索失败';
+    const errorMsg = error instanceof Error ? error.message : (locale === 'en' ? 'Regional weather search failed' : '区域天气检索失败');
     options.emit({
       type: 'panel',
-      panel: buildErrorPanel('区域天气检索失败', errorMsg, toolName),
+      panel: buildErrorPanel(locale === 'en' ? 'Regional weather search failed' : '区域天气检索失败', errorMsg, toolName),
     });
-    options.emit({ type: 'text', content: `区域天气检索失败：${errorMsg}` });
+    options.emit({
+      type: 'text',
+      content: locale === 'en'
+        ? `Regional weather search failed: ${errorMsg}`
+        : `区域天气检索失败：${errorMsg}`,
+    });
     options.emit({
       type: 'agent_step',
-      title: '区域天气检索失败',
+      title: locale === 'en' ? 'Regional weather search failed' : '区域天气检索失败',
       toolName,
       status: 'done',
     });
@@ -297,7 +356,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
   try {
     const { tools: mcpTools } = await mcpClient.listTools(undefined, { signal: options.signal });
     const openaiTools = mcpToolsToOpenAITools(mcpTools);
-    const systemPrompt = buildSystemPrompt(options.userLocation);
+    const systemPrompt = buildSystemPrompt(options.userLocation, options.locale ?? 'zh');
     const allMessages: OpenAI.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       ...options.messages.map((message) => ({
@@ -352,6 +411,7 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
         } catch {
           toolArgs = {};
         }
+        toolArgs.locale = options.locale ?? 'zh';
 
         options.emit({ type: 'tool_start', name: toolName, args: toolArgs });
 
@@ -378,8 +438,8 @@ async function runToolCallingChat(options: RunWeatherAgentOptions) {
           } as OpenAI.ChatCompletionMessageParam);
         } catch (toolError) {
           if (isAbortError(toolError) || options.signal?.aborted) throw toolError;
-          const errorMsg = toolError instanceof Error ? toolError.message : '工具调用失败';
-          const panel = buildErrorPanel('工具调用失败', errorMsg, toolName);
+          const errorMsg = toolError instanceof Error ? toolError.message : (options.locale === 'en' ? 'Tool call failed' : '工具调用失败');
+          const panel = buildErrorPanel(options.locale === 'en' ? 'Tool call failed' : '工具调用失败', errorMsg, toolName);
           options.emit({ type: 'panel', panel });
           allMessages.push({
             role: 'tool',

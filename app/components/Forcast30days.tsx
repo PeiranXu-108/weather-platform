@@ -14,6 +14,8 @@ import { ICONS } from '@/app/utils/icons';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { getTemperatureColor } from '@/app/utils/utils';
 import { fetchWeather30d } from '@/app/lib/api';
+import { getDayOfWeekLabel, getWeekdayLabels, useI18n } from '@/app/i18n';
+import { localizeMoonPhase, localizeWeatherText, localizeWindDirection } from '@/app/utils/weatherTranslations';
 
 interface TemperatureChartProps {
   location?: { lat: number; lon: number };
@@ -56,6 +58,7 @@ type ChartType = 'bar' | 'line' | 'scatter' | 'pie';
 type ViewType = 'chart' | 'table';
 
 export default function TemperatureChart({ location, textColorTheme, enhanceReadableText = false, opacity = 100 }: TemperatureChartProps) {
+  const { locale, t } = useI18n();
   const [chartType, setChartType] = useState<ChartType>('bar');
   const [viewType, setViewType] = useState<ViewType>('chart');
   const [forecastData, setForecastData] = useState<DailyForecast[]>([]);
@@ -109,7 +112,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
 
   const dates = forecastData.map(day => {
     const date = new Date(day.fxDate);
-    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' });
   });
 
   const maxTemps = forecastData.map(day => parseInt(day.tempMax));
@@ -170,7 +173,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
     // 统计天气类型分布
     const weatherCount: Record<string, number> = {};
     forecastData.forEach(day => {
-      const weather = day.textDay.trim();
+      const weather = localizeWeatherText(day.textDay.trim(), locale);
       weatherCount[weather] = (weatherCount[weather] || 0) + 1;
     });
 
@@ -200,7 +203,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
       coolingDays,
       precipitationDays,
     };
-  }, [forecastData]);
+  }, [forecastData, locale]);
 
   // 饼状图颜色配置
   const pieColors = [
@@ -219,8 +222,9 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
     const date = new Date(dateString);
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return `${month}月${day}日 ${days[date.getDay()]}`;
+    return locale === 'en'
+      ? `${date.toLocaleDateString('en', { month: 'short', day: 'numeric' })} ${getDayOfWeekLabel(date, locale)}`
+      : `${month}月${day}日 ${getDayOfWeekLabel(date, locale)}`;
   };
 
   // Get current date for highlighting today
@@ -306,7 +310,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
     if (isPieChart) {
       return {
         title: {
-          text: '30日天气分布',
+          text: t('weather.weatherDistribution30'),
           left: 'center',
           top: 10,
           textStyle: {
@@ -319,7 +323,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         tooltip: {
           trigger: 'item',
           formatter: (params: any) => {
-            return `${params.name}<br/>${params.value}天 (${params.percent}%)`;
+            return `${params.name}<br/>${t('weather.daysSuffix', { value: params.value })} (${params.percent}%)`;
           }
         },
         legend: {
@@ -332,12 +336,12 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
           },
           formatter: (name: string) => {
             const item = weatherStats.weatherDistribution.find(w => w.name === name);
-            return item ? `${name} (${item.value}天)` : name;
+            return item ? `${name} (${t('weather.daysSuffix', { value: item.value })})` : name;
           }
         },
         series: [
           {
-            name: '天气分布',
+            name: t('weather.weatherDistribution'),
             type: 'pie',
             radius: ['40%', '70%'],
             center: ['60%', '55%'],
@@ -348,7 +352,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
             },
             label: {
               show: true,
-              formatter: '{b}: {c}天',
+              formatter: (params: any) => `${params.name}: ${t('weather.daysSuffix', { value: params.value })}`,
               color: axisColor,
               fontSize: axisFontSize,
               ...echartsTs,
@@ -380,7 +384,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
 
     return {
       title: {
-        text: '30日天气预报',
+        text: t('weather.forecast30Title'),
         left: 'center',
         textStyle: {
           fontSize: titleFontSize,
@@ -394,11 +398,11 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         formatter: isBarChart
           ? (params: any) => {
             if (Array.isArray(params)) {
-              const barItem = params.find((item) => item.seriesName === '温度范围') ?? params[0];
+              const barItem = params.find((item) => item.seriesName === t('weather.tempRange')) ?? params[0];
               const index = barItem?.dataIndex ?? 0;
               return `${dates[index]}<br/>
-                      最高: ${maxTemps[index]}°C<br/>
-                      最低: ${minTemps[index]}°C<br/>
+                      ${t('weather.maxTemp')}: ${maxTemps[index]}°C<br/>
+                      ${t('weather.minTemp')}: ${minTemps[index]}°C<br/>
                       `;
             }
             return '';
@@ -407,10 +411,10 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
             ? (params: any) => {
               const index = params.dataIndex;
               return `${dates[index]}<br/>
-                    平均温度: ${avgTemps[index]}°C<br/>
-                    最高: ${maxTemps[index]}°C<br/>
-                    最低: ${minTemps[index]}°C<br/>
-                    温差: ${tempRanges[index]}°C<br/>
+                    ${t('weather.avgTemp')}: ${avgTemps[index]}°C<br/>
+                    ${t('weather.maxTemp')}: ${maxTemps[index]}°C<br/>
+                    ${t('weather.minTemp')}: ${minTemps[index]}°C<br/>
+                    ${t('weather.tempDiff')}: ${tempRanges[index]}°C<br/>
                     `;
             }
             : undefined,
@@ -419,7 +423,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         }
       },
       legend: {
-        data: isBarChart ? [] : isScatterChart ? ['平均温度'] : ['最高温度', '最低温度', '平均温度'],
+        data: isBarChart ? [] : isScatterChart ? [t('weather.avgTemp')] : [t('weather.maxTemperature'), t('weather.minTemperature'), t('weather.avgTemp')],
         bottom: 10,
         show: !isBarChart,
         textStyle: {
@@ -475,7 +479,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
       },
       yAxis: {
         type: 'value',
-        name: '温度 (°C)',
+        name: `${t('weather.temperature')} (°C)`,
         nameTextStyle: {
           color: axisColor,
           ...echartsTs,
@@ -502,7 +506,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
       },
       series: isBarChart ? [
         {
-          name: '温度范围',
+          name: t('weather.tempRange'),
           type: 'custom',
           renderItem: (params: any, api: any) => {
             const categoryIndex = api.value(0);
@@ -546,7 +550,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         }
       ] : isScatterChart ? [
         {
-          name: '平均温度',
+          name: t('weather.avgTemp'),
           type: 'scatter',
           data: scatterData.map((item, index) => ({
             value: [item[0], item[1]], // [日期索引, 平均温度]
@@ -574,7 +578,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         }
       ] : [
         {
-          name: '最高温度',
+          name: t('weather.maxTemperature'),
           type: 'line',
           data: maxTemps,
           smooth: true,
@@ -588,7 +592,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
           symbolSize: 8
         },
         {
-          name: '最低温度',
+          name: t('weather.minTemperature'),
           type: 'line',
           data: minTemps,
           smooth: true,
@@ -603,16 +607,20 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         }
       ]
     };
-  }, [isMobile, isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan, enhanceReadableText]);
+  }, [isMobile, isPieChart, isBarChart, isScatterChart, weatherStats, pieColors, titleColor, axisColor, isDark, dates, maxTemps, minTemps, avgTemps, tempRanges, barData, scatterData, minRange, rangeSpan, enhanceReadableText, t]);
 
   const rs = (level: 'primary' | 'secondary') =>
     readableTextShadowStyle(level, enhanceReadableText);
+  const windScaleLabel = (direction: string, scale: string) =>
+    locale === 'en'
+      ? `${localizeWindDirection(direction, locale)} force ${scale}`
+      : `${direction} ${scale}级`;
 
   if (error) {
     return (
       <div className={`${getCardStyle(textColorTheme.backgroundType)} rounded-2xl shadow-xl p-6 h-full min-h-[320px] sm:min-h-[380px] relative flex items-center justify-center`}>
         <div className={`${textColorTheme.textColor.secondary}`} style={rs('secondary')}>
-          加载失败: {error}
+          {t('weather.loadFailed', { error })}
         </div>
       </div>
     );
@@ -620,7 +628,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
 
   const calendarData = generateCalendarData();
   const todayDateString = getTodayDateString();
-  const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+  const weekDays = getWeekdayLabels(locale);
 
   return (
     <div className={`rounded-2xl shadow-xl p-6 h-[400px] sm:h-[520px] relative flex flex-col`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
@@ -631,8 +639,8 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
         mainButton={{
           value: viewType === 'chart' ? chartType : 'chart',
           label: viewType === 'chart'
-            ? (chartType === 'bar' ? '柱状图' : chartType === 'line' ? '折线图' : chartType === 'scatter' ? '散点图' : '饼状图')
-            : '图表',
+            ? (chartType === 'bar' ? t('weather.barChart') : chartType === 'line' ? t('weather.lineChart') : chartType === 'scatter' ? t('weather.scatterChart') : t('weather.pieChart'))
+            : t('weather.chart'),
           showChevron: viewType === 'chart',
           onClick: () => {
             if (viewType !== 'chart') {
@@ -641,15 +649,15 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
           },
         }}
         dropdownOptions={[
-          { value: 'bar', label: '柱状图', icon: ICONS.chartBar },
-          { value: 'line', label: '折线图', icon: ICONS.chartLine },
-          { value: 'scatter', label: '散点图', icon: ICONS.chartScatter },
-          { value: 'pie', label: '饼状图', icon: ICONS.chartPie },
+          { value: 'bar', label: t('weather.barChart'), icon: ICONS.chartBar },
+          { value: 'line', label: t('weather.lineChart'), icon: ICONS.chartLine },
+          { value: 'scatter', label: t('weather.scatterChart'), icon: ICONS.chartScatter },
+          { value: 'pie', label: t('weather.pieChart'), icon: ICONS.chartPie },
         ]}
         otherButtons={[
           {
             value: 'table',
-            label: '日历',
+            label: t('weather.calendar'),
             onClick: () => {
               setViewType('table');
             },
@@ -693,12 +701,12 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
           {isPieChart && (
             <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm">
               <div className={`${textColorTheme.textColor.primary} font-semibold`} style={rs('primary')}>
-                <span className={textColorTheme.textColor.secondary}>降温</span>
-                {weatherStats.coolingDays}次，
+                <span className={textColorTheme.textColor.secondary}>{t('weather.cooling')}</span>
+                {t('common.times', { count: weatherStats.coolingDays })}，
               </div>
               <div className={`${textColorTheme.textColor.primary} font-semibold`} style={rs('primary')}>
-                <span className={textColorTheme.textColor.secondary}>降水</span>
-                {weatherStats.precipitationDays}天
+                <span className={textColorTheme.textColor.secondary}>{t('weather.precipShort')}</span>
+                {t('weather.daysSuffix', { value: weatherStats.precipitationDays })}
               </div>
             </div>
           )}
@@ -710,7 +718,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
             className={`text-lg font-semibold ${textColorTheme.textColor.primary} mb-3 text-center flex-shrink-0`}
             style={rs('primary')}
           >
-            30日天气预报
+            {t('weather.forecast30Title')}
           </h2>
 
           {/* Calendar Table View */}
@@ -778,14 +786,14 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
                                   }`}
                                 style={isDark ? rs('primary') : undefined}
                               >
-                                {date.getMonth() + 1}月{date.getDate()}日
+                                {locale === 'en' ? date.toLocaleDateString('en', { month: 'short', day: 'numeric' }) : `${date.getMonth() + 1}月${date.getDate()}日`}
                               </div>
                               <div
                                 className={`text-xs mb-1 truncate ${isDark ? 'text-gray-300' : 'text-gray-700'
                                   }`}
                                 style={isDark ? rs('secondary') : undefined}
                               >
-                                {forecast.textDay}
+                                {localizeWeatherText(forecast.textDay, locale)}
                               </div>
                               <div
                                 className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'
@@ -807,7 +815,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
                                 }`}
                               style={isDark ? rs('secondary') : undefined}
                             >
-                              {dayNumber}日
+                              {locale === 'en' ? dayNumber : `${dayNumber}日`}
                             </div>
                           )}
                         </td>
@@ -844,7 +852,7 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
                       {selectedDay.tempMax}°C / {selectedDay.tempMin}°C
                     </p>
                     <p className={`text-base ${textColorTheme.textColor.muted}`}>
-                      {selectedDay.textDay} / {selectedDay.textNight}
+                      {localizeWeatherText(selectedDay.textDay, locale)} / {localizeWeatherText(selectedDay.textNight, locale)}
                     </p>
                   </div>
                 </div>
@@ -852,79 +860,79 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
                   type="button"
                   onClick={() => setSelectedDay(null)}
                   className={`rounded-full p-2 transition hover:rotate-90 ${isDarkTheme ? 'hover:bg-white/10 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                  aria-label="关闭天气详情"
+                  aria-label={t('weather.closeDetails')}
                 >
-                  <Icon src={ICONS.close} className="w-6 h-6" title="关闭" />
+                  <Icon src={ICONS.close} className="w-6 h-6" title={t('common.close')} />
                 </button>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  日出 {selectedDay.sunrise}
+                  {t('weather.sunrise')} {selectedDay.sunrise}
                 </span>
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  日落 {selectedDay.sunset}
+                  {t('weather.sunset')} {selectedDay.sunset}
                 </span>
                 <span className={`px-3 py-1 text-xs rounded-full border ${isDarkTheme ? 'border-white/15 bg-white/5 text-white' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
-                  {selectedDay.moonPhase}
+                  {localizeMoonPhase(selectedDay.moonPhase, locale)}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   {
-                    label: '降水/降雪',
+                    label: t('weather.precipSnow'),
                     value: `${selectedDay.precip} mm`,
-                    sub: '日降水量',
-                    icon: <Icon src={ICONS.precipitation} className="w-6 h-6 text-sky-400" title="降水" />
+                    sub: t('weather.dailyPrecip'),
+                    icon: <Icon src={ICONS.precipitation} className="w-6 h-6 text-sky-400" title={t('weather.precipShort')} />
                   },
                   {
-                    label: '湿度',
+                    label: t('weather.humidity'),
                     value: `${selectedDay.humidity}%`,
-                    sub: '空气相对湿度',
-                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-blue-300" title="湿度" />
+                    sub: t('weather.relativeHumidity'),
+                    icon: <Icon src={ICONS.humidity} className="w-6 h-6 text-blue-300" title={t('weather.humidity')} />
                   },
                   {
-                    label: '云量',
+                    label: t('weather.cloudAmount'),
                     value: `${selectedDay.cloud}%`,
-                    sub: '天空云覆盖率',
-                    icon: <Icon src={ICONS.cloudAmount} className="w-6 h-6 text-indigo-300" title="云量" />
+                    sub: t('weather.cloudCoverage'),
+                    icon: <Icon src={ICONS.cloudAmount} className="w-6 h-6 text-indigo-300" title={t('weather.cloudAmount')} />
                   },
                   {
-                    label: '风速 / 阵风（白天）',
+                    label: t('weather.dayWindGust'),
                     value: `${selectedDay.windSpeedDay} km/h`,
-                    sub: `${selectedDay.windDirDay} ${selectedDay.windScaleDay}级`,
-                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title="风速" />
+                    sub: windScaleLabel(selectedDay.windDirDay, selectedDay.windScaleDay),
+                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title={t('weather.windSpeed')} />
                   },
                   {
-                    label: '风速 / 阵风（夜间）',
+                    label: t('weather.nightWindGust'),
                     value: `${selectedDay.windSpeedNight} km/h`,
-                    sub: `${selectedDay.windDirNight} ${selectedDay.windScaleNight}级`,
-                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title="风速" />
+                    sub: windScaleLabel(selectedDay.windDirNight, selectedDay.windScaleNight),
+                    icon: <Icon src={ICONS.wind} className="w-6 h-6 text-emerald-400" title={t('weather.windSpeed')} />
                   },
                   {
-                    label: '风向（白天）',
-                    value: `${selectedDay.windDirDay}`,
+                    label: t('weather.dayWindDirection'),
+                    value: localizeWindDirection(selectedDay.windDirDay, locale),
                     sub: `${selectedDay.wind360Day}°`,
-                    icon: <Icon src={ICONS.windDirection} className="w-6 h-6 text-indigo-400" title="风向" />
+                    icon: <Icon src={ICONS.windDirection} className="w-6 h-6 text-indigo-400" title={t('weather.windDirection')} />
                   },
                   {
-                    label: '气压',
+                    label: t('weather.pressure'),
                     value: `${selectedDay.pressure} mb`,
-                    sub: '海平面气压',
-                    icon: <Icon src={ICONS.pressure} className="w-6 h-6 text-violet-400" title="气压" />
+                    sub: t('weather.seaLevelPressure'),
+                    icon: <Icon src={ICONS.pressure} className="w-6 h-6 text-violet-400" title={t('weather.pressure')} />
                   },
                   {
-                    label: '能见度',
+                    label: t('weather.visibility'),
                     value: `${selectedDay.vis} km`,
-                    sub: '水平能见距离',
-                    icon: <Icon src={ICONS.visibility} className="w-6 h-6 text-amber-400" title="能见度" />
+                    sub: t('weather.visibilitySub'),
+                    icon: <Icon src={ICONS.visibility} className="w-6 h-6 text-amber-400" title={t('weather.visibility')} />
                   },
                   {
-                    label: '紫外线',
+                    label: t('weather.uv'),
                     value: `${selectedDay.uvIndex}`,
-                    sub: 'UV 指数',
-                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-500" title="紫外线" />
+                    sub: t('weather.uvIndexSub'),
+                    icon: <Icon src={ICONS.uv} className="w-6 h-6 text-amber-500" title={t('weather.uv')} />
                   },
                 ].map(stat => (
                   <div

@@ -22,13 +22,14 @@ import { CSS } from '@dnd-kit/utilities';
 import type { WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle, getTextColorTheme, readableTextShadowStyle } from '@/app/utils/textColorTheme';
-import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import { localizeWeatherCondition, translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { translateLocation } from '@/app/utils/locationTranslations';
 import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { favoritesApi, weatherUrl } from '@/app/lib/api';
 import { useTranslatedText } from '@/app/hooks/useTranslatedText';
+import { useI18n } from '@/app/i18n';
 
 const WeatherBackgroundLayer = dynamic(
   () => import('@/app/backgrounds/WeatherBackgroundLayer'),
@@ -103,6 +104,7 @@ function FavoriteCityCard({
   onSelect: () => void;
   setContainerRef?: (node: HTMLDivElement | null) => void;
 }) {
+  const { locale, t } = useI18n();
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -135,14 +137,15 @@ function FavoriteCityCard({
     : undefined;
   const weatherNameFromHook = useTranslatedText(weatherData?.location.name ?? '', weatherGeo);
   const weatherNameStatic = weatherData ? translateLocation(weatherData.location).name : '';
+  const savedLabel = fav.label?.trim();
 
-  const displayName = weatherData
-    ? (weatherNameStatic !== weatherData.location.name ? weatherNameStatic : weatherNameFromHook)
-    : fallbackTranslatedName;
+  const displayName = savedLabel || (weatherData
+    ? (locale === 'zh' ? (weatherNameStatic !== weatherData.location.name ? weatherNameStatic : weatherNameFromHook) : weatherData.location.name)
+    : (locale === 'zh' ? fallbackTranslatedName : fallbackRawName));
   const temp = weatherData ? `${weatherData.current.temp_c.toFixed(0)}°C` : '--';
   const cond = weatherData
-    ? translateWeatherCondition(weatherData.current.condition)
-    : (isLoading ? '加载中…' : '未加载');
+    ? localizeWeatherCondition(weatherData.current.condition, locale)
+    : (isLoading ? t('favorites.loading') : t('favorites.notLoaded'));
 
   const hasBg = showBackground && weatherData && isVisible;
 
@@ -173,13 +176,13 @@ function FavoriteCityCard({
         type="button"
         onClick={onSelect}
         className="relative z-10 w-full text-left p-4"
-        aria-label={`查看${displayName}天气`}
+        aria-label={t('favorites.viewWeather', { name: displayName })}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className={`text-3xl font-bold ${cardTheme.textColor.primary}`} style={readableTextShadowStyle('primary', !!hasBg)}>{displayName}</p>
             <p className={`text-xs ${cardTheme.textColor.muted}`}>
-              {isLoading ? '正在更新…' : isFresh ? '' : '待更新'}
+              {isLoading ? t('favorites.updating') : isFresh ? '' : t('favorites.pendingUpdate')}
             </p>
           </div>
           <div className="text-right">
@@ -270,6 +273,7 @@ export default function FavoritesDrawer({
   isAuthenticated = false,
   liveWeather,
 }: FavoritesDrawerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedWeather>>({});
   const [loadingQueries, setLoadingQueries] = useState<Record<string, boolean>>({});
@@ -448,13 +452,13 @@ export default function FavoritesDrawer({
           className={`fixed z-[85] rounded-xl p-2 transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
             }`}
           style={{ top: 'max(1rem, env(safe-area-inset-top, 0px))', left: 'max(1rem, env(safe-area-inset-left, 0px))' }}
-          aria-label="打开收藏城市抽屉"
-          title="收藏城市"
+          aria-label={t('favorites.openDrawer')}
+          title={t('favorites.title')}
         >
           <Icon
             src={ICONS.sidebar}
             className={`w-6 h-6 ${textColorTheme.textColor.secondary}`}
-            title="收藏抽屉"
+            title={t('favorites.drawerTitle')}
           />
         </button>
       )}
@@ -474,22 +478,22 @@ export default function FavoritesDrawer({
           <div className={`h-full ${getCardStyle(textColorTheme.backgroundType)} ${isDark ? 'bg-gray-900/70' : 'bg-white/30'} backdrop-blur-2xl border-r ${isDark ? 'border-white/10' : 'border-white/50'} shadow-2xl`}>
             <div className="p-5 flex items-center justify-between">
               <div>
-                <h3 className={`text-lg font-bold ${textColorTheme.textColor.primary}`}>收藏城市</h3>
+                <h3 className={`text-lg font-bold ${textColorTheme.textColor.primary}`}>{t('favorites.title')}</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className={`rounded-xl p-2 min-w-[44px] min-h-[44px] flex items-center justify-center transition ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
-                aria-label="收起收藏抽屉"
+                aria-label={t('favorites.collapseDrawer')}
               >
-                <Icon src={ICONS.sidebar} className={`w-6 h-6 ${textColorTheme.textColor.secondary}`} title="收起" />
+                <Icon src={ICONS.sidebar} className={`w-6 h-6 ${textColorTheme.textColor.secondary}`} title={t('favorites.collapse')} />
               </button>
             </div>
 
             <div className="px-5 pb-2 overflow-y-auto h-[calc(100%-102px)]" ref={scrollContainerRef}>
               {favorites.length === 0 ? (
                 <div className={`mt-10 text-center ${textColorTheme.textColor.muted}`}>
-                  暂无收藏城市
+                  {t('favorites.empty')}
                 </div>
               ) : (
                 <DndContext

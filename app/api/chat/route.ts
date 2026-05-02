@@ -23,20 +23,22 @@ function formatSSE(event: ChatSSEEvent): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, userLocation } = body as {
+    const { messages, userLocation, locale } = body as {
       messages: Array<{ role: string; content: string }>;
+      locale?: 'zh' | 'en';
       userLocation?: { latitude: number; longitude: number };
     };
+    const responseLocale = locale === 'en' ? 'en' : 'zh';
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: '消息不能为空' }), {
+      return new Response(JSON.stringify({ error: responseLocale === 'en' ? 'Messages cannot be empty' : '消息不能为空' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
     if (!process.env.DASHSCOPE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'DASHSCOPE_API_KEY 未配置' }), {
+      return new Response(JSON.stringify({ error: responseLocale === 'en' ? 'DASHSCOPE_API_KEY is not configured' : 'DASHSCOPE_API_KEY 未配置' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
         try {
           await runWeatherAgent({
             messages,
+            locale: responseLocale,
             userLocation:
               userLocation &&
               typeof userLocation.latitude === 'number' &&
@@ -100,10 +103,12 @@ export async function POST(request: NextRequest) {
           }
 
           console.error('Chat stream error:', error);
-          const errorMsg = error instanceof Error ? error.message : '未知错误';
+          const errorMsg = error instanceof Error ? error.message : (responseLocale === 'en' ? 'Unknown error' : '未知错误');
           emit({
             type: 'error',
-            content: `处理请求时出错: ${errorMsg}`,
+            content: responseLocale === 'en'
+              ? `An error occurred while processing the request: ${errorMsg}`
+              : `处理请求时出错: ${errorMsg}`,
           });
           emit({ type: 'done' });
           close();

@@ -9,7 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getEnglishCityName, searchCities } from '@/app/utils/citySearch';
 import { translateLocationName } from '@/app/utils/locationTranslations';
-import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import { localizeWeatherCondition, localizeWeatherText, translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { listChinaWeatherLocations } from '@/app/lib/weather/chinaLocations';
 import { isAbortError, isTimeoutError, throwIfAborted, withTimeoutSignal } from '@/app/lib/abort';
 import {
@@ -47,10 +47,50 @@ const DEFAULT_CONDITION_SEARCH_LIMIT = Number.isFinite(configuredConditionSearch
   : 150;
 const WEATHER_API_TIMEOUT_MS = 8_000;
 const QWEATHER_API_TIMEOUT_MS = 10_000;
+type ToolLocale = 'zh' | 'en';
+const localeSchema = z.enum(['zh', 'en']).optional().describe('返回文案语言：zh=中文，en=English。默认 zh。');
+
+const PROVINCE_EN_MAP: Record<string, string> = {
+  北京: 'Beijing',
+  天津: 'Tianjin',
+  上海: 'Shanghai',
+  重庆: 'Chongqing',
+  河北: 'Hebei',
+  山西: 'Shanxi',
+  辽宁: 'Liaoning',
+  吉林: 'Jilin',
+  黑龙江: 'Heilongjiang',
+  江苏: 'Jiangsu',
+  浙江: 'Zhejiang',
+  安徽: 'Anhui',
+  福建: 'Fujian',
+  江西: 'Jiangxi',
+  山东: 'Shandong',
+  河南: 'Henan',
+  湖北: 'Hubei',
+  湖南: 'Hunan',
+  广东: 'Guangdong',
+  海南: 'Hainan',
+  四川: 'Sichuan',
+  贵州: 'Guizhou',
+  云南: 'Yunnan',
+  陕西: 'Shaanxi',
+  甘肃: 'Gansu',
+  青海: 'Qinghai',
+  台湾: 'Taiwan',
+  内蒙古: 'Inner Mongolia',
+  广西: 'Guangxi',
+  西藏: 'Tibet',
+  宁夏: 'Ningxia',
+  新疆: 'Xinjiang',
+  香港: 'Hong Kong',
+  澳门: 'Macau',
+};
 
 interface BatchWeatherLocation {
   name: string;
   province?: string;
+  englishName?: string;
   latitude?: number;
   longitude?: number;
 }
@@ -92,15 +132,33 @@ function toChineseCondition(conditionLike: any): string {
   });
 }
 
-function currentForecastTitle(prefix: string, days: number): string {
+function toLocalizedCondition(conditionLike: any, locale: ToolLocale): string {
+  if (locale === 'zh') return toChineseCondition(conditionLike);
+  return localizeWeatherCondition({
+    code: toNumber(conditionLike?.code, -1),
+    text: String(conditionLike?.text ?? ''),
+  }, locale);
+}
+
+function translateProvinceName(province: string | undefined, locale: ToolLocale): string | undefined {
+  if (!province) return undefined;
+  return locale === 'en' ? (PROVINCE_EN_MAP[province] ?? province) : province;
+}
+
+function currentForecastTitle(prefix: string, days: number, locale: ToolLocale): string {
+  if (locale === 'en') {
+    return `${prefix} and next ${days}-day forecast`;
+  }
   return `${prefix}与未来${days}天预报`;
 }
 
-function forecastTitle(days: number): string {
+function forecastTitle(days: number, locale: ToolLocale): string {
+  if (locale === 'en') return `${days}-day weather forecast`;
   return `未来${days}天天气预报`;
 }
 
-function conditionTitle(condition: WeatherConditionIntent, scope: string): string {
+function conditionTitle(condition: WeatherConditionIntent, scope: string, locale: ToolLocale): string {
+  if (locale === 'en') return `${scope} ${condition} search`;
   return `${scope}${getWeatherConditionLabel(condition)}检索`;
 }
 
@@ -118,7 +176,8 @@ function buildErrorPanel(title: string, message: string, toolName?: string): Wea
 function buildCurrentForecastPanel(
   data: any,
   title: string,
-  requestedDays: number
+  requestedDays: number,
+  locale: ToolLocale
 ): CurrentForecastPanel {
   const current = data.current ?? {};
   const location = data.location ?? {};
@@ -135,7 +194,7 @@ function buildCurrentForecastPanel(
     .map((hour: any) => ({
       time: String(hour.time ?? ''),
       tempC: toNumber(hour.temp_c),
-      condition: toChineseCondition(hour.condition),
+      condition: toLocalizedCondition(hour.condition, locale),
       icon: hour.condition?.icon ? String(hour.condition.icon) : undefined,
       rainChance: toNumber(hour.chance_of_rain),
     }));
@@ -147,9 +206,9 @@ function buildCurrentForecastPanel(
     title,
     requestedDays,
     location: {
-      name: translatedLocationName || String(location.name ?? ''),
-      region: translatedRegion || (location.region ? String(location.region) : undefined),
-      country: translatedCountry || (location.country ? String(location.country) : undefined),
+      name: locale === 'zh' ? (translatedLocationName || String(location.name ?? '')) : String(location.name ?? ''),
+      region: locale === 'zh' ? (translatedRegion || (location.region ? String(location.region) : undefined)) : (location.region ? String(location.region) : undefined),
+      country: locale === 'zh' ? (translatedCountry || (location.country ? String(location.country) : undefined)) : (location.country ? String(location.country) : undefined),
       lat: typeof location.lat === 'number' ? location.lat : undefined,
       lon: typeof location.lon === 'number' ? location.lon : undefined,
       localtime: location.localtime ? String(location.localtime) : undefined,
@@ -157,7 +216,7 @@ function buildCurrentForecastPanel(
     current: {
       tempC: toNumber(current.temp_c),
       feelsLikeC: toNumber(current.feelslike_c),
-      condition: toChineseCondition(current.condition),
+      condition: toLocalizedCondition(current.condition, locale),
       icon: current.condition?.icon ? String(current.condition.icon) : undefined,
       humidity: toNumber(current.humidity),
       windKph: toNumber(current.wind_kph),
@@ -171,7 +230,7 @@ function buildCurrentForecastPanel(
     },
     daily: forecast.slice(0, requestedDays).map((day: any) => ({
       date: String(day.date ?? ''),
-      condition: toChineseCondition(day.day?.condition),
+      condition: toLocalizedCondition(day.day?.condition, locale),
       icon: day.day?.condition?.icon ? String(day.day.condition.icon) : undefined,
       minTempC: toNumber(day.day?.mintemp_c),
       maxTempC: toNumber(day.day?.maxtemp_c),
@@ -188,7 +247,8 @@ function buildForecast30dPanel(
   longitude: number,
   latitude: number,
   requestedDays: number,
-  locationName?: { name?: string; region?: string; country?: string }
+  locationName?: { name?: string; region?: string; country?: string },
+  locale: ToolLocale = 'zh'
 ): Forecast30dPanel {
   const daily = Array.isArray(data.daily) ? data.daily : [];
 
@@ -196,20 +256,20 @@ function buildForecast30dPanel(
     schemaVersion: SCHEMA_VERSION,
     id: panelId('forecast_30d'),
     kind: 'forecast_30d',
-    title: forecastTitle(requestedDays),
+    title: forecastTitle(requestedDays, locale),
     requestedDays,
     location: {
       longitude,
       latitude,
-      name: locationName?.name ? translateLocationName(locationName.name, 'city') : undefined,
-      region: locationName?.region ? translateLocationName(locationName.region, 'region') : undefined,
-      country: locationName?.country ? translateLocationName(locationName.country, 'country') : undefined,
+      name: locationName?.name ? (locale === 'zh' ? translateLocationName(locationName.name, 'city') : locationName.name) : undefined,
+      region: locationName?.region ? (locale === 'zh' ? translateLocationName(locationName.region, 'region') : locationName.region) : undefined,
+      country: locationName?.country ? (locale === 'zh' ? translateLocationName(locationName.country, 'country') : locationName.country) : undefined,
     },
     updateTime: data.updateTime ? String(data.updateTime) : undefined,
     daily: daily.slice(0, requestedDays).map((day: any) => ({
       date: String(day.fxDate ?? ''),
-      textDay: String(day.textDay ?? ''),
-      textNight: String(day.textNight ?? ''),
+      textDay: localizeWeatherText(String(day.textDay ?? ''), locale),
+      textNight: localizeWeatherText(String(day.textNight ?? ''), locale),
       tempMinC: toNumber(day.tempMin),
       tempMaxC: toNumber(day.tempMax),
       humidity: toNumber(day.humidity),
@@ -221,13 +281,13 @@ function buildForecast30dPanel(
   };
 }
 
-async function fetchWeatherApiForecast(query: string, signal?: AbortSignal) {
+async function fetchWeatherApiForecast(query: string, locale: ToolLocale = 'zh', signal?: AbortSignal) {
   if (!API_KEY || !API_BASE_URL) {
     throw new Error('天气 API 未配置，请检查环境变量 API_KEY 和 API_BASE_URL');
   }
 
   throwIfAborted(signal);
-  const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=${WEATHER_API_DAYS}&aqi=no&alerts=no&lang=zh`;
+  const url = `${API_BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=${WEATHER_API_DAYS}&aqi=no&alerts=no&lang=${locale}`;
   const timeout = withTimeoutSignal(signal, WEATHER_API_TIMEOUT_MS, 'WeatherAPI request timed out');
   let response: Response;
 
@@ -271,16 +331,19 @@ function matchWeatherCondition(data: any, condition: WeatherConditionIntent): bo
 function normalizeBatchWeatherResult(
   location: BatchWeatherLocation,
   data: any,
-  condition: WeatherConditionIntent
+  condition: WeatherConditionIntent,
+  locale: ToolLocale
 ): BatchWeatherResult {
   const current = data.current ?? {};
   const weatherLocation = data.location ?? {};
 
   return {
-    name: location.name || String(weatherLocation.name ?? ''),
-    province: location.province,
+    name: locale === 'en'
+      ? (location.englishName || String(weatherLocation.name ?? '') || location.name)
+      : (location.name || String(weatherLocation.name ?? '')),
+    province: translateProvinceName(location.province, locale),
     temperatureC: toNumber(current.temp_c, Number.NaN),
-    conditionText: toChineseCondition(current.condition) || '未知',
+    conditionText: toLocalizedCondition(current.condition, locale) || (locale === 'en' ? 'Unknown' : '未知'),
     precipMm: toNumber(current.precip_mm, 0),
     windKph: toNumber(current.wind_kph, 0),
     updatedAt: current.last_updated ? String(current.last_updated) : undefined,
@@ -291,18 +354,19 @@ function normalizeBatchWeatherResult(
 function buildFailedBatchWeatherResult(
   location: BatchWeatherLocation,
   error: unknown,
-  fallbackError?: unknown
+  fallbackError?: unknown,
+  locale: ToolLocale = 'zh'
 ): BatchWeatherResult {
   return {
-    name: location.name,
-    province: location.province,
-    conditionText: '查询失败',
+    name: locale === 'en' ? (location.englishName || location.name) : location.name,
+    province: translateProvinceName(location.province, locale),
+    conditionText: locale === 'en' ? 'Query failed' : '查询失败',
     isMatch: false,
     error: error instanceof Error
       ? error.message
       : fallbackError instanceof Error
         ? fallbackError.message
-        : '未知错误',
+        : (locale === 'en' ? 'Unknown error' : '未知错误'),
   };
 }
 
@@ -332,27 +396,28 @@ async function fetchBatchCurrentWeather(
   locations: BatchWeatherLocation[],
   condition: WeatherConditionIntent,
   concurrency = DEFAULT_BATCH_CONCURRENCY,
+  locale: ToolLocale = 'zh',
   signal?: AbortSignal
 ): Promise<BatchWeatherResult[]> {
   return mapWithConcurrency(locations, concurrency, async (location) => {
     throwIfAborted(signal);
     try {
       const query = weatherQueryForLocation(location);
-      const data = await fetchWeatherApiForecast(query, signal);
-      return normalizeBatchWeatherResult(location, data, condition);
+      const data = await fetchWeatherApiForecast(query, locale, signal);
+      return normalizeBatchWeatherResult(location, data, condition, locale);
     } catch (firstError) {
       if (isAbortError(firstError) || signal?.aborted) throw firstError;
       if (isTimeoutError(firstError)) {
-        return buildFailedBatchWeatherResult(location, firstError);
+        return buildFailedBatchWeatherResult(location, firstError, undefined, locale);
       }
       try {
         throwIfAborted(signal);
         const query = weatherQueryForLocation(location);
-        const data = await fetchWeatherApiForecast(query, signal);
-        return normalizeBatchWeatherResult(location, data, condition);
+        const data = await fetchWeatherApiForecast(query, locale, signal);
+        return normalizeBatchWeatherResult(location, data, condition, locale);
       } catch (secondError) {
         if (isAbortError(secondError) || signal?.aborted) throw secondError;
-        return buildFailedBatchWeatherResult(location, secondError, firstError);
+        return buildFailedBatchWeatherResult(location, secondError, firstError, locale);
       }
     }
   }, signal);
@@ -363,24 +428,30 @@ function buildConditionSearchPanel(params: {
   scope: 'china' | 'province';
   province?: string;
   results: BatchWeatherResult[];
+  locale?: ToolLocale;
 }): ConditionSearchPanel {
+  const locale = params.locale ?? 'zh';
   const checked = params.results.filter((result) => !result.error);
   const matched = checked.filter((result) => result.isMatch);
-  const scopeLabel = params.scope === 'province' && params.province ? params.province : '全国主要城市';
+  const scopeLabel = params.scope === 'province' && params.province
+    ? (translateProvinceName(params.province, locale) ?? params.province)
+    : (locale === 'en' ? 'Major cities in China' : '全国主要城市');
   const updatedAt = checked.find((result) => result.updatedAt)?.updatedAt;
 
   return {
     schemaVersion: SCHEMA_VERSION,
     id: panelId('condition_search'),
     kind: 'condition_search',
-    title: conditionTitle(params.condition, scopeLabel),
+    title: conditionTitle(params.condition, scopeLabel, locale),
     condition: params.condition,
     scope: params.scope,
-    province: params.province,
+    province: translateProvinceName(params.province, locale),
     checkedCount: checked.length,
     failedCount: params.results.length - checked.length,
     updatedAt,
-    confidenceNote: `结果基于已检查的${scopeLabel}候选城市实时天气，不代表雷达级全域覆盖。`,
+    confidenceNote: locale === 'en'
+      ? `Results are based on current weather from checked candidate cities in ${scopeLabel}; this is not radar-grade full-area coverage.`
+      : `结果基于已检查的${scopeLabel}候选城市实时天气，不代表雷达级全域覆盖。`,
     matchedLocations: matched.map((result) => ({
       name: result.name,
       province: result.province,
@@ -393,14 +464,14 @@ function buildConditionSearchPanel(params: {
   };
 }
 
-async function fetchQWeather30d(longitude: number, latitude: number, signal?: AbortSignal) {
+async function fetchQWeather30d(longitude: number, latitude: number, locale: ToolLocale = 'zh', signal?: AbortSignal) {
   if (!QWEATHER_API_KEY || !QWEATHER_API_BASE) {
     throw new Error('和风天气 API 未配置，请检查环境变量 QWEATHER_API_KEY 和 QWEATHER_API_BASE');
   }
 
   throwIfAborted(signal);
   const location = `${longitude.toFixed(2)},${latitude.toFixed(2)}`;
-  const url = `${QWEATHER_API_BASE}?location=${location}&lang=zh`;
+  const url = `${QWEATHER_API_BASE}?location=${location}&lang=${locale}`;
   const timeout = withTimeoutSignal(signal, QWEATHER_API_TIMEOUT_MS, 'QWeather request timed out');
   let response: Response;
 
@@ -446,26 +517,29 @@ export function createWeatherServer(): McpServer {
       inputSchema: {
         city: z.string().describe('城市名称，支持中文（如"杭州"、"北京"）或英文（如"hangzhou"、"beijing"）'),
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
+        locale: localeSchema,
       },
     },
-    async ({ city, days }, extra) => {
+    async ({ city, days, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const forecastDays = normalizeForecastDays(days);
 
         // 将中文城市名转为英文
         const englishCity = getEnglishCityName(city);
-        const weatherData = await fetchWeatherApiForecast(englishCity, extra.signal);
+        const weatherData = await fetchWeatherApiForecast(englishCity, outputLocale, extra.signal);
         const location = weatherData.location ?? {};
         const panel =
           forecastDays <= WEATHER_API_DAYS
             ? buildCurrentForecastPanel(
                 weatherData,
-                currentForecastTitle('实时天气', forecastDays),
-                forecastDays
+                currentForecastTitle(outputLocale === 'en' ? 'Current weather' : '实时天气', forecastDays, outputLocale),
+                forecastDays,
+                outputLocale
               )
             : buildForecast30dPanel(
-                await fetchQWeather30d(toNumber(location.lon), toNumber(location.lat), extra.signal),
+                await fetchQWeather30d(toNumber(location.lon), toNumber(location.lat), outputLocale, extra.signal),
                 toNumber(location.lon),
                 toNumber(location.lat),
                 forecastDays,
@@ -473,7 +547,8 @@ export function createWeatherServer(): McpServer {
                   name: location.name ? String(location.name) : undefined,
                   region: location.region ? String(location.region) : undefined,
                   country: location.country ? String(location.country) : undefined,
-                }
+                },
+                outputLocale
               );
 
         return {
@@ -481,9 +556,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '天气查询出错',
-          `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'Weather query failed' : '天气查询出错',
+          errorLocale === 'en' ? `Weather query failed: ${errorMessage}` : `天气查询出错: ${errorMessage}`,
           'get_current_weather'
         );
         return {
@@ -505,17 +582,21 @@ export function createWeatherServer(): McpServer {
         longitude: z.number().describe('经度，如 120.15'),
         latitude: z.number().describe('纬度，如 30.28'),
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未说明默认30。'),
+        locale: localeSchema,
       },
     },
-    async ({ longitude, latitude, days }, extra) => {
+    async ({ longitude, latitude, days, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const forecastDays = normalizeForecastDays(days ?? 30);
         const panel = buildForecast30dPanel(
-          await fetchQWeather30d(longitude, latitude, extra.signal),
+          await fetchQWeather30d(longitude, latitude, outputLocale, extra.signal),
           longitude,
           latitude,
-          forecastDays
+          forecastDays,
+          undefined,
+          outputLocale
         );
 
         return {
@@ -523,9 +604,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '30天预报查询出错',
-          `30天预报查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? '30-day forecast query failed' : '30天预报查询出错',
+          errorLocale === 'en' ? `30-day forecast query failed: ${errorMessage}` : `30天预报查询出错: ${errorMessage}`,
           'get_forecast_30d'
         );
         return {
@@ -547,27 +630,32 @@ export function createWeatherServer(): McpServer {
         latitude: z.number().describe('纬度，如 30.28'),
         longitude: z.number().describe('经度，如 120.15'),
         days: z.number().min(1).max(30).optional().describe('预报天数，1到30。未来一周=7，未来5天=5，未说明默认3。'),
+        locale: localeSchema,
       },
     },
-    async ({ latitude, longitude, days }, extra) => {
+    async ({ latitude, longitude, days, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const forecastDays = normalizeForecastDays(days);
         const query = `${latitude},${longitude}`;
         const weatherData =
-          forecastDays <= WEATHER_API_DAYS ? await fetchWeatherApiForecast(query, extra.signal) : null;
+          forecastDays <= WEATHER_API_DAYS ? await fetchWeatherApiForecast(query, outputLocale, extra.signal) : null;
         const panel =
           forecastDays <= WEATHER_API_DAYS && weatherData
             ? buildCurrentForecastPanel(
                 weatherData,
-                currentForecastTitle('当前位置天气', forecastDays),
-                forecastDays
+                currentForecastTitle(outputLocale === 'en' ? 'Current location weather' : '当前位置天气', forecastDays, outputLocale),
+                forecastDays,
+                outputLocale
               )
             : buildForecast30dPanel(
-                await fetchQWeather30d(longitude, latitude, extra.signal),
+                await fetchQWeather30d(longitude, latitude, outputLocale, extra.signal),
                 longitude,
                 latitude,
-                forecastDays
+                forecastDays,
+                undefined,
+                outputLocale
               );
 
         return {
@@ -575,9 +663,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '当前位置天气查询出错',
-          `天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'Current location weather query failed' : '当前位置天气查询出错',
+          errorLocale === 'en' ? `Weather query failed: ${errorMessage}` : `天气查询出错: ${errorMessage}`,
           'get_weather_at_my_location'
         );
         return {
@@ -597,11 +687,13 @@ export function createWeatherServer(): McpServer {
       description: '根据关键词搜索城市。支持中文和英文搜索。返回匹配的城市列表及其中英文名称。当用户输入的城市名不确定时，可先搜索确认。',
       inputSchema: {
         query: z.string().describe('搜索关键词，如"杭"、"shang"、"北京"'),
+        locale: localeSchema,
       },
     },
-    async ({ query }, extra) => {
+    async ({ query, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const results = searchCities(query, 10);
 
         if (results.length === 0) {
@@ -609,7 +701,7 @@ export function createWeatherServer(): McpServer {
             schemaVersion: SCHEMA_VERSION,
             id: panelId('city_search'),
             kind: 'city_search',
-            title: '城市搜索',
+            title: outputLocale === 'en' ? 'City search' : '城市搜索',
             query,
             results: [],
           };
@@ -622,7 +714,7 @@ export function createWeatherServer(): McpServer {
           schemaVersion: SCHEMA_VERSION,
           id: panelId('city_search'),
           kind: 'city_search',
-          title: '城市搜索',
+          title: outputLocale === 'en' ? 'City search' : '城市搜索',
           query,
           results: results.map((city) => ({
             chineseName: city.chineseName,
@@ -635,9 +727,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '城市搜索出错',
-          `城市搜索出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'City search failed' : '城市搜索出错',
+          errorLocale === 'en' ? `City search failed: ${errorMessage}` : `城市搜索出错: ${errorMessage}`,
           'search_city'
         );
         return {
@@ -658,11 +752,13 @@ export function createWeatherServer(): McpServer {
       inputSchema: {
         scope: z.enum(['china', 'province']).optional().describe('检索范围，默认 china'),
         province: z.string().optional().describe('省份名称，如"浙江"、"新疆"。scope=province 时使用。'),
+        locale: localeSchema,
       },
     },
-    async ({ scope, province }, extra) => {
+    async ({ scope, province, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const locations = listChinaWeatherLocations(scope === 'province' ? province : undefined);
         return {
           content: [{
@@ -672,9 +768,9 @@ export function createWeatherServer(): McpServer {
               province,
               count: locations.length,
               locations: locations.map((location) => ({
-                name: location.nameZh,
+                name: outputLocale === 'en' ? location.nameEn : location.nameZh,
                 englishName: location.nameEn,
-                province: location.province,
+                province: translateProvinceName(location.province, outputLocale),
                 latitude: location.latitude,
                 longitude: location.longitude,
                 priority: location.priority,
@@ -684,9 +780,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '候选城市查询出错',
-          `候选城市查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'Candidate city query failed' : '候选城市查询出错',
+          errorLocale === 'en' ? `Candidate city query failed: ${errorMessage}` : `候选城市查询出错: ${errorMessage}`,
           'list_china_weather_locations'
         );
         return {
@@ -708,17 +806,20 @@ export function createWeatherServer(): McpServer {
         locations: z.array(z.object({
           name: z.string().describe('城市中文名或英文名'),
           province: z.string().optional().describe('省份名称'),
+          englishName: z.string().optional().describe('城市英文名'),
           latitude: z.number().optional().describe('纬度'),
           longitude: z.number().optional().describe('经度'),
         })).min(1).max(MAX_CONDITION_SEARCH_LIMIT).describe('待查询城市列表'),
         condition: z.enum(WEATHER_CONDITION_VALUES).optional().describe(WEATHER_CONDITION_TOOL_SCHEMA_DESCRIPTION),
+        locale: localeSchema,
       },
     },
-    async ({ locations, condition }, extra) => {
+    async ({ locations, condition, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const weatherCondition = (condition ?? 'snow') as WeatherConditionIntent;
-        const results = await fetchBatchCurrentWeather(locations, weatherCondition, DEFAULT_BATCH_CONCURRENCY, extra.signal);
+        const results = await fetchBatchCurrentWeather(locations, weatherCondition, DEFAULT_BATCH_CONCURRENCY, outputLocale, extra.signal);
         return {
           content: [{
             type: 'text' as const,
@@ -732,9 +833,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '批量天气查询出错',
-          `批量天气查询出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'Batch weather query failed' : '批量天气查询出错',
+          errorLocale === 'en' ? `Batch weather query failed: ${errorMessage}` : `批量天气查询出错: ${errorMessage}`,
           'batch_get_current_weather'
         );
         return {
@@ -757,11 +860,13 @@ export function createWeatherServer(): McpServer {
         province: z.string().optional().describe('省份名称，如"浙江"。scope=province 时使用。'),
         condition: z.enum(WEATHER_CONDITION_VALUES).describe(WEATHER_CONDITION_TOOL_SCHEMA_DESCRIPTION),
         limit: z.number().min(1).max(MAX_CONDITION_SEARCH_LIMIT).optional().describe(`最多检查的候选城市数量，默认${DEFAULT_CONDITION_SEARCH_LIMIT}，最高${MAX_CONDITION_SEARCH_LIMIT}`),
+        locale: localeSchema,
       },
     },
-    async ({ scope, province, condition, limit }, extra) => {
+    async ({ scope, province, condition, limit, locale }, extra) => {
       try {
         throwIfAborted(extra.signal);
+        const outputLocale = locale === 'en' ? 'en' : 'zh';
         const normalizedScope = scope ?? (province ? 'province' : 'china');
         const searchLimit = Math.min(
           MAX_CONDITION_SEARCH_LIMIT,
@@ -770,7 +875,8 @@ export function createWeatherServer(): McpServer {
         const locations = listChinaWeatherLocations(normalizedScope === 'province' ? province : undefined)
           .slice(0, searchLimit)
           .map((location) => ({
-            name: location.nameZh,
+            name: outputLocale === 'en' ? location.nameEn : location.nameZh,
+            englishName: location.nameEn,
             province: location.province,
             latitude: location.latitude,
             longitude: location.longitude,
@@ -782,16 +888,18 @@ export function createWeatherServer(): McpServer {
             scope: normalizedScope,
             province,
             results: [],
+            locale: outputLocale,
           });
           return { content: textContent(panel) };
         }
 
-        const results = await fetchBatchCurrentWeather(locations, condition, DEFAULT_BATCH_CONCURRENCY, extra.signal);
+        const results = await fetchBatchCurrentWeather(locations, condition, DEFAULT_BATCH_CONCURRENCY, outputLocale, extra.signal);
         const panel = buildConditionSearchPanel({
           condition,
           scope: normalizedScope,
           province,
           results,
+          locale: outputLocale,
         });
 
         return {
@@ -799,9 +907,11 @@ export function createWeatherServer(): McpServer {
         };
       } catch (error) {
         if (isAbortError(error) || extra.signal.aborted) throw error;
+        const errorLocale = locale === 'en' ? 'en' : 'zh';
+        const errorMessage = error instanceof Error ? error.message : (errorLocale === 'en' ? 'Unknown error' : '未知错误');
         const panel = buildErrorPanel(
-          '区域天气检索出错',
-          `区域天气检索出错: ${error instanceof Error ? error.message : '未知错误'}`,
+          errorLocale === 'en' ? 'Regional weather search failed' : '区域天气检索出错',
+          errorLocale === 'en' ? `Regional weather search failed: ${errorMessage}` : `区域天气检索出错: ${errorMessage}`,
           'search_weather_by_condition'
         );
         return {

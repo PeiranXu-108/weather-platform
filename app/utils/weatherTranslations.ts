@@ -138,3 +138,152 @@ export function translateWeatherCondition(condition: { code: number; text: strin
   return condition.text;
 }
 
+const WEATHER_CODE_EN_MAP: Record<number, string> = {
+  1000: 'Sunny',
+  1003: 'Partly cloudy',
+  1006: 'Cloudy',
+  1009: 'Overcast',
+  1030: 'Mist',
+  1063: 'Patchy rain nearby',
+  1066: 'Patchy snow nearby',
+  1069: 'Patchy sleet nearby',
+  1072: 'Patchy freezing drizzle nearby',
+  1087: 'Thundery outbreaks nearby',
+  1114: 'Blowing snow',
+  1117: 'Blizzard',
+  1135: 'Fog',
+  1147: 'Freezing fog',
+  1150: 'Patchy light drizzle',
+  1153: 'Light drizzle',
+  1168: 'Freezing drizzle',
+  1171: 'Heavy freezing drizzle',
+  1180: 'Patchy light rain',
+  1183: 'Light rain',
+  1186: 'Moderate rain at times',
+  1189: 'Moderate rain',
+  1192: 'Heavy rain at times',
+  1195: 'Heavy rain',
+  1198: 'Light freezing rain',
+  1201: 'Moderate or heavy freezing rain',
+  1204: 'Light sleet',
+  1207: 'Moderate or heavy sleet',
+  1210: 'Patchy light snow',
+  1213: 'Light snow',
+  1216: 'Patchy moderate snow',
+  1219: 'Moderate snow',
+  1222: 'Patchy heavy snow',
+  1225: 'Heavy snow',
+  1237: 'Ice pellets',
+  1240: 'Light rain shower',
+  1243: 'Moderate or heavy rain shower',
+  1246: 'Torrential rain shower',
+  1249: 'Light sleet showers',
+  1252: 'Moderate or heavy sleet showers',
+  1255: 'Light snow showers',
+  1258: 'Moderate or heavy snow showers',
+  1261: 'Light showers of ice pellets',
+  1264: 'Moderate or heavy showers of ice pellets',
+  1273: 'Patchy light rain with thunder',
+  1276: 'Moderate or heavy rain with thunder',
+  1279: 'Patchy light snow with thunder',
+  1282: 'Moderate or heavy snow with thunder',
+};
+
+const WEATHER_ZH_TO_EN_TEXT_MAP: Record<string, string> = {
+  晴: 'Sunny',
+  晴朗: 'Sunny',
+  多云: 'Cloudy',
+  局部多云: 'Partly cloudy',
+  少云: 'Partly cloudy',
+  阴: 'Overcast',
+  阴天: 'Overcast',
+  雾: 'Fog',
+  薄雾: 'Mist',
+  霾: 'Haze',
+  浮尘: 'Dust',
+  扬沙: 'Sand',
+  沙尘暴: 'Sandstorm',
+  小雨: 'Light rain',
+  中雨: 'Moderate rain',
+  大雨: 'Heavy rain',
+  暴雨: 'Rainstorm',
+  阵雨: 'Rain shower',
+  小阵雨: 'Light rain shower',
+  中阵雨: 'Moderate rain shower',
+  大阵雨: 'Heavy rain shower',
+  雷阵雨: 'Thunderstorm',
+  小雷阵雨: 'Light thunderstorm',
+  大雷阵雨: 'Heavy thunderstorm',
+  毛毛雨: 'Drizzle',
+  冻雨: 'Freezing rain',
+  雨夹雪: 'Sleet',
+  小雨夹雪: 'Light sleet',
+  中雨夹雪: 'Moderate sleet',
+  小雪: 'Light snow',
+  中雪: 'Moderate snow',
+  大雪: 'Heavy snow',
+  暴雪: 'Blizzard',
+  阵雪: 'Snow shower',
+  小阵雪: 'Light snow shower',
+  中阵雪: 'Moderate snow shower',
+  大阵雪: 'Heavy snow shower',
+  零星小雪: 'Patchy light snow',
+  零星中雪: 'Patchy moderate snow',
+  零星大雪: 'Patchy heavy snow',
+  吹雪: 'Blowing snow',
+  冰雹: 'Hail',
+  小冰雹: 'Light hail',
+  大冰雹: 'Heavy hail',
+};
+
+const WIND_DIRECTION_ZH_TO_EN_MAP: Record<string, string> = {
+  无持续风向: 'Variable',
+  北风: 'N',
+  东北风: 'NE',
+  东风: 'E',
+  东南风: 'SE',
+  南风: 'S',
+  西南风: 'SW',
+  西风: 'W',
+  西北风: 'NW',
+  旋转风: 'Rotating',
+};
+
+const MOON_PHASE_ZH_TO_EN_MAP: Record<string, string> = {
+  新月: 'New moon',
+  娥眉月: 'Waxing crescent',
+  上弦月: 'First quarter',
+  盈凸月: 'Waxing gibbous',
+  满月: 'Full moon',
+  亏凸月: 'Waning gibbous',
+  下弦月: 'Last quarter',
+  残月: 'Waning crescent',
+};
+
+export function localizeWeatherCondition(
+  condition: { code: number; text: string },
+  locale: 'zh' | 'en'
+): string {
+  if (locale === 'zh') return translateWeatherCondition(condition);
+  return WEATHER_CODE_EN_MAP[condition.code] ?? condition.text;
+}
+
+export function localizeWeatherText(text: string, locale: 'zh' | 'en'): string {
+  if (!text) return text;
+  if (locale === 'zh') return WEATHER_TEXT_MAP[text] ?? text;
+  return WEATHER_ZH_TO_EN_TEXT_MAP[text.trim()] ?? text;
+}
+
+export function localizeWindDirection(direction: string, locale: 'zh' | 'en'): string {
+  if (!direction) return direction;
+  if (locale === 'zh') return direction;
+  const trimmed = direction.trim();
+  return WIND_DIRECTION_ZH_TO_EN_MAP[trimmed] ?? trimmed.replace(/风$/, '');
+}
+
+export function localizeMoonPhase(phase: string, locale: 'zh' | 'en'): string {
+  if (!phase) return phase;
+  if (locale === 'zh') return phase;
+  return MOON_PHASE_ZH_TO_EN_MAP[phase.trim()] ?? phase;
+}
+

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
+import { useI18n } from '@/app/i18n';
 
 interface ChatInputProps {
   value: string;
@@ -11,6 +12,7 @@ interface ChatInputProps {
 }
 
 export default function ChatInput({ value, onChange, onSend, isLoading, isDark }: ChatInputProps) {
+  const { t } = useI18n();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 自动调整 textarea 高度
@@ -45,7 +47,7 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="输入你的天气问题..."
+        placeholder={t('chat.inputPlaceholder')}
         rows={1}
         disabled={isLoading}
         className={`flex-1 min-h-[40px] resize-none rounded-xl px-3 py-2 text-sm outline-none transition-all ${
@@ -67,7 +69,7 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
               ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/20'
               : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-200'
         }`}
-        title="发送"
+        title={t('chat.send')}
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
           <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.414 4.926A1.5 1.5 0 0 0 5.135 9.25h6.115a.75.75 0 0 1 0 1.5H5.135a1.5 1.5 0 0 0-1.442 1.086l-1.414 4.926a.75.75 0 0 0 .826.95 28.897 28.897 0 0 0 15.293-7.155.75.75 0 0 0 0-1.114A28.897 28.897 0 0 0 3.105 2.288Z" />

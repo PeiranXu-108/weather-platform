@@ -9,7 +9,8 @@ import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
 import { useTranslatedTexts } from '@/app/hooks/useTranslatedText';
 import { translateLocationName } from '@/app/utils/locationTranslations';
-import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import { localizeWeatherCondition, translateWeatherCondition } from '@/app/utils/weatherTranslations';
+import { formatDateTimeForLocale, useI18n } from '@/app/i18n';
 
 interface CurrentWeatherProps {
   location: Location;
@@ -23,6 +24,7 @@ interface CurrentWeatherProps {
 }
 
 export default function CurrentWeather({ location, current, textColorTheme, enhanceReadableText = false, cityQuery, isFavorite, onToggleFavorite, opacity = 100 }: CurrentWeatherProps) {
+  const { locale, t } = useI18n();
   const originals = [
     location.name ?? '',
     location.region ?? '',
@@ -40,25 +42,15 @@ export default function CurrentWeather({ location, current, textColorTheme, enha
   const staticRegion = translateLocationName(originals[1], 'region');
   const staticCountry = translateLocationName(originals[2], 'country');
   const staticCondition = translateWeatherCondition(current.condition);
-  const displayName = staticName !== originals[0] ? staticName : translated[0];
-  const displayRegion = staticRegion !== originals[1] ? staticRegion : translated[1];
-  const displayCountry = staticCountry !== originals[2] ? staticCountry : translated[2];
-  const displayCondition = staticCondition !== originals[3] ? staticCondition : translated[3];
+  const displayName = locale === 'zh' ? (staticName !== originals[0] ? staticName : translated[0]) : originals[0];
+  const displayRegion = locale === 'zh' ? (staticRegion !== originals[1] ? staticRegion : translated[1]) : originals[1];
+  const displayCountry = locale === 'zh' ? (staticCountry !== originals[2] ? staticCountry : translated[2]) : originals[2];
+  const displayCondition = locale === 'zh'
+    ? (staticCondition !== originals[3] ? staticCondition : translated[3])
+    : localizeWeatherCondition(current.condition, locale);
 
   // Format local time from location.localtime
-  const formatTime = (timeString: string) => {
-    try {
-      const date = new Date(timeString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${year} 年 ${month} 月 ${day} 日 ${hours}:${minutes}`;
-    } catch (e) {
-      return timeString;
-    }
-  };
+  const formatTime = (timeString: string) => formatDateTimeForLocale(timeString, locale);
 
 
   const formattedLocalTime = formatTime(location.localtime);
@@ -75,13 +67,13 @@ export default function CurrentWeather({ location, current, textColorTheme, enha
               ? 'hover:bg-white/10'
               : 'hover:bg-black/5'
           }`}
-          aria-label={isFavorite ? '取消收藏城市' : '收藏该城市'}
-          title={isFavorite ? '已收藏，点击取消' : '点击收藏'}
+          aria-label={isFavorite ? t('weather.favoriteRemoveAria') : t('weather.favoriteAddAria')}
+          title={isFavorite ? t('weather.favoriteRemoveTitle') : t('weather.favoriteAddTitle')}
         >
           <Icon
             src={isFavorite ? ICONS.bookmarkFilled : ICONS.bookmark}
             className={`w-5 h-5 ${isFavorite ? 'text-amber-400' : textColorTheme.textColor.secondary}`}
-            title={isFavorite ? '已收藏' : '收藏'}
+            title={isFavorite ? t('weather.favorited') : t('weather.favorite')}
           />
         </button>
       )}
@@ -133,13 +125,13 @@ export default function CurrentWeather({ location, current, textColorTheme, enha
             className={`text-xs ${textColorTheme.textColor.muted}`}
             style={readableTextShadowStyle('secondary', enhanceReadableText)}
           >
-            最后更新：北京时间 {formatTime(current.last_updated)}
+            {t('weather.lastUpdatedBeijing', { time: formatTime(current.last_updated) })}
           </p>
           <p
             className={`text-xs ${textColorTheme.textColor.secondary}`}
             style={readableTextShadowStyle('secondary', enhanceReadableText)}
           >
-            当地时间 {formattedLocalTime}
+            {t('weather.localTime', { time: formattedLocalTime })}
           </p>
         </div>
       </div>

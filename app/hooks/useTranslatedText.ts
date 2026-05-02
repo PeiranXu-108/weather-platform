@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { translateLocationName } from '@/app/utils/locationTranslations';
 import { translateWeatherCondition } from '@/app/utils/weatherTranslations';
 import { fetchTranslate } from '@/app/lib/api';
+import { useI18n } from '@/app/i18n';
 
 export type TranslateGeo = { country?: string; region?: string; city?: string };
 const TRANSLATION_SESSION_CACHE_KEY = 'weather.translation.cache.v1';
@@ -166,9 +167,14 @@ async function translateBatch(texts: string[], geo?: TranslateGeo): Promise<stri
  * @param geo 可选地理信息，传入可提升地名等翻译准确度
  */
 export function useTranslatedText(original: string, geo?: TranslateGeo): string {
+  const { locale } = useI18n();
   const [display, setDisplay] = useState(() => resolveImmediateTranslation(original, geo));
 
   useEffect(() => {
+    if (locale === 'en') {
+      setDisplay(original);
+      return;
+    }
     const immediate = resolveImmediateTranslation(original, geo);
     setDisplay(immediate);
     if (!original || !isLikelyEnglish(original)) return;
@@ -181,9 +187,9 @@ export function useTranslatedText(original: string, geo?: TranslateGeo): string 
     return () => {
       cancelled = true;
     };
-  }, [original, geo?.country, geo?.region, geo?.city]);
+  }, [original, geo?.country, geo?.region, geo?.city, locale]);
 
-  return display;
+  return locale === 'en' ? original : display;
 }
 
 /**
@@ -191,11 +197,16 @@ export function useTranslatedText(original: string, geo?: TranslateGeo): string 
  * @param geo 可选地理信息，传入可提升地名等翻译准确度
  */
 export function useTranslatedTexts(originals: string[], geo?: TranslateGeo): string[] {
+  const { locale } = useI18n();
   const [display, setDisplay] = useState<string[]>(() =>
     originals.map((text) => resolveImmediateTranslation(text, geo))
   );
 
   useEffect(() => {
+    if (locale === 'en') {
+      setDisplay(originals);
+      return;
+    }
     const immediate = originals.map((text) => resolveImmediateTranslation(text, geo));
     setDisplay(immediate);
     const toTranslate = originals
@@ -220,7 +231,7 @@ export function useTranslatedTexts(originals: string[], geo?: TranslateGeo): str
     return () => {
       cancelled = true;
     };
-  }, [originals.join('\0'), geo?.country, geo?.region, geo?.city]);
+  }, [originals.join('\0'), geo?.country, geo?.region, geo?.city, locale]);
 
-  return display;
+  return locale === 'en' ? originals : display;
 }

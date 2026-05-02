@@ -5,6 +5,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 /**
  * 从元素中获取含 gradient 的背景值（兼容浏览器对 background 短属性的拆解）。
@@ -97,6 +98,7 @@ export default function SettingsPanel({
   onShowBackgroundChange,
   showFireworksAction = false,
 }: SettingsPanelProps) {
+  const { locale, setLocale, t } = useI18n();
   const [showTooltip, setShowTooltip] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [captureStatus, setCaptureStatus] = useState<'success' | 'error' | null>(null);
@@ -215,13 +217,13 @@ export default function SettingsPanel({
         className={`p-2 rounded-full transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
           isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'
         }`}
-        aria-label="打开设置"
-        title="设置"
+        aria-label={t('settings.open')}
+        title={t('settings.title')}
       >
         <Icon
           src={ICONS.settings}
           className={`w-8 h-8 ${textColorTheme.textColor.secondary}`}
-          title="设置"
+          title={t('settings.title')}
         />
       </button>
 
@@ -236,7 +238,7 @@ export default function SettingsPanel({
           {/* Opacity Control */}
           <div className="mb-4">
             <label className={`block text-sm font-medium mb-2 ${textColorTheme.textColor.primary}`}>
-              透明度
+              {t('settings.opacity')}
             </label>
             <div className="flex items-center gap-3">
               <input
@@ -266,7 +268,7 @@ export default function SettingsPanel({
           {/* Background Rendering Toggle */}
           <div className="flex items-center justify-between">
             <label className={`text-sm font-medium ${textColorTheme.textColor.primary}`}>
-              背景渲染
+              {t('settings.backgroundRendering')}
             </label>
             <button
               onClick={() => onShowBackgroundChange(!showBackground)}
@@ -279,7 +281,7 @@ export default function SettingsPanel({
                     ? 'bg-white/20'
                     : 'bg-gray-300/60'
               }`}
-              aria-label={showBackground ? '禁用背景渲染' : '启用背景渲染'}
+              aria-label={showBackground ? t('settings.disableBackgroundRendering') : t('settings.enableBackgroundRendering')}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
@@ -287,6 +289,36 @@ export default function SettingsPanel({
                 }`}
               />
             </button>
+          </div>
+
+          {/* Language Toggle */}
+          <div className={`mt-4 pt-3 border-t ${isDark ? 'border-white/10' : 'border-black/5'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <label className={`text-sm font-medium ${textColorTheme.textColor.primary}`}>
+                {t('settings.language')}
+              </label>
+              <div className={`inline-flex rounded-full p-1 ${isDark ? 'bg-white/10' : 'bg-sky-500/10'}`}>
+                {(['zh', 'en'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setLocale(item)}
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+                      locale === item
+                        ? isDark
+                          ? 'bg-white/20 text-white'
+                          : 'bg-white text-sky-700 shadow-sm'
+                        : isDark
+                          ? 'text-white/60 hover:text-white'
+                          : 'text-sky-700/60 hover:text-sky-700'
+                    }`}
+                    aria-pressed={locale === item}
+                  >
+                    {item === 'zh' ? t('settings.languageChinese') : t('settings.languageEnglish')}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Capture Background Button */}
@@ -332,12 +364,12 @@ export default function SettingsPanel({
                 </svg>
               )}
               {capturing
-                ? '截取中…'
+                ? t('settings.wallpaperCapturing')
                 : captureStatus === 'success'
-                  ? '已复制到剪贴板'
+                  ? t('settings.wallpaperCopied')
                   : captureStatus === 'error'
-                    ? '截取失败'
-                    : '截取壁纸'}
+                    ? t('settings.wallpaperFailed')
+                    : t('settings.captureWallpaper')}
             </button>
 
             {showFireworksAction && (
@@ -353,8 +385,8 @@ export default function SettingsPanel({
                       ? 'bg-gradient-to-r from-fuchsia-500/20 via-amber-400/20 to-sky-400/20 hover:from-fuchsia-500/30 hover:via-amber-400/30 hover:to-sky-400/30 text-white border border-white/15 active:scale-[0.98]'
                       : 'bg-gradient-to-r from-fuchsia-500/15 via-amber-400/15 to-sky-400/15 hover:from-fuchsia-500/25 hover:via-amber-400/25 hover:to-sky-400/25 text-fuchsia-700 border border-fuchsia-200 active:scale-[0.98]'
                 }`}
-                title={fireworksFiring ? '烟花绽放中…' : '点击燃放一场约 7 秒的烟花'}
-                aria-label="燃放烟花"
+                title={fireworksFiring ? t('settings.fireworksRunningTitle') : t('settings.fireworksTitle')}
+                aria-label={t('settings.launchFireworks')}
               >
                 {/* Sparkle icon */}
                 <svg
@@ -376,7 +408,7 @@ export default function SettingsPanel({
                   <path d="M16.3 7.7l2.1-2.1" />
                   <circle cx="12" cy="12" r="2" />
                 </svg>
-                {fireworksFiring ? '绽放中…' : '看烟花'}
+                {fireworksFiring ? t('settings.fireworksRunning') : t('settings.watchFireworks')}
               </button>
             )}
           </div>

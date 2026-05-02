@@ -5,6 +5,7 @@ import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 export interface DropdownOption {
   value: string;
@@ -54,6 +55,7 @@ export default function SegmentedDropdown({
   positionClassName = 'absolute top-6 right-6 z-10',
   enhanceReadableText = false,
 }: SegmentedDropdownProps) {
+  const { t } = useI18n();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isDark = textColorTheme.backgroundType === 'dark';
@@ -131,7 +133,7 @@ export default function SegmentedDropdown({
                 <Icon
                   src={ICONS.chevronRight}
                   className={`w-3 h-3 transition-transform duration-200 ${isDropdownOpen ? 'rotate-90' : ''}`}
-                  title="展开"
+                  title={t('common.expand')}
                 />
               )}
             </button>

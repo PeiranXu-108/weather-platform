@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import ChatPanel from './ChatPanel';
 import type { ChatLayoutMode } from './types';
+import { useI18n } from '@/app/i18n';
 
 interface ChatBotProps {
   textColorTheme: TextColorTheme;
@@ -12,6 +13,7 @@ interface ChatBotProps {
 }
 
 export default function ChatBot({ textColorTheme, mode, onModeChange }: ChatBotProps) {
+  const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [hasOpenedPanel, setHasOpenedPanel] = useState(false);
@@ -140,7 +142,7 @@ export default function ChatBot({ textColorTheme, mode, onModeChange }: ChatBotP
                 : 'bg-white/90 hover:bg-white border-slate-200/70 text-slate-700 shadow-lg shadow-slate-400/15 hover:shadow-slate-400/25'
           }`}
           style={{ bottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}
-          title={isOpen ? '关闭天气助手' : '打开天气助手'}
+          title={isOpen ? t('chat.closeAssistant') : t('chat.openAssistant')}
         >
           {isOpen ? (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>

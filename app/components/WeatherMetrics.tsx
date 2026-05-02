@@ -1,9 +1,12 @@
+'use client';
+
 import React from 'react';
 import type { Current } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardStyle, getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 interface WeatherMetricsProps {
   current: Current;
@@ -13,15 +16,16 @@ interface WeatherMetricsProps {
 }
 
 export default function WeatherMetrics({ current, textColorTheme, enhanceReadableText = false, opacity = 100 }: WeatherMetricsProps) {
+  const { t } = useI18n();
   const metrics = [
-    { label: '湿度', value: `${current.humidity}%`, icon: ICONS.humidity, iconColor: 'text-blue-500' },
-    { label: '风速', value: `${Math.round(current.wind_kph)} km/h`, icon: ICONS.wind, iconColor: 'text-emerald-500' },
-    { label: '气压', value: `${current.pressure_mb} mb`, icon: ICONS.pressure, iconColor: 'text-violet-500' },
-    { label: '紫外线', value: current.uv.toString(), icon: ICONS.uv, iconColor: 'text-amber-500' },
-    { label: '能见度', value: `${current.vis_km} km`, icon: ICONS.visibility, iconColor: 'text-indigo-500' },
-    { label: '降水量', value: `${current.precip_mm} mm`, icon: ICONS.precipitation, iconColor: 'text-cyan-500' },
-    { label: '风向', value: `${current.wind_dir} (${current.wind_degree}°)`, icon: ICONS.windDirection, iconColor: 'text-sky-500' },
-    { label: '云量', value: `${current.cloud}%`, icon: ICONS.cloudAmount, iconColor: 'text-slate-400' },
+    { label: t('weather.humidity'), value: `${current.humidity}%`, icon: ICONS.humidity, iconColor: 'text-blue-500' },
+    { label: t('weather.windSpeed'), value: `${Math.round(current.wind_kph)} km/h`, icon: ICONS.wind, iconColor: 'text-emerald-500' },
+    { label: t('weather.pressure'), value: `${current.pressure_mb} mb`, icon: ICONS.pressure, iconColor: 'text-violet-500' },
+    { label: t('weather.uv'), value: current.uv.toString(), icon: ICONS.uv, iconColor: 'text-amber-500' },
+    { label: t('weather.visibility'), value: `${current.vis_km} km`, icon: ICONS.visibility, iconColor: 'text-indigo-500' },
+    { label: t('weather.precipitation'), value: `${current.precip_mm} mm`, icon: ICONS.precipitation, iconColor: 'text-cyan-500' },
+    { label: t('weather.windDirection'), value: `${current.wind_dir} (${current.wind_degree}°)`, icon: ICONS.windDirection, iconColor: 'text-sky-500' },
+    { label: t('weather.cloudAmount'), value: `${current.cloud}%`, icon: ICONS.cloudAmount, iconColor: 'text-slate-400' },
   ];
 
   const rs = (level: 'primary' | 'secondary') =>
@@ -33,7 +37,7 @@ export default function WeatherMetrics({ current, textColorTheme, enhanceReadabl
         className={`text-base sm:text-lg font-bold ${textColorTheme.textColor.primary} mb-3 sm:mb-4`}
         style={rs('primary')}
       >
-        天气指标
+        {t('weather.metricsTitle')}
       </h2>
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="grid grid-cols-2 grid-rows-4 gap-3 sm:gap-4 flex-1 min-h-0">

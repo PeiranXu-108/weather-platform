@@ -20,6 +20,7 @@ import { useSession } from 'next-auth/react';
 import { fetchWeatherByCity, fetchWeatherByCoords, favoritesApi } from './lib/api';
 import ChatBot from './components/ChatBot/ChatBot';
 import type { ChatLayoutMode } from './components/ChatBot/types';
+import { useI18n } from './i18n';
 
 // 动态导入 Three.js 组件，禁用 SSR
 const CloudyWeatherBackground = dynamic(
@@ -83,6 +84,7 @@ function saveCurrentCityToStorage(city: string, query: string) {
 }
 
 export default function Home() {
+  const { t } = useI18n();
   useSyncFavorites();
   const { status } = useSession();
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
@@ -311,11 +313,11 @@ export default function Home() {
     if (error) {
       setModalConfig({
         isOpen: true,
-        message: `加载天气数据失败：${error}\n\n请稍后重试。`,
+        message: t('weather.errorModalMessage', { error }),
       });
       setError(null); // Clear error after showing modal
     }
-  }, [error]);
+  }, [error, t]);
 
   const handleCloseModal = () => {
     setModalConfig(prev => ({ ...prev, isOpen: false }));
@@ -558,7 +560,7 @@ export default function Home() {
                           className="text-sm text-white-100 opacity-80"
                           style={readableTextShadowStyle('secondary', enhanceReadableText)}
                         >
-                          数据来源：WeatherAPI.com • 最后更新：{weatherData.current.last_updated}
+                          {t('weather.dataSourceFooter', { time: weatherData.current.last_updated })}
                         </p>
                       </footer>
                     </div>

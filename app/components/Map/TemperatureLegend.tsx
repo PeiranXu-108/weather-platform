@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/app/i18n';
+
 const GRADIENT_STOPS = [
   { pct: 0, rgb: 'rgb(55, 0, 120)' },
   { pct: 12, rgb: 'rgb(59, 130, 246)' },
@@ -17,9 +19,10 @@ const LABELS = [MAX_TEMP, 30, 20, 10, 0, -10, MIN_TEMP];
 const gradientValue = GRADIENT_STOPS.map((s) => `${s.rgb} ${s.pct}%`).join(', ');
 
 export default function TemperatureLegend() {
+  const { t } = useI18n();
   return (
     <div className="bg-white/70 backdrop-blur-md rounded-xl shadow-2xl px-3 py-2 border border-white/40">
-      <p className="text-xs font-medium text-gray-800 mb-2">气温（℃）</p>
+      <p className="text-xs font-medium text-gray-800 mb-2">{t('map.temperatureLegend')}</p>
       <div className="flex items-stretch gap-2">
         <div
           className="w-1 rounded-full flex-shrink-0"

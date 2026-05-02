@@ -11,6 +11,7 @@ import {
 } from '@/app/utils/textColorTheme';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 interface HourlyChartProps {
   hourlyData: Hour[];
@@ -42,6 +43,7 @@ interface DataTypeConfig {
 }
 
 export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadableText = false, opacity = 100 }: HourlyChartProps) {
+  const { locale, t } = useI18n();
   const [selectedDataType, setSelectedDataType] = useState<DataType>('temperature');
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadabl
 
   const hours = next24Hours.map(hour => {
     const date = new Date(hour.time);
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(locale === 'zh' ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit' });
   });
 
   const isDark = textColorTheme.backgroundType === 'dark';
@@ -67,90 +69,90 @@ export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadabl
   // Data type configurations
   const dataTypeConfigs: Record<DataType, DataTypeConfig> = {
     temperature: {
-      label: '温度',
+      label: t('weather.temperature'),
       unit: '°C',
-      yAxisName: '温度 (°C)',
+      yAxisName: `${t('weather.temperature')} (°C)`,
       formatter: (v) => `${v}°C`,
       extractor: (h) => h.temp_c,
       color: '#fb923c',
       areaColor: 'rgba(251, 146, 60, 0.4)'
     },
     humidity: {
-      label: '湿度',
+      label: t('weather.humidity'),
       unit: '%',
-      yAxisName: '湿度 (%)',
+      yAxisName: `${t('weather.humidity')} (%)`,
       formatter: (v) => `${v}%`,
       extractor: (h) => h.humidity,
       color: '#3b82f6',
       areaColor: 'rgba(59, 130, 246, 0.4)'
     },
     wind: {
-      label: '风速',
+      label: t('weather.windSpeed'),
       unit: 'km/h',
-      yAxisName: '风速 (km/h)',
+      yAxisName: `${t('weather.windSpeed')} (km/h)`,
       formatter: (v) => `${v} km/h`,
       extractor: (h) => h.wind_kph,
       color: '#10b981',
       areaColor: 'rgba(16, 185, 129, 0.4)'
     },
     pressure: {
-      label: '气压',
+      label: t('weather.pressure'),
       unit: 'mb',
-      yAxisName: '气压 (mb)',
+      yAxisName: `${t('weather.pressure')} (mb)`,
       formatter: (v) => `${v} mb`,
       extractor: (h) => h.pressure_mb,
       color: '#8b5cf6',
       areaColor: 'rgba(139, 92, 246, 0.4)'
     },
     precipitation: {
-      label: '降水量',
+      label: t('weather.precipitation'),
       unit: 'mm',
-      yAxisName: '降水量 (mm)',
+      yAxisName: `${t('weather.precipitation')} (mm)`,
       formatter: (v) => `${v} mm`,
       extractor: (h) => h.precip_mm,
       color: '#06b6d4',
       areaColor: 'rgba(6, 182, 212, 0.4)'
     },
     visibility: {
-      label: '能见度',
+      label: t('weather.visibility'),
       unit: 'km',
-      yAxisName: '能见度 (km)',
+      yAxisName: `${t('weather.visibility')} (km)`,
       formatter: (v) => `${v} km`,
       extractor: (h) => h.vis_km,
       color: '#f59e0b',
       areaColor: 'rgba(245, 158, 11, 0.4)'
     },
     cloud: {
-      label: '云量',
+      label: t('weather.cloudAmount'),
       unit: '%',
-      yAxisName: '云量 (%)',
+      yAxisName: `${t('weather.cloudAmount')} (%)`,
       formatter: (v) => `${v}%`,
       extractor: (h) => h.cloud,
       color: '#6366f1',
       areaColor: 'rgba(99, 102, 241, 0.4)'
     },
     uv: {
-      label: '紫外线指数',
+      label: t('weather.uvIndex'),
       unit: '',
-      yAxisName: '紫外线指数',
+      yAxisName: t('weather.uvIndex'),
       formatter: (v) => `${v}`,
       extractor: (h) => h.uv,
       color: '#ef4444',
       areaColor: 'rgba(239, 68, 68, 0.4)'
     },
     gust: {
-      label: '阵风',
+      label: t('weather.gust'),
       unit: 'km/h',
-      yAxisName: '阵风 (km/h)',
+      yAxisName: `${t('weather.gust')} (km/h)`,
       formatter: (v) => `${v} km/h`,
       extractor: (h) => h.gust_kph,
       color: '#14b8a6',
       areaColor: 'rgba(20, 184, 166, 0.4)'
     },
     dewpoint: {
-      label: '露点',
+      label: t('weather.dewPoint'),
       unit: '°C',
-      yAxisName: '露点 (°C)',
+      yAxisName: `${t('weather.dewPoint')} (°C)`,
       formatter: (v) => `${v}°C`,
       extractor: (h) => h.dewpoint_c,
       color: '#84cc16',
@@ -189,7 +191,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadabl
     const echartsTs = readableEChartsTextShadowStyle(enhanceReadableText);
     return {
       title: {
-        text: `24小时${config.label}预报`,
+        text: t('weather.hourlyForecastTitle', { label: config.label }),
         left: 'center',
         textStyle: {
           fontSize: titleFontSize,
@@ -206,7 +208,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadabl
         formatter: function(params: any) {
           let result = `<strong>${params[0].axisValue}</strong><br/>`;
           params.forEach((param: any) => {
-            result += `${param.marker}${param.seriesName}：${config.formatter(param.value)}<br/>`;
+            result += `${param.marker}${param.seriesName}: ${config.formatter(param.value)}<br/>`;
           });
           return result;
         }
@@ -310,7 +312,7 @@ export default function HourlyChart({ hourlyData, textColorTheme, enhanceReadabl
         }
       ]
     };
-  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark, isMobile, enhanceReadableText]);
+  }, [hours, chartData, selectedDataType, titleColor, axisColor, isDark, isMobile, enhanceReadableText, t]);
 
   return (
     <div className={`rounded-2xl shadow-xl p-4 sm:p-6 relative min-h-[240px] sm:min-h-[280px]`} style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>

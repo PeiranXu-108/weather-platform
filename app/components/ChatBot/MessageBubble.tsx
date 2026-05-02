@@ -4,6 +4,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import WeatherPanel from './WeatherPanel';
 import type { ChatMessage } from './types';
+import { useI18n } from '@/app/i18n';
 
 export type { ChatMessage } from './types';
 
@@ -11,20 +12,6 @@ interface MessageBubbleProps {
   message: ChatMessage;
   isDark: boolean;
 }
-
-// 工具名称映射为中文
-const TOOL_NAME_MAP: Record<string, string> = {
-  get_current_weather: '实时天气',
-  get_forecast_30d: '30天预报',
-  get_weather_at_my_location: '当前位置天气',
-  search_city: '城市搜索',
-  list_china_weather_locations: '候选城市',
-  batch_get_current_weather: '批量天气',
-  search_weather_by_condition: '区域天气检索',
-  agent_plan: 'Agent 计划',
-  agent_step: 'Agent 步骤',
-  agent_observation: 'Agent 观察',
-};
 
 function ToolCallIndicator({
   toolName,
@@ -37,9 +24,22 @@ function ToolCallIndicator({
   isDark: boolean;
   content?: string;
 }) {
-  const displayName = TOOL_NAME_MAP[toolName] || toolName;
+  const { t } = useI18n();
+  const toolNameMap: Record<string, string> = {
+    get_current_weather: t('chat.tool.currentWeather'),
+    get_forecast_30d: t('chat.tool.forecast30d'),
+    get_weather_at_my_location: t('chat.tool.locationWeather'),
+    search_city: t('chat.tool.citySearch'),
+    list_china_weather_locations: t('chat.tool.candidateCities'),
+    batch_get_current_weather: t('chat.tool.batchWeather'),
+    search_weather_by_condition: t('chat.tool.conditionSearch'),
+    agent_plan: t('chat.tool.agentPlan'),
+    agent_step: t('chat.tool.agentStep'),
+    agent_observation: t('chat.tool.agentObservation'),
+  };
+  const displayName = toolNameMap[toolName] || toolName;
   const isCalling = status === 'calling';
-  const label = content || (isCalling ? `正在查询${displayName}...` : `${displayName}查询完成`);
+  const label = content || (isCalling ? t('chat.tool.calling', { name: displayName }) : t('chat.tool.done', { name: displayName }));
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${

@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
+import { useI18n } from '@/app/i18n';
 
 export default function AuthModal({
   isOpen,
@@ -15,6 +16,7 @@ export default function AuthModal({
   onClose: () => void;
   textColorTheme: TextColorTheme;
 }) {
+  const { t } = useI18n();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +41,7 @@ export default function AuthModal({
       if (res?.error) setError(res.error);
       else onClose();
     } catch {
-      setError('发生错误，请稍后再试');
+      setError(t('auth.genericError'));
     } finally {
       setLoading(false);
     }
@@ -59,16 +61,16 @@ export default function AuthModal({
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-black/5 transition-colors"
         >
-          <Icon src={ICONS.close} className={`w-5 h-5 ${textColorTheme.textColor.muted}`} title="关闭" />
+          <Icon src={ICONS.close} className={`w-5 h-5 ${textColorTheme.textColor.muted}`} title={t('common.close')} />
         </button>
 
         <h3 className={`text-2xl font-bold mb-6 text-center ${textColorTheme.textColor.primary}`}>
-          {isLogin ? '欢迎回来' : '注册账号'}
+          {isLogin ? t('auth.welcomeBack') : t('auth.registerAccount')}
         </h3>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className={`block text-sm font-medium mb-1 ${textColorTheme.textColor.secondary}`}>邮箱</label>
+            <label className={`block text-sm font-medium mb-1 ${textColorTheme.textColor.secondary}`}>{t('auth.email')}</label>
             <input
               type="email"
               value={email}
@@ -81,7 +83,7 @@ export default function AuthModal({
             />
           </div>
           <div>
-            <label className={`block text-sm font-medium mb-1 ${textColorTheme.textColor.secondary}`}>密码</label>
+            <label className={`block text-sm font-medium mb-1 ${textColorTheme.textColor.secondary}`}>{t('auth.password')}</label>
             <input
               type="password"
               value={password}
@@ -103,14 +105,14 @@ export default function AuthModal({
               isDark ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-lg' : 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-200'
             } ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {loading ? <Icon src={ICONS.spinner} className="w-5 h-5 animate-spin" title="加载中" /> : isLogin ? '登录' : '注册'}
+            {loading ? <Icon src={ICONS.spinner} className="w-5 h-5 animate-spin" title={t('common.loading')} /> : isLogin ? t('auth.login') : t('auth.register')}
           </button>
         </form>
 
         <p className={`mt-6 text-center text-sm ${textColorTheme.textColor.secondary}`}>
-          {isLogin ? '还没有账号？' : '已有账号？'}
+          {isLogin ? t('auth.noAccount') : t('auth.haveAccount')}
           <button type="button" onClick={() => setIsLogin(!isLogin)} className="ml-1 text-sky-500 font-bold hover:underline">
-            {isLogin ? '去注册' : '去登录'}
+            {isLogin ? t('auth.goRegister') : t('auth.goLogin')}
           </button>
         </p>
       </div>

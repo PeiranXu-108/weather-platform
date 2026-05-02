@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/app/i18n';
+
 export const TIMELINE_TOTAL_STEPS = 24;
 
 export interface MapTimelinePlaybackProps {
@@ -17,6 +19,7 @@ export default function MapTimelinePlayback({
   onStepChange,
   onTogglePlay,
 }: MapTimelinePlaybackProps) {
+  const { t } = useI18n();
   return (
     <div
       className="absolute left-1/2 -translate-x-1/2 z-10 w-[min(680px,90%)] rounded-2xl bg-white/70 backdrop-blur-sm border border-white/50 shadow-xl px-4 py-3"
@@ -27,8 +30,8 @@ export default function MapTimelinePlayback({
           type="button"
           onClick={onTogglePlay}
           className="flex items-center justify-center w-9 h-9 min-w-[44px] min-h-[44px] rounded-full bg-white/90 border border-white/70 text-slate-700 hover:bg-white transition-colors"
-          title={isPlaying ? '暂停播放' : '播放动画'}
-          aria-label={isPlaying ? '暂停播放' : '播放动画'}
+          title={isPlaying ? t('map.pause') : t('map.play')}
+          aria-label={isPlaying ? t('map.pause') : t('map.play')}
         >
           {isPlaying ? (
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -49,13 +52,13 @@ export default function MapTimelinePlayback({
           value={step}
           onChange={(e) => onStepChange(Number(e.target.value))}
           className="w-full h-2 bg-white/70 rounded-full appearance-none cursor-pointer accent-blue-500"
-          aria-label="未来48小时天气时间轴"
+          aria-label={t('map.timelineAria')}
         />
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px] text-slate-600">
-        <span>当前</span>
-        <span>T+{step * 2}小时 · {timeLabel}</span>
-        <span>未来48小时</span>
+        <span>{t('common.current')}</span>
+        <span>{t('map.timelineOffset', { hours: step * 2, time: timeLabel })}</span>
+        <span>{t('map.next48Hours')}</span>
       </div>
     </div>
   );

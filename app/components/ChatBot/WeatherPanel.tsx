@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { getWeatherConditionLabel } from '@/app/lib/agent/weatherConditions';
+import { getDayOfWeekLabel, useI18n } from '@/app/i18n';
+import { localizeWeatherText } from '@/app/utils/weatherTranslations';
 import type {
   CitySearchPanel,
   ConditionSearchPanel,
@@ -10,6 +12,24 @@ import type {
   WeatherAssistantPanel,
   WeatherErrorPanel,
 } from './types';
+
+const WEATHER_CONDITION_LABELS_EN: Record<ConditionSearchPanel['condition'], string> = {
+  snow: 'Snow',
+  rain: 'Rain',
+  hot: 'Hot',
+  cold: 'Cold',
+  wind: 'Windy',
+  clear: 'Clear',
+  cloudy: 'Cloudy',
+  overcast: 'Overcast',
+  fog: 'Fog',
+  haze: 'Haze',
+  thunder: 'Thunderstorms',
+  humid: 'Humid',
+  dry: 'Dry',
+  comfortable: 'Comfortable',
+  adverse: 'Adverse weather',
+};
 
 interface WeatherPanelProps {
   panel: WeatherAssistantPanel;
@@ -22,12 +42,11 @@ function weatherIconUrl(icon?: string): string | undefined {
   return icon;
 }
 
-function formatDateLabel(date: string): string {
+function formatDateLabel(date: string, locale: 'zh' | 'en'): string {
   if (!date) return '-';
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
-  const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  return `${parsed.getMonth() + 1}/${parsed.getDate()} ${days[parsed.getDay()]}`;
+  return `${parsed.getMonth() + 1}/${parsed.getDate()} ${getDayOfWeekLabel(parsed, locale)}`;
 }
 
 function formatHourLabel(time: string): string {
@@ -78,6 +97,7 @@ function MetricPill({
 }
 
 function CurrentForecastCard({ panel, isDark }: { panel: CurrentForecastPanel; isDark: boolean }) {
+  const { locale, t } = useI18n();
   const icon = weatherIconUrl(panel.current.icon);
   const dailyLabelDays = panel.daily.length || panel.requestedDays;
 
@@ -90,7 +110,7 @@ function CurrentForecastCard({ panel, isDark }: { panel: CurrentForecastPanel; i
               {panel.title}
             </div>
             <div className="mt-1 truncate text-base font-bold">
-              {panel.location.name || '未知位置'}
+              {panel.location.name || t('chat.panel.unknownLocation')}
             </div>
             <div className={`mt-0.5 truncate text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>
               {[panel.location.region, panel.location.country].filter(Boolean).join(' · ') || panel.location.localtime || ''}
@@ -101,32 +121,32 @@ function CurrentForecastCard({ panel, isDark }: { panel: CurrentForecastPanel; i
             <div className="text-right">
               <div className="text-3xl font-bold leading-none">{numberText(panel.current.tempC, '°')}</div>
               <div className={`mt-1 max-w-24 truncate text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                {panel.current.condition}
+                {localizeWeatherText(panel.current.condition, locale)}
               </div>
             </div>
           </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <MetricPill label="体感" value={numberText(panel.current.feelsLikeC, '°C')} isDark={isDark} />
-          <MetricPill label="湿度" value={numberText(panel.current.humidity, '%')} isDark={isDark} />
-          <MetricPill label="风" value={`${numberText(panel.current.windKph, ' km/h')} ${panel.current.windDir}`} isDark={isDark} />
-          <MetricPill label="降水 / UV" value={`${panel.current.precipMm} mm · ${panel.current.uv}`} isDark={isDark} />
+          <MetricPill label={t('chat.panel.feelsLike')} value={numberText(panel.current.feelsLikeC, '°C')} isDark={isDark} />
+          <MetricPill label={t('weather.humidity')} value={numberText(panel.current.humidity, '%')} isDark={isDark} />
+          <MetricPill label={t('chat.panel.wind')} value={`${numberText(panel.current.windKph, ' km/h')} ${panel.current.windDir}`} isDark={isDark} />
+          <MetricPill label={t('chat.panel.precipUv')} value={`${panel.current.precipMm} mm · ${panel.current.uv}`} isDark={isDark} />
         </div>
       </div>
 
       {panel.daily.length > 0 && (
         <div className="p-3">
           <div className={`mb-2 text-[11px] font-semibold ${isDark ? 'text-slate-300' : 'text-slate-500'}`}>
-            未来{dailyLabelDays}天
+            {t('chat.panel.nextDays', { days: dailyLabelDays })}
           </div>
           <div className="space-y-2">
             {panel.daily.map((day) => (
               <div key={day.date} className={`rounded-xl px-2.5 py-2 ${isDark ? 'bg-white/[0.06]' : 'bg-slate-50'}`}>
                 <div className="flex items-center gap-2">
-                  <div className="w-14 shrink-0 text-xs font-semibold">{formatDateLabel(day.date)}</div>
+                  <div className="w-14 shrink-0 text-xs font-semibold">{formatDateLabel(day.date, locale)}</div>
                   {weatherIconUrl(day.icon) && <img src={weatherIconUrl(day.icon)} alt="" className="h-7 w-7 shrink-0" />}
-                  <div className="min-w-0 flex-1 truncate text-xs">{day.condition}</div>
+                  <div className="min-w-0 flex-1 truncate text-xs">{localizeWeatherText(day.condition, locale)}</div>
                   <div className="shrink-0 text-xs font-semibold">
                     {numberText(day.minTempC, '°')}~{numberText(day.maxTempC, '°')}
                   </div>
@@ -138,7 +158,7 @@ function CurrentForecastCard({ panel, isDark }: { panel: CurrentForecastPanel; i
                   />
                 </div>
                 <div className={`mt-1 text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  降雨概率 {day.rainChance}% · 湿度 {day.humidity}% · UV {day.uv}
+                  {t('chat.panel.rainHumidityUv', { rain: day.rainChance, humidity: day.humidity, uv: day.uv })}
                 </div>
               </div>
             ))}
@@ -165,6 +185,7 @@ function CurrentForecastCard({ panel, isDark }: { panel: CurrentForecastPanel; i
 }
 
 function Forecast30dCard({ panel, isDark }: { panel: Forecast30dPanel; isDark: boolean }) {
+  const { locale, t } = useI18n();
   const temps = panel.daily.flatMap((day) => [day.tempMinC, day.tempMaxC]).filter(Number.isFinite);
   const min = temps.length ? Math.min(...temps) : 0;
   const max = temps.length ? Math.max(...temps) : 1;
@@ -182,7 +203,7 @@ function Forecast30dCard({ panel, isDark }: { panel: Forecast30dPanel; isDark: b
         <div className="mt-1 truncate text-sm font-semibold">{locationLabel}</div>
         {panel.updateTime && (
           <div className={`mt-0.5 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            更新 {panel.updateTime}
+            {t('common.updatedAt', { time: panel.updateTime })}
           </div>
         )}
       </div>
@@ -193,8 +214,8 @@ function Forecast30dCard({ panel, isDark }: { panel: Forecast30dPanel; isDark: b
           return (
             <div key={day.date} className={`rounded-xl px-2.5 py-2 ${isDark ? 'bg-white/[0.06]' : 'bg-slate-50'}`}>
               <div className="flex items-center gap-2 text-xs">
-                <span className="w-14 shrink-0 font-semibold">{formatDateLabel(day.date)}</span>
-                <span className="min-w-0 flex-1 truncate">{day.textDay}/{day.textNight}</span>
+                <span className="w-14 shrink-0 font-semibold">{formatDateLabel(day.date, locale)}</span>
+                <span className="min-w-0 flex-1 truncate">{localizeWeatherText(day.textDay, locale)}/{localizeWeatherText(day.textNight, locale)}</span>
                 <span className="shrink-0 font-semibold">{day.tempMinC}°~{day.tempMaxC}°</span>
               </div>
               <div className={`mt-2 h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`}>
@@ -204,7 +225,7 @@ function Forecast30dCard({ panel, isDark }: { panel: Forecast30dPanel; isDark: b
                 />
               </div>
               <div className={`mt-1 text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                降水 {day.precipMm} mm · 湿度 {day.humidity}% · {day.windDirDay}{day.windScaleDay}级 · UV {day.uvIndex}
+                {t('chat.panel.precipHumidityWindUv', { precip: day.precipMm, humidity: day.humidity, windDir: day.windDirDay, windScale: day.windScaleDay, uv: day.uvIndex })}
               </div>
             </div>
           );
@@ -215,18 +236,19 @@ function Forecast30dCard({ panel, isDark }: { panel: Forecast30dPanel; isDark: b
 }
 
 function CitySearchCard({ panel, isDark }: { panel: CitySearchPanel; isDark: boolean }) {
+  const { locale, t } = useI18n();
   return (
     <PanelShell isDark={isDark}>
       <div className={`p-3 ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50/90'}`}>
         <div className={`text-[11px] font-medium ${isDark ? 'text-indigo-200' : 'text-indigo-700'}`}>
           {panel.title}
         </div>
-        <div className="mt-1 text-sm font-semibold">“{panel.query}” 的匹配城市</div>
+        <div className="mt-1 text-sm font-semibold">{t('chat.panel.queryMatches', { query: panel.query })}</div>
       </div>
       <div className="p-3">
         {panel.results.length === 0 ? (
           <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-white/[0.06] text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
-            没有找到匹配城市，可以试试更完整的城市名。
+            {t('chat.panel.noCityMatches')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2">
@@ -235,8 +257,10 @@ function CitySearchCard({ panel, isDark }: { panel: CitySearchPanel; isDark: boo
                 key={`${city.chineseName}-${city.englishName}`}
                 className={`rounded-xl px-3 py-2 ${isDark ? 'bg-white/[0.06]' : 'bg-slate-50'}`}
               >
-                <div className="text-sm font-semibold">{city.chineseName}</div>
-                <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{city.englishName}</div>
+                <div className="text-sm font-semibold">{locale === 'en' ? city.englishName : city.chineseName}</div>
+                <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {locale === 'en' ? city.chineseName : city.englishName}
+                </div>
               </div>
             ))}
           </div>
@@ -246,12 +270,13 @@ function CitySearchCard({ panel, isDark }: { panel: CitySearchPanel; isDark: boo
   );
 }
 
-function conditionLabel(condition: ConditionSearchPanel['condition']): string {
-  return getWeatherConditionLabel(condition);
+function conditionLabel(condition: ConditionSearchPanel['condition'], locale: 'zh' | 'en'): string {
+  return locale === 'en' ? WEATHER_CONDITION_LABELS_EN[condition] : getWeatherConditionLabel(condition);
 }
 
 function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; isDark: boolean }) {
-  const scopeLabel = panel.scope === 'province' && panel.province ? panel.province : '全国主要城市';
+  const { locale, t } = useI18n();
+  const scopeLabel = panel.scope === 'province' && panel.province ? panel.province : t('chat.panel.mainCities');
 
   return (
     <PanelShell isDark={isDark}>
@@ -260,18 +285,21 @@ function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; i
           {panel.title}
         </div>
         <div className="mt-1 text-sm font-semibold">
-          {scopeLabel} · {conditionLabel(panel.condition)}
+          {scopeLabel} · {conditionLabel(panel.condition, locale)}
         </div>
         <div className={`mt-0.5 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-          已检查 {panel.checkedCount} 个城市{panel.failedCount > 0 ? `，${panel.failedCount} 个失败` : ''}
-          {panel.updatedAt ? ` · 更新 ${panel.updatedAt}` : ''}
+          {t('chat.panel.checkedCities', {
+            checked: panel.checkedCount,
+            failed: panel.failedCount > 0 ? t('chat.panel.failedCities', { count: panel.failedCount }) : '',
+            updated: panel.updatedAt ? ` · ${t('common.updatedAt', { time: panel.updatedAt })}` : '',
+          })}
         </div>
       </div>
 
       <div className="max-h-72 overflow-y-auto p-3">
         {panel.matchedLocations.length === 0 ? (
           <div className={`rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-white/[0.06] text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
-            暂未在已检查城市中发现匹配地点。
+            {t('chat.panel.noConditionMatches')}
           </div>
         ) : (
           <div className="space-y-2">
@@ -290,13 +318,13 @@ function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; i
                   )}
                 </div>
                 <div className={`mt-1 text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-                  {location.conditionText}
-                  {typeof location.precipMm === 'number' ? ` · 降水 ${location.precipMm} mm` : ''}
-                  {typeof location.windKph === 'number' ? ` · 风速 ${Math.round(location.windKph)} km/h` : ''}
+                  {localizeWeatherText(location.conditionText, locale)}
+                  {typeof location.precipMm === 'number' ? ` · ${t('chat.panel.precipValue', { value: location.precipMm })}` : ''}
+                  {typeof location.windKph === 'number' ? ` · ${t('chat.panel.windSpeedValue', { value: Math.round(location.windKph) })}` : ''}
                 </div>
                 {location.updatedAt && (
                   <div className={`mt-1 text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    更新 {location.updatedAt}
+                    {t('common.updatedAt', { time: location.updatedAt })}
                   </div>
                 )}
               </div>
@@ -313,6 +341,7 @@ function ConditionSearchCard({ panel, isDark }: { panel: ConditionSearchPanel; i
 }
 
 function ErrorCard({ panel, isDark }: { panel: WeatherErrorPanel; isDark: boolean }) {
+  const { t } = useI18n();
   return (
     <PanelShell isDark={isDark}>
       <div className={`p-3 ${isDark ? 'bg-rose-500/10' : 'bg-rose-50/90'}`}>
@@ -322,7 +351,7 @@ function ErrorCard({ panel, isDark }: { panel: WeatherErrorPanel; isDark: boolea
         <div className="mt-1 text-xs leading-relaxed">{panel.message}</div>
         {panel.toolName && (
           <div className={`mt-2 text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            工具：{panel.toolName}
+            {t('chat.panel.tool', { name: panel.toolName })}
           </div>
         )}
       </div>

@@ -10,6 +10,7 @@ import { useSession } from 'next-auth/react';
 import AuthModal from '@/app/components/Auth/AuthModal';
 import ProfileModal from '@/app/components/Auth/ProfileModal';
 import SettingsPanel from '@/app/components/SettingsPanel';
+import { useI18n } from '@/app/i18n';
 
 interface HeaderProps {
   onCitySelect: (cityName: string) => void;
@@ -25,6 +26,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onCitySelect, onLocationSelect, currentCity, isLocating = false, textColorTheme, opacity = 0, onOpacityChange, showBackground = true, onShowBackgroundChange, showFireworksAction = false }: HeaderProps) {
+  const { locale, t } = useI18n();
   const { data: session } = useSession();
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -136,7 +138,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
     if (!onLocationSelect) return;
 
     if (!navigator.geolocation) {
-      alert('您的浏览器不支持地理位置功能');
+      alert(t('header.geolocationUnsupported'));
       return;
     }
 
@@ -150,19 +152,19 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
       },
       (error) => {
         setLocating(false);
-        let errorMessage = '获取位置失败：';
+        let errorMessage = t('header.locationFailedPrefix');
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage += '用户拒绝了地理位置请求';
+            errorMessage += t('header.locationDenied');
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage += '位置信息不可用';
+            errorMessage += t('header.locationUnavailable');
             break;
           case error.TIMEOUT:
-            errorMessage += '获取位置超时';
+            errorMessage += t('header.locationTimeout');
             break;
           default:
-            errorMessage += '未知错误';
+            errorMessage += t('header.locationUnknown');
             break;
         }
         alert(errorMessage);
@@ -202,12 +204,12 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               className={`p-2 rounded-full transition-all active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center ${
                 theme.backgroundType === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5'
               }`}
-              title="个人中心"
+              title={t('header.profileCenter')}
             >
               <Icon
                 src={ICONS.profile}
                 className={`w-8 h-8 ${theme.textColor.secondary}`}
-                title="个人中心"
+                title={t('header.profileCenter')}
               />
             </button>
           </>
@@ -222,7 +224,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
             <Icon
               src={ICONS.profile}
               className={`w-8 h-8 ${theme.textColor.secondary}`}
-              title="登录"
+              title={t('header.login')}
             />
           </button>
         )}
@@ -251,7 +253,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                   setShowSuggestions(true);
                 }
               }}
-              placeholder="搜索城市"
+              placeholder={t('header.searchCity')}
               className={`w-full px-4 py-3 pl-12 ${currentCity ? 'pr-12 sm:pr-20 md:pr-40' : 'pr-12 sm:pr-20'} rounded-xl focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-200 ${theme.textColor.primary} placeholder-gray-400 transition-all ${getCardStyle(theme.backgroundType)}`}
               style={readableTextShadowStyle('primary', enhanceReadableText)}
             />
@@ -259,7 +261,7 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
               <Icon
                 src={ICONS.search}
                 className={`w-5 h-5 ${theme.textColor.muted}`}
-                title="搜索"
+                title={t('common.search')}
               />
             </div>
             <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
@@ -269,19 +271,19 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                 disabled={locating || isLocating}
                 className={`p-2 rounded-lg transition-all min-w-[44px] min-h-[44px] flex items-center justify-center  ${locating || isLocating
                   }`}
-                title="获取当前位置"
+                title={t('header.getCurrentLocation')}
               >
                 {locating || isLocating ? (
                   <Icon
                     src={ICONS.spinner}
                     className="w-5 h-5 text-sky-500 animate-spin"
-                    title="定位中"
+                    title={t('header.locating')}
                   />
                 ) : (
                   <Icon
                     src={ICONS.location}
                     className="w-5 h-5 text-sky-600"
-                    title="获取当前位置"
+                    title={t('header.getCurrentLocation')}
                   />
                 )}
               </button>
@@ -311,19 +313,19 @@ export default function Header({ onCitySelect, onLocationSelect, currentCity, is
                       className={`font-medium ${theme.textColor.primary}`}
                       style={readableTextShadowStyle('primary', enhanceReadableText)}
                     >
-                      {city.chineseName}
+                      {locale === 'zh' ? city.chineseName : city.englishName}
                     </p>
                     <p
                       className={`text-sm ${theme.textColor.muted}`}
                       style={readableTextShadowStyle('secondary', enhanceReadableText)}
                     >
-                      {city.englishName}
+                      {locale === 'zh' ? city.englishName : city.chineseName}
                     </p>
                   </div>
                   <Icon
                     src={ICONS.chevronRight}
                     className="w-5 h-5 text-sky-400"
-                    title="选择"
+                    title={t('common.select')}
                   />
                 </div>
               </button>
