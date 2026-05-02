@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
   closestCenter,
@@ -174,6 +174,60 @@ function FavoriteCityCard({
           </div>
         </div>
       </button>
+    </div>
+  );
+}
+
+function SortableFavoriteCard({
+  fav,
+  cached,
+  isLoading,
+  fallbackTheme,
+  showBackground,
+  scrollContainer,
+  onSelect,
+}: {
+  fav: FavoriteCity;
+  cached: CachedWeather | null;
+  isLoading: boolean;
+  fallbackTheme: TextColorTheme;
+  showBackground: boolean;
+  scrollContainer: HTMLDivElement | null;
+  onSelect: (query: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: fav.query });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    touchAction: 'manipulation',
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  const handleSelect = useCallback(() => {
+    if (isDragging) return;
+    onSelect(fav.query);
+  }, [isDragging, onSelect, fav.query]);
+
+  return (
+    <div style={style} {...attributes} {...listeners}>
+      <FavoriteCityCard
+        fav={fav}
+        cached={cached}
+        isLoading={isLoading}
+        fallbackTheme={fallbackTheme}
+        showBackground={showBackground}
+        scrollContainer={scrollContainer}
+        setContainerRef={setNodeRef}
+        onSelect={handleSelect}
+      />
     </div>
   );
 }
@@ -362,46 +416,13 @@ export default function FavoritesDrawer({
     void persistReorderedFavorites(next);
   };
 
-  function SortableFavoriteCard({
-    fav,
-  }: {
-    fav: FavoriteCity;
-  }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: fav.query });
-
-    const style: React.CSSProperties = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      touchAction: 'manipulation',
-      opacity: isDragging ? 0.6 : 1,
-    };
-
-    return (
-      <div style={style} {...attributes} {...listeners}>
-        <FavoriteCityCard
-          fav={fav}
-          cached={weatherByQuery[fav.query] ?? null}
-          isLoading={!!loadingQueries[fav.query]}
-          fallbackTheme={textColorTheme}
-          showBackground={showBackground && open}
-          scrollContainer={scrollContainerRef.current}
-          setContainerRef={setNodeRef}
-          onSelect={() => {
-            if (isDragging) return;
-            onSelectCity(fav.query);
-            setOpen(false);
-          }}
-        />
-      </div>
-    );
-  }
+  const handleSelectCity = useCallback(
+    (query: string) => {
+      onSelectCity(query);
+      setOpen(false);
+    },
+    [onSelectCity],
+  );
 
   return (
     <>
@@ -469,7 +490,16 @@ export default function FavoritesDrawer({
                   >
                     <div className="space-y-4">
                       {favorites.map((fav) => (
-                        <SortableFavoriteCard key={fav.query} fav={fav} />
+                        <SortableFavoriteCard
+                          key={fav.query}
+                          fav={fav}
+                          cached={weatherByQuery[fav.query] ?? null}
+                          isLoading={!!loadingQueries[fav.query]}
+                          fallbackTheme={textColorTheme}
+                          showBackground={showBackground && open}
+                          scrollContainer={scrollContainerRef.current}
+                          onSelect={handleSelectCity}
+                        />
                       ))}
                     </div>
                   </SortableContext>

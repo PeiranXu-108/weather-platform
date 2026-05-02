@@ -17,8 +17,10 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
+      const minHeightPx = 40;
+      const maxHeightPx = 80;
       el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+      el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeightPx), maxHeightPx)}px`;
     }
   }, [value]);
 
@@ -46,17 +48,17 @@ export default function ChatInput({ value, onChange, onSend, isLoading, isDark }
         placeholder="输入你的天气问题..."
         rows={1}
         disabled={isLoading}
-        className={`flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none transition-all ${
+        className={`flex-1 min-h-[40px] resize-none rounded-xl px-3 py-2 text-sm outline-none transition-all ${
           isDark
             ? 'bg-white/10 text-white placeholder-gray-400 focus:bg-white/15 focus:ring-1 focus:ring-sky-400/50'
             : 'bg-black/5 text-gray-900 placeholder-gray-500 focus:bg-black/10 focus:ring-1 focus:ring-sky-400/50'
         } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        style={{ maxHeight: '120px' }}
+        style={{ maxHeight: '80px' }}
       />
       <button
         onClick={onSend}
         disabled={isLoading || !value.trim()}
-        className={`flex-shrink-0 w-10 h-10 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
+        className={`flex-shrink-0 w-9 h-9 min-w-[40px] min-h-[40px] rounded-lg flex items-center justify-center transition-all active:scale-95 ${
           isLoading || !value.trim()
             ? isDark
               ? 'bg-white/5 text-gray-500 cursor-not-allowed'
