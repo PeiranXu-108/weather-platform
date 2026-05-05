@@ -418,6 +418,14 @@ export default function Home() {
   const allHourlyData: Hour[] = weatherData?.forecast.forecastday.reduce((acc, day) => {
     return [...acc, ...day.hour];
   }, [] as Hour[]) || [];
+  const forecast30dLocation = useMemo(() => {
+    if (!weatherData) return undefined;
+
+    return {
+      lat: Number(weatherData.location.lat.toFixed(2)),
+      lon: Number(weatherData.location.lon.toFixed(2)),
+    };
+  }, [weatherData?.location.lat, weatherData?.location.lon]);
   const liveFavoriteWeather = useMemo(
     () => ({ query: currentCityQuery, data: weatherData }),
     [currentCityQuery, weatherData]
@@ -519,10 +527,7 @@ export default function Home() {
                       <div className={secondaryGridClass}>
                         <div className="lg:col-span-2">
                           <TemperatureChart
-                            location={{
-                              lat: Number(weatherData.location.lat.toFixed(2)),
-                              lon: Number(weatherData.location.lon.toFixed(2))
-                            }}
+                            location={forecast30dLocation}
                             textColorTheme={textColorTheme}
                             enhanceReadableText={enhanceReadableText}
                             opacity={opacity}

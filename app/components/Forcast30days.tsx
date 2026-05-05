@@ -66,6 +66,11 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
   const [error, setError] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<DailyForecast | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const locationParam = useMemo(
+    () => (location ? `${location.lon},${location.lat}` : '116.41,39.92'),
+    [location?.lat, location?.lon]
+  );
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
     setIsMobile(mq.matches);
@@ -75,18 +80,14 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // 构建location参数
-        const locationParam = location
-          ? `${location.lon},${location.lat}`
-          : '116.41,39.92'; // 默认北京
-
-        const response = await fetchWeather30d(locationParam);
-        console.log(response)
+        const response = await fetchWeather30d(locationParam, { signal: controller.signal });
 
         if (!response.ok) {
           throw new Error('Failed to fetch 30-day forecast');
@@ -100,15 +101,23 @@ export default function TemperatureChart({ location, textColorTheme, enhanceRead
 
         setForecastData(data.daily || []);
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+
         console.error('Error fetching 30-day forecast:', err);
         setError(err instanceof Error ? err.message : 'Failed to load data');
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, [location]);
+
+    return () => controller.abort();
+  }, [locationParam]);
 
   const dates = forecastData.map(day => {
     const date = new Date(day.fxDate);

@@ -34,8 +34,11 @@ export function weather30dUrl(location: string): string {
   return `${BASE}/api/weather/30d?location=${encodeURIComponent(location)}`;
 }
 
-export function fetchWeather30d(location: string): Promise<Response> {
-  return fetch(weather30dUrl(location));
+export function fetchWeather30d(
+  location: string,
+  options?: { signal?: AbortSignal }
+): Promise<Response> {
+  return fetch(weather30dUrl(location), options);
 }
 
 /** 收藏夹接口 */
