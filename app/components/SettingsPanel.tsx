@@ -254,16 +254,20 @@ export default function SettingsPanel({
   const [captureStatus, setCaptureStatus] = useState<'success' | 'error' | null>(null);
   const [fireworksFiring, setFireworksFiring] = useState(false);
   const fireworksTimerRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const handleLaunchFireworks = useCallback(() => {
+  const handleLaunchFireworks = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     if (typeof window === 'undefined') return;
     if (fireworksTimerRef.current !== null) {
       window.clearTimeout(fireworksTimerRef.current);
     }
     window.dispatchEvent(new CustomEvent('weather:fireworks-start'));
     setFireworksFiring(true);
+    setShowTooltip(false);
     fireworksTimerRef.current = window.setTimeout(() => {
       setFireworksFiring(false);
       fireworksTimerRef.current = null;
@@ -331,12 +335,7 @@ export default function SettingsPanel({
   // Handle click outside to close tooltip
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        tooltipRef.current &&
-        !tooltipRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         setShowTooltip(false);
       }
     }
@@ -352,7 +351,7 @@ export default function SettingsPanel({
   const isDark = textColorTheme.backgroundType === 'dark';
 
   return (
-    <div className="relative">
+    <div ref={panelRef} className="relative">
       {/* Settings Button */}
       <button
         ref={buttonRef}
