@@ -38,12 +38,6 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as { id?: string })?.id;
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
 
     const forwardedFor = request.headers.get('x-forwarded-for');
     const ip = forwardedFor?.split(',')[0]?.trim() || 'unknown';
