@@ -5,9 +5,16 @@ import type { Location, WeatherResponse } from '@/app/types/weather';
 import type { TextColorTheme } from '@/app/utils/textColorTheme';
 import { getCardBackgroundStyle, readableTextShadowStyle } from '@/app/utils/textColorTheme';
 import FloatingWeatherInfo from './InfoCard';
-import TemperatureLegend from './TemperatureLegend';
-import PrecipLegend from './PrecipLegend';
-import MapTimelinePlayback, { TIMELINE_TOTAL_STEPS } from './MapTimelinePlayback';
+import { TIMELINE_TOTAL_STEPS } from './MapTimelinePlayback';
+import {
+  LayerProgressBars,
+  MapLayerLegends,
+  MapTimelineControls,
+  MapTopControls,
+  MapZoomControls,
+  WeatherMapHeader,
+  type MapRenderMode,
+} from './WeatherMapControls';
 import { TemperatureGridRenderer } from '@/app/utils/temperatureGridRenderer';
 import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
 import { CloudLayerRenderer } from '@/app/utils/cloudLayerRenderer';
@@ -25,7 +32,6 @@ import {
 } from './centerMarker';
 import { fetchWeatherByCoords } from '@/app/lib/api';
 import Globe3D from './Globe3D';
-import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { isDomesticCity } from '@/app/utils/utils';
 import { useI18n } from '@/app/i18n';
 import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
@@ -102,7 +108,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
   const precipDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [layerDropdownOpen, setLayerDropdownOpen] = useState(false);
   const layerDropdownRef = useRef<HTMLDivElement>(null);
-  const [mapRenderMode, setMapRenderMode] = useState<'2d' | '3d'>('2d');
+  const [mapRenderMode, setMapRenderMode] = useState<MapRenderMode>('2d');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
   const [timelineStep, setTimelineStep] = useState(0);
@@ -143,12 +149,6 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
 
   const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
   const is3DMode = mapRenderMode === '3d';
-  const showLayerProgress =
-    (temperatureLayerEnabled && temperatureLayerLoading) ||
-    (windLayerEnabled && windLayerLoading) ||
-    (cloudLayerEnabled && cloudLayerLoading) ||
-    (precipLayerEnabled && precipLayerLoading);
-
   // 点击外部关闭温度图层下拉
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1714,26 +1714,13 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
 
   return (
     <div className="rounded-2xl shadow-xl p-4 h-full flex flex-col relative" style={{ backgroundColor: getCardBackgroundStyle(opacity, textColorTheme.backgroundType) }}>
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`} style={mapTitleShadow}>
-          {t('map.title')}
-        </h2>
-        <SegmentedDropdown
-          textColorTheme={textColorTheme}
-          enhanceReadableText={enhanceReadableText}
-          positionClassName="relative z-20"
-          mainButton={{
-            value: mapRenderMode,
-            label: mapRenderMode === '3d' ? t('map.globeView') : t('map.mapView'),
-            icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
-          }}
-          dropdownOptions={[
-            { value: '2d', label: t('map.mapView'), icon: '/icons/地图.svg' },
-            { value: '3d', label: t('map.globeView'), icon: '/icons/地球.svg' },
-          ]}
-          onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
-        />
-      </div>
+      <WeatherMapHeader
+        textColorTheme={textColorTheme}
+        enhanceReadableText={enhanceReadableText}
+        mapRenderMode={mapRenderMode}
+        onMapRenderModeChange={setMapRenderMode}
+        titleStyle={mapTitleShadow}
+      />
       <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
         {is3DMode && (
           <div className="absolute inset-0 z-0">
@@ -1757,182 +1744,45 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
             height: '100%',
           }}
         />
-        {!is3DMode && showLayerProgress && (
-          <div className="absolute top-0 left-0 right-0 z-20 pointer-events-none">
-            <div className="flex flex-col">
-              {temperatureLayerLoading && (
-                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-200 ease-out"
-                    style={{
-                      width: `${temperatureLayerProgress}%`,
-                      background: 'linear-gradient(90deg, #0ea5e9 0%, #06b6d4 50%, #22d3ee 100%)',
-                      boxShadow: '0 0 12px rgba(14, 165, 233, 0.5)',
-                    }}
-                  />
-                </div>
-              )}
-              {windLayerLoading && (
-                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-200 ease-out"
-                    style={{
-                      width: `${windLayerProgress}%`,
-                      background: 'linear-gradient(90deg, #059669 0%, #10b981 50%, #34d399 100%)',
-                      boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)',
-                    }}
-                  />
-                </div>
-              )}
-              {cloudLayerLoading && (
-                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-200 ease-out"
-                    style={{
-                      width: `${cloudLayerProgress}%`,
-                      background: 'linear-gradient(90deg, #475569 0%, #64748b 50%, #94a3b8 100%)',
-                      boxShadow: '0 0 12px rgba(100, 116, 139, 0.5)',
-                    }}
-                  />
-                </div>
-              )}
-              {precipLayerLoading && (
-                <div className="h-1 w-full rounded-full overflow-hidden bg-white/30 backdrop-blur-sm">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-200 ease-out"
-                    style={{
-                      width: `${precipLayerProgress}%`,
-                      background: 'linear-gradient(90deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%)',
-                      boxShadow: '0 0 12px rgba(99, 102, 241, 0.5)',
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {!is3DMode && (precipLayerEnabled || temperatureLayerEnabled) && (
-          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 flex flex-col gap-3">
-            {precipLayerEnabled && <PrecipLegend />}
-            {temperatureLayerEnabled && <TemperatureLegend />}
-          </div>
-        )}
-        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 flex items-center gap-2">
-          {!is3DMode && (
-            <div ref={layerDropdownRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setLayerDropdownOpen((v) => !v)}
-                className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
-                aria-expanded={layerDropdownOpen}
-                aria-haspopup="true"
-                title={anyLayerEnabled ? t('map.layersOn') : t('map.layerOptions')}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                  <rect x="3" y="7" width="14" height="14" rx="2" />
-                  <rect x="7" y="3" width="14" height="14" rx="2" />
-                </svg>
-              </button>
-              {layerDropdownOpen && (
-                <div className="absolute top-full right-0 mt-2 flex flex-col gap-2 min-w-[120px] max-w-[50vw] py-2 px-2 bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/40">
-                  <button type="button" onClick={() => handleTemperatureLayerChange(!temperatureLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${temperatureLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
-                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                      {temperatureLayerEnabled ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><circle cx="12" cy="12" r="10" /></svg>
-                      )}
-                    </span>
-                    <span>{t('map.temperatureLayer')}</span>
-                  </button>
-                  <button type="button" onClick={() => handleWindLayerChange(!windLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${windLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
-                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                      {windLayerEnabled ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                          <path d="M3 8h8a3 3 0 1 0-3-3" />
-                          <path d="M3 14h13a3 3 0 1 1-3 3" />
-                        </svg>
-                      )}
-                    </span>
-                    <span>{t('map.windLayer')}</span>
-                  </button>
-                  <button type="button" onClick={() => handleCloudLayerChange(!cloudLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${cloudLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
-                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                      {cloudLayerEnabled ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                          <path d="M5 18h11a4 4 0 0 0 .4-7.98A5 5 0 0 0 6.2 9.8 3.5 3.5 0 0 0 5 18z" />
-                        </svg>
-                      )}
-                    </span>
-                    <span>{t('map.cloudLayer')}</span>
-                  </button>
-                  <button type="button" onClick={() => handlePrecipLayerChange(!precipLayerEnabled)} className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-full text-sm transition-colors ${precipLayerEnabled ? 'bg-white/90 text-slate-800 shadow-sm' : 'bg-white/50 text-slate-600 hover:bg-white/70'}`}>
-                    <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5" aria-hidden>
-                      {precipLayerEnabled ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600"><polyline points="20 6 9 17 4 12" /></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
-                          <path d="M8 7.5a4 4 0 0 1 8 0" />
-                          <path d="M6.5 10.5h11a3.5 3.5 0 1 1-2.8 5.6" />
-                          <path d="M9 16.5v3" />
-                          <path d="M13 17.5v3" />
-                        </svg>
-                      )}
-                    </span>
-                    <span>{t('map.precipLayer')}</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="flex items-center justify-center w-10 h-10 min-w-[44px] min-h-[44px] rounded-full bg-white/70 backdrop-blur-sm shadow-lg border border-white/40 hover:bg-white/90 transition-colors text-slate-600"
-            title={isFullscreen ? t('map.exitFullscreen') : t('map.fullscreen')}
-            aria-label={isFullscreen ? t('map.exitFullscreen') : t('map.fullscreen')}
-          >
-            {isFullscreen ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-              </svg>
-            )}
-          </button>
-        </div>
-        {/* 上方正中间：缩放按钮（左右排布） */}
         {!is3DMode && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10 flex flex-row gap-px">
-            <button
-              type="button"
-              onClick={handleZoomOut}
-              className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-l-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-              title={t('map.zoomOut')}
-              aria-label={t('map.zoomOut')}
-            >
-              −
-            </button>
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              className="w-9 h-9 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white/70 backdrop-blur-sm rounded-r-lg border border-white/40 shadow-lg text-gray-800 text-xl font-light hover:bg-white/90 transition-colors leading-none"
-              title={t('map.zoomIn')}
-              aria-label={t('map.zoomIn')}
-            >
-              +
-            </button>
-          </div>
+          <LayerProgressBars
+            temperature={{ loading: temperatureLayerLoading, progress: temperatureLayerProgress }}
+            wind={{ loading: windLayerLoading, progress: windLayerProgress }}
+            cloud={{ loading: cloudLayerLoading, progress: cloudLayerProgress }}
+            precip={{ loading: precipLayerLoading, progress: precipLayerProgress }}
+          />
+        )}
+        {!is3DMode && (
+          <MapLayerLegends
+            precipLayerEnabled={precipLayerEnabled}
+            temperatureLayerEnabled={temperatureLayerEnabled}
+          />
+        )}
+        <MapTopControls
+          is3DMode={is3DMode}
+          layerDropdownRef={layerDropdownRef}
+          layerDropdownOpen={layerDropdownOpen}
+          onToggleDropdown={() => setLayerDropdownOpen((v) => !v)}
+          anyLayerEnabled={anyLayerEnabled}
+          temperatureLayerEnabled={temperatureLayerEnabled}
+          windLayerEnabled={windLayerEnabled}
+          cloudLayerEnabled={cloudLayerEnabled}
+          precipLayerEnabled={precipLayerEnabled}
+          onTemperatureLayerChange={handleTemperatureLayerChange}
+          onWindLayerChange={handleWindLayerChange}
+          onCloudLayerChange={handleCloudLayerChange}
+          onPrecipLayerChange={handlePrecipLayerChange}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
+        {!is3DMode && (
+          <MapZoomControls
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+          />
         )}
         {!is3DMode && anyLayerEnabled && (
-          <MapTimelinePlayback
+          <MapTimelineControls
             step={timelineStep}
             isPlaying={isTimelinePlaying}
             timeLabel={timelineTimeLabel}

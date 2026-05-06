@@ -10,14 +10,14 @@ import WeatherMetrics from './components/WeatherMetrics';
 import Modal from './models/Modal';
 import WeatherSkeleton from './components/WeatherSkeleton';
 import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
-import { translateLocation } from './utils/locationTranslations';
 import { translateWeatherCondition } from './utils/weatherTranslations';
 import { getTextColorTheme, readableTextShadowStyle, shouldEnhanceReadableText } from './utils/textColorTheme';
 import dynamic from 'next/dynamic';
-import type { WeatherResponse, Hour } from './types/weather';
+import type { Hour } from './types/weather';
 import { useSyncFavorites } from './hooks/useSyncFavorites';
+import { useHomeWeather } from './hooks/useHomeWeather';
 import { useSession } from 'next-auth/react';
-import { fetchWeatherByCity, fetchWeatherByCoords, favoritesApi } from './lib/api';
+import { favoritesApi } from './lib/api';
 import ChatBot from './components/ChatBot/ChatBot';
 import type { ChatLayoutMode } from './components/ChatBot/types';
 import { useI18n } from './i18n';
@@ -54,46 +54,22 @@ const WeatherMap = dynamic(
   { ssr: false }
 );
 
-const CURRENT_CITY_KEY = 'wp:currentCity:v1';
-
-// 从 localStorage 读取当前城市
-function loadCurrentCityFromStorage(): { city: string; query: string } | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(CURRENT_CITY_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed && typeof parsed === 'object' && parsed.query) {
-        return { city: parsed.city || '杭州', query: parsed.query };
-      }
-    }
-  } catch {
-    // 忽略解析错误
-  }
-  return null;
-}
-
-// 保存当前城市到 localStorage
-function saveCurrentCityToStorage(city: string, query: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(CURRENT_CITY_KEY, JSON.stringify({ city, query }));
-  } catch {
-    // 忽略存储错误
-  }
-}
-
 export default function Home() {
   const { t } = useI18n();
   useSyncFavorites();
   const { status } = useSession();
-  const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentCity, setCurrentCity] = useState<string>('杭州');
-  const [currentCityQuery, setCurrentCityQuery] = useState<string>('hangzhou');
+  const {
+    weatherData,
+    loading,
+    error,
+    clearError,
+    currentCity,
+    currentCityQuery,
+    isLocating,
+    fetchWeatherData,
+    fetchWeatherByLocation,
+  } = useHomeWeather();
   const [favorites, setFavorites] = useState<FavoriteCity[]>([]);
-  const [isLocating, setIsLocating] = useState(false);
   const [opacity, setOpacity] = useState(0);
   const [showBackground, setShowBackground] = useState(true);
   const [uiHidden, setUiHidden] = useState(false);
@@ -115,102 +91,6 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const fetchWeatherData = async (city: string = 'hangzhou') => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetchWeatherByCity(city);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch weather data');
-      }
-
-      const data: WeatherResponse = await response.json();
-      setWeatherData(data);
-
-      // Update current city display name and query
-      const translated = translateLocation(data.location);
-      setCurrentCity(translated.name);
-      setCurrentCityQuery(city);
-      // Save to localStorage
-      saveCurrentCityToStorage(translated.name, city);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching weather data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchWeatherByLocation = async (lat: number, lon: number, skipLocating: boolean = false) => {
-    try {
-      setLoading(true);
-      setError(null);
-      if (!skipLocating) {
-        setIsLocating(true);
-      }
-      const response = await fetchWeatherByCoords(lat, lon);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch weather data');
-      }
-
-      const data: WeatherResponse = await response.json();
-      setWeatherData(data);
-
-      // Update current city display name and query
-      const translated = translateLocation(data.location);
-      setCurrentCity(translated.name);
-      const query = `${lat},${lon}`;
-      setCurrentCityQuery(query);
-      // Save to localStorage
-      saveCurrentCityToStorage(translated.name, query);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching weather data:', err);
-    } finally {
-      setLoading(false);
-      if (!skipLocating) {
-        setIsLocating(false);
-      }
-    }
-  };
-
-  // Initial load - only run once on mount
-  useEffect(() => {
-    const savedCity = loadCurrentCityFromStorage();
-    if (savedCity) {
-      setCurrentCity(savedCity.city);
-      setCurrentCityQuery(savedCity.query);
-      if (savedCity.query.includes(',')) {
-        const [lat, lon] = savedCity.query.split(',');
-        fetchWeatherByLocation(parseFloat(lat), parseFloat(lon), true);
-      } else {
-        fetchWeatherData(savedCity.query);
-      }
-      return;
-    }
-
-    // 无保存城市时：使用浏览器 Geolocation API 自动定位，一进入页面就显示当地天气
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      setIsLocating(true);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          fetchWeatherByLocation(latitude, longitude, true);
-          setIsLocating(false);
-        },
-        () => {
-          setIsLocating(false);
-          fetchWeatherData(); // 用户拒绝或超时：回退到默认城市（杭州）
-        },
-        { enableHighAccuracy: false, timeout: 20000, maximumAge: 30 * 60 * 1000 }
-      );
-    } else {
-      fetchWeatherData();
-    }
-  }, []); // Empty dependency array - only run on mount
 
   // Load favorites: authed from DB, guest from localStorage
   useEffect(() => {
@@ -241,23 +121,6 @@ export default function Home() {
     window.addEventListener('favorites:synced', onSynced);
     return () => window.removeEventListener('favorites:synced', onSynced);
   }, [status]);
-
-  // Auto-refresh - run every 30 minutes for current city/location
-  useEffect(() => {
-    if (!currentCityQuery) return;
-
-    const interval = setInterval(() => {
-      // Check if it's coordinates (lat,lon format) or city name
-      if (currentCityQuery.includes(',')) {
-        const [lat, lon] = currentCityQuery.split(',');
-        fetchWeatherByLocation(parseFloat(lat), parseFloat(lon));
-      } else {
-        fetchWeatherData(currentCityQuery);
-      }
-    }, 30 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [currentCityQuery]);
 
   const handleCitySelect = (cityName: string) => {
     fetchWeatherData(cityName);
@@ -315,9 +178,9 @@ export default function Home() {
         isOpen: true,
         message: t('weather.errorModalMessage', { error }),
       });
-      setError(null); // Clear error after showing modal
+      clearError();
     }
-  }, [error, t]);
+  }, [clearError, error, t]);
 
   const handleCloseModal = () => {
     setModalConfig(prev => ({ ...prev, isOpen: false }));
