@@ -1,6 +1,6 @@
 import { fetchWeatherPoint, getForecastHourByEpoch } from './weatherPointCache';
 
-interface MapBounds {
+export interface CloudMapBounds {
   northeast: { lat: number; lng: number };
   southwest: { lat: number; lng: number };
   zoom?: number;
@@ -32,7 +32,7 @@ export interface CloudLayerRenderOptions {
   targetEpoch?: number;
 }
 
-const DEFAULT_CONFIG: CloudLayerConfig = {
+export const DEFAULT_CLOUD_LAYER_CONFIG: CloudLayerConfig = {
   minGridCells: 30,
   maxGridCells: 1600,
   cacheExpiry: 3 * 60 * 1000,
@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: CloudLayerConfig = {
   renderStyle: 'noise',
 };
 
-function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+export function generateCloudBoundsHash(bounds: CloudMapBounds, targetEpoch?: number): string {
   const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
   return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
@@ -54,8 +54,8 @@ function calculateDynamicMaxCells(zoom?: number, baseMaxCells: number = 1600): n
   return Math.max(100, Math.min(4000, dynamicMaxCells));
 }
 
-function calculateGridDimensions(
-  bounds: MapBounds,
+export function calculateCloudGridDimensions(
+  bounds: CloudMapBounds,
   config: CloudLayerConfig
 ): { rows: number; cols: number } {
   const latDiff = Math.abs(bounds.northeast.lat - bounds.southwest.lat);
@@ -89,8 +89,8 @@ function calculateGridDimensions(
   return { rows, cols };
 }
 
-function generateGridPoints(
-  bounds: MapBounds,
+export function generateCloudGridPoints(
+  bounds: CloudMapBounds,
   rows: number,
   cols: number
 ): Array<{ lat: number; lon: number; row: number; col: number }> {
@@ -290,7 +290,7 @@ async function fetchCloudValue(lat: number, lon: number, targetEpoch?: number): 
   }
 }
 
-async function fetchGridClouds(
+export async function fetchGridClouds(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
@@ -390,7 +390,7 @@ export class CloudLayerRenderer {
       console.warn('CloudLayerRenderer: Map instance is required');
     }
     this.amap = amap;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_CLOUD_LAYER_CONFIG, ...config };
   }
 
   setMapInstance(amap: any): void {
@@ -418,7 +418,7 @@ export class CloudLayerRenderer {
     return true;
   }
 
-  private ensureCanvasLayer(bounds: MapBounds): void {
+  private ensureCanvasLayer(bounds: CloudMapBounds): void {
     if (this.canvasLayer && this.canvas && this.ctx) {
       this.updateCanvasSize();
       if (this.canvasLayer.setBounds) {
@@ -581,7 +581,7 @@ export class CloudLayerRenderer {
   }
 
   async renderCloudLayer(
-    bounds: MapBounds,
+    bounds: CloudMapBounds,
     options: CloudLayerRenderOptions = {}
   ): Promise<void> {
     const reportProgress = (value: number) => {
@@ -598,7 +598,7 @@ export class CloudLayerRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
+    const boundsHash = generateCloudBoundsHash(bounds, options.targetEpoch);
     this.ensureCanvasLayer(bounds);
 
     if (this.lastBoundsHash === boundsHash && this.cloudCells.length > 0) {
@@ -619,8 +619,8 @@ export class CloudLayerRenderer {
     this.requestInProgress = true;
     try {
       reportProgress(0);
-      const { rows, cols } = calculateGridDimensions(bounds, this.config);
-      const points = generateGridPoints(bounds, rows, cols);
+      const { rows, cols } = calculateCloudGridDimensions(bounds, this.config);
+      const points = generateCloudGridPoints(bounds, rows, cols);
       const cells = await fetchGridClouds(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
         const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
         reportProgress(Math.min(85, percent));

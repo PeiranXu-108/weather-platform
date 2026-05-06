@@ -2,7 +2,7 @@
 
 基于 **Next.js 14（App Router）+ TypeScript + Tailwind CSS** 构建的天气可视化应用，集成：
 
-- 国内地图（高德）2D / 3D 模式
+- 国内地图（高德）与国外开放地图（MapLibre/OpenFreeMap）2D / 3D 模式
 - Three.js 地球交互（点击地球任意点查询天气）
 - 多图层可视化（温度网格 / 风场 / 云图 / 降水）+ 时间轴回放
 - 收藏城市（游客本地存储 / 登录后 MongoDB 同步）
@@ -13,7 +13,7 @@
 - **定位与搜索**：支持浏览器定位（Geolocation API）、城市搜索、经纬度查询。
 - **实时天气与预报**：当前天气、24 小时曲线/卡片、30 天预报（按经纬度）。
 - **可视化地图**：
-  - **2D 高德地图**：拖拽/缩放，中心点天气卡片。
+  - **2D 地图**：国内使用高德，国外使用 MapLibre + OpenFreeMap，拖拽/缩放，中心点天气卡片。
   - **3D 地球**：旋转/缩放，点击地球拾取经纬度并查询天气。
   - **图层**：温度（网格渲染）、风场（粒子/矢量）、云图、降水（强度/分布）。
   - **时间轴**：按步进回放（用于各图层的时序渲染与对比）。
@@ -56,6 +56,7 @@ npm install
 | `QWEATHER_API_BASE` | 和风 30 天预报接口地址 | 是（如使用 30 天预报） |
 | `NEXT_PUBLIC_AMAP_KEY` | 高德 JS API Key（前端加载地图 SDK） | 是（如使用地图） |
 | `NEXT_PUBLIC_AMAP_SECURITY_JS_CODE` | 高德安全密钥（SecurityJsCode） | 取决于你的高德配置 |
+| `NEXT_PUBLIC_MAPLIBRE_STYLE_URL` | 国外 2D 开放地图样式 URL（默认 OpenFreeMap Liberty） | 否 |
 | `DASHSCOPE_API_KEY` | DashScope Key（Qwen：`/api/chat`、`/api/translate`） | 是（如使用 AI） |
 | `MONGODB_URI` | MongoDB 连接串（收藏夹/使用量等数据） | 登录相关功能需要 |
 | `NEXTAUTH_SECRET` | NextAuth secret（JWT/会话签名） | 登录相关功能需要 |
@@ -107,7 +108,7 @@ weather-platform/
 
 ## 使用说明与注意事项
 
-- **地图显示**：地图模块依赖高德 JS SDK（需要正确配置 `NEXT_PUBLIC_AMAP_KEY` 等）。当前页面仅在判定为国内/港澳台地点时展示地图模块（见主页逻辑）。
+- **地图显示**：国内/港澳台 2D 地图依赖高德 JS SDK（需要正确配置 `NEXT_PUBLIC_AMAP_KEY` 等）；国外 2D 地图使用 MapLibre/OpenFreeMap，默认样式可通过 `NEXT_PUBLIC_MAPLIBRE_STYLE_URL` 覆盖。
 - **游客 vs 登录**：
   - 未登录：收藏保存在 `localStorage`。
   - 已登录：收藏保存在 MongoDB，并在登录后触发本地收藏与云端收藏的合并同步。
@@ -123,6 +124,6 @@ weather-platform/
 
 - Weather data: [WeatherAPI.com](https://www.weatherapi.com/)
 - 30-day forecast: [和风天气](https://www.qweather.com/)
-- Maps: [高德开放平台](https://lbs.amap.com/)
+- Maps: [高德开放平台](https://lbs.amap.com/), [MapLibre GL JS](https://maplibre.org/), [OpenFreeMap](https://openfreemap.org/)
 - Charts: [Apache ECharts](https://echarts.apache.org/)
 - Framework: [Next.js](https://nextjs.org/)

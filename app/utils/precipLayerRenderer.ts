@@ -1,6 +1,6 @@
 import { fetchWeatherPoint, getForecastHourByEpoch } from './weatherPointCache';
 
-interface MapBounds {
+export interface PrecipMapBounds {
   northeast: { lat: number; lng: number };
   southwest: { lat: number; lng: number };
   zoom?: number;
@@ -31,7 +31,7 @@ export interface PrecipLayerRenderOptions {
   targetEpoch?: number;
 }
 
-const DEFAULT_CONFIG: PrecipLayerConfig = {
+export const DEFAULT_PRECIP_LAYER_CONFIG: PrecipLayerConfig = {
   minGridCells: 30,
   maxGridCells: 1600,
   cacheExpiry: 3 * 60 * 1000,
@@ -51,7 +51,7 @@ const DEFAULT_COLORS = [
   'rgba(150, 50, 200, 0.9)',
 ];
 
-function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+export function generatePrecipBoundsHash(bounds: PrecipMapBounds, targetEpoch?: number): string {
   const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
   return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
@@ -63,8 +63,8 @@ function calculateDynamicMaxCells(zoom?: number, baseMaxCells: number = 1600): n
   return Math.max(100, Math.min(4000, dynamicMaxCells));
 }
 
-function calculateGridDimensions(
-  bounds: MapBounds,
+export function calculatePrecipGridDimensions(
+  bounds: PrecipMapBounds,
   config: PrecipLayerConfig
 ): { rows: number; cols: number } {
   const latDiff = Math.abs(bounds.northeast.lat - bounds.southwest.lat);
@@ -98,8 +98,8 @@ function calculateGridDimensions(
   return { rows, cols };
 }
 
-function generateGridPoints(
-  bounds: MapBounds,
+export function generatePrecipGridPoints(
+  bounds: PrecipMapBounds,
   rows: number,
   cols: number
 ): Array<{ lat: number; lon: number; row: number; col: number }> {
@@ -300,7 +300,7 @@ async function fetchPrecipValue(lat: number, lon: number, targetEpoch?: number):
   }
 }
 
-function getPrecipColor(value: number): string {
+export function getPrecipColor(value: number): string {
   for (let i = DEFAULT_BINS.length - 1; i >= 0; i--) {
     if (value >= DEFAULT_BINS[i]) {
       return DEFAULT_COLORS[i];
@@ -309,7 +309,7 @@ function getPrecipColor(value: number): string {
   return DEFAULT_COLORS[0];
 }
 
-async function fetchGridPrecip(
+export async function fetchGridPrecip(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
@@ -398,7 +398,7 @@ export class PrecipLayerRenderer {
   private requestInProgress: boolean = false;
   private lastBoundsHash: string | null = null;
   private precipCells: PrecipCell[] = [];
-  private lastBounds: MapBounds | null = null;
+  private lastBounds: PrecipMapBounds | null = null;
   private lastRows: number = 0;
   private lastCols: number = 0;
   private progress: number = 0;
@@ -408,7 +408,7 @@ export class PrecipLayerRenderer {
       console.warn('PrecipLayerRenderer: Map instance is required');
     }
     this.amap = amap;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_PRECIP_LAYER_CONFIG, ...config };
   }
 
   setMapInstance(amap: any): void {
@@ -431,7 +431,7 @@ export class PrecipLayerRenderer {
     return true;
   }
 
-  private ensureCanvasLayer(bounds: MapBounds): void {
+  private ensureCanvasLayer(bounds: PrecipMapBounds): void {
     if (this.canvasLayer && this.canvas && this.ctx) {
       this.updateCanvasSize();
       if (this.canvasLayer.setBounds) {
@@ -558,7 +558,7 @@ export class PrecipLayerRenderer {
   }
 
   async renderPrecipLayer(
-    bounds: MapBounds,
+    bounds: PrecipMapBounds,
     options: PrecipLayerRenderOptions = {}
   ): Promise<void> {
     const reportProgress = (value: number) => {
@@ -575,9 +575,9 @@ export class PrecipLayerRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
+    const boundsHash = generatePrecipBoundsHash(bounds, options.targetEpoch);
     this.ensureCanvasLayer(bounds);
-    const { rows, cols } = calculateGridDimensions(bounds, this.config);
+    const { rows, cols } = calculatePrecipGridDimensions(bounds, this.config);
     this.lastBounds = bounds;
     this.lastRows = rows;
     this.lastCols = cols;
@@ -600,7 +600,7 @@ export class PrecipLayerRenderer {
     this.requestInProgress = true;
     try {
       reportProgress(0);
-      const points = generateGridPoints(bounds, rows, cols);
+      const points = generatePrecipGridPoints(bounds, rows, cols);
       const cells = await fetchGridPrecip(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
         const percent = total > 0 ? Math.round((completed / total) * 85) : 85;
         reportProgress(Math.min(85, percent));

@@ -22,7 +22,7 @@ interface GridCacheItem {
 /**
  * 地图边界对象
  */
-interface MapBounds {
+export interface MapBounds {
   northeast: { lat: number; lng: number };
   southwest: { lat: number; lng: number };
   zoom?: number; // 可选的地图缩放级别
@@ -45,7 +45,7 @@ export interface TemperatureGridConfig {
   enableInterpolation: boolean; // 是否启用插值算法
 }
 
-const DEFAULT_CONFIG: TemperatureGridConfig = {
+export const DEFAULT_TEMPERATURE_GRID_CONFIG: TemperatureGridConfig = {
   minGridCells: 30, // 5x6，提高最小网格数
   maxGridCells: 2000, // 增加到2000个网格，提供更细致的渲染
   cacheExpiry: 3 * 60 * 1000, // 5分钟
@@ -57,7 +57,7 @@ const DEFAULT_CONFIG: TemperatureGridConfig = {
 /**
  * 生成网格边界哈希值用于缓存
  */
-function generateBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
+export function generateTemperatureBoundsHash(bounds: MapBounds, targetEpoch?: number): string {
   const timeBucket = typeof targetEpoch === 'number' ? Math.floor(targetEpoch / 7200) : 'current';
   return `${bounds.northeast.lat.toFixed(4)}_${bounds.northeast.lng.toFixed(4)}_${bounds.southwest.lat.toFixed(4)}_${bounds.southwest.lng.toFixed(4)}_${timeBucket}`;
 }
@@ -91,7 +91,7 @@ function calculateDynamicMaxCells(zoom?: number, baseMaxCells: number = 2000): n
  * 增加网格密度以提供更细致的渲染
  * 根据缩放级别动态调整密度
  */
-function calculateGridDimensions(
+export function calculateTemperatureGridDimensions(
   bounds: MapBounds,
   config: TemperatureGridConfig
 ): { rows: number; cols: number } {
@@ -138,7 +138,7 @@ function calculateGridDimensions(
 /**
  * 生成网格坐标点
  */
-function generateGridPoints(
+export function generateTemperatureGridPoints(
   bounds: MapBounds,
   rows: number,
   cols: number
@@ -457,7 +457,7 @@ function calculateDynamicSamplingRatio(
  * 批量获取网格点的温度数据
  * 使用智能采样 + IDW插值算法，大幅减少API请求数量
  */
-async function fetchGridTemperatures(
+export async function fetchGridTemperatures(
   allPoints: Array<{ lat: number; lon: number; row: number; col: number }>,
   rows: number,
   cols: number,
@@ -622,7 +622,7 @@ export class TemperatureGridRenderer {
       console.warn('TemperatureGridRenderer: Map instance is required');
     }
     this.amap = amap;
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_TEMPERATURE_GRID_CONFIG, ...config };
   }
 
   /**
@@ -760,7 +760,7 @@ export class TemperatureGridRenderer {
       return;
     }
 
-    const boundsHash = generateBoundsHash(bounds, options.targetEpoch);
+    const boundsHash = generateTemperatureBoundsHash(bounds, options.targetEpoch);
 
     // 如果边界没有变化且矩形已存在，不重新渲染
     if (this.lastBoundsHash === boundsHash && this.rectangles.length > 0) {
@@ -782,8 +782,8 @@ export class TemperatureGridRenderer {
     this.requestInProgress = true;
     try {
       reportProgress(0);
-      const { rows, cols } = calculateGridDimensions(bounds, this.config);
-      const points = generateGridPoints(bounds, rows, cols);
+      const { rows, cols } = calculateTemperatureGridDimensions(bounds, this.config);
+      const points = generateTemperatureGridPoints(bounds, rows, cols);
 
       // 使用智能采样 + 插值算法
       cells = await fetchGridTemperatures(points, rows, cols, this.config, options.targetEpoch, (completed, total) => {
@@ -855,7 +855,7 @@ export class TemperatureGridRenderer {
 
     if (!rows || !cols) {
       // 如果未提供行列数，使用默认值
-      const dims = calculateGridDimensions(bounds, this.config);
+      const dims = calculateTemperatureGridDimensions(bounds, this.config);
       rows = dims.rows;
       cols = dims.cols;
     }

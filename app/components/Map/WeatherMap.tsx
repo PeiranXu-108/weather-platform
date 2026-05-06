@@ -13,6 +13,12 @@ import { WindFieldRenderer } from '@/app/utils/windFieldRenderer';
 import { CloudLayerRenderer } from '@/app/utils/cloudLayerRenderer';
 import { PrecipLayerRenderer } from '@/app/utils/precipLayerRenderer';
 import {
+  MapLibreCloudLayerRenderer,
+  MapLibrePrecipLayerRenderer,
+  MapLibreTemperatureGridRenderer,
+  MapLibreWindFieldRenderer,
+} from '@/app/utils/mapLibreWeatherLayerRenderer';
+import {
   centerMarkerSize,
   formatCenterTemp,
   buildCenterMarkerContent
@@ -22,6 +28,7 @@ import Globe3D from './Globe3D';
 import SegmentedDropdown from '@/app/models/SegmentedDropdown';
 import { isDomesticCity } from '@/app/utils/utils';
 import { useI18n } from '@/app/i18n';
+import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
 
 interface WeatherMapProps {
   location: Location;
@@ -40,19 +47,23 @@ declare global {
 
 const Key = process.env.NEXT_PUBLIC_AMAP_KEY
 const SecurityJsCode = process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE
+const MAPLIBRE_STYLE_URL = process.env.NEXT_PUBLIC_MAPLIBRE_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty';
 const TIMELINE_STEP_SECONDS = 2 * 3600; // 2小时
 const TIMELINE_PLAY_INTERVAL_MS = 400;
+type MapProvider = 'amap' | 'maplibre';
+type AnyMapInstance = any | MapLibreMap;
+type AnyCenterMarker = any | MapLibreMarker;
 
 export default function WeatherMap({ location, textColorTheme, enhanceReadableText = false, opacity = 100, onGoToLocation }: WeatherMapProps) {
   const { locale, t } = useI18n();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<AnyMapInstance | null>(null);
   const mapLabelLayerRef = useRef<any[]>([]);
   const mapLabelLayerZIndexRef = useRef<Map<any, number>>(new Map());
   const mapLabelLayerDomRef = useRef<HTMLElement | null>(null);
   const mapLabelLayerDomZIndexRef = useRef<string | null>(null);
   const mapLabelLayerBoostedRef = useRef(false);
-  const centerMarkerRef = useRef<any>(null);
+  const centerMarkerRef = useRef<AnyCenterMarker | null>(null);
   const scriptLoadedRef = useRef(false);
   const [centerWeather, setCenterWeather] = useState<WeatherResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
@@ -60,21 +71,21 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
   const [viewportCenterLoading, setViewportCenterLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const viewportDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const temperatureLayerRef = useRef<TemperatureGridRenderer | null>(null);
+  const temperatureLayerRef = useRef<TemperatureGridRenderer | MapLibreTemperatureGridRenderer | null>(null);
   const [temperatureLayerEnabled, setTemperatureLayerEnabled] = useState(false);
   const temperatureLayerEnabledRef = useRef(false);
   const [temperatureLayerProgress, setTemperatureLayerProgress] = useState(0);
   const [temperatureLayerLoading, setTemperatureLayerLoading] = useState(false);
   const temperatureProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const temperatureDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const windLayerRef = useRef<WindFieldRenderer | null>(null);
+  const windLayerRef = useRef<WindFieldRenderer | MapLibreWindFieldRenderer | null>(null);
   const [windLayerEnabled, setWindLayerEnabled] = useState(false);
   const windLayerEnabledRef = useRef(false);
   const [windLayerProgress, setWindLayerProgress] = useState(0);
   const [windLayerLoading, setWindLayerLoading] = useState(false);
   const windProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const windDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const cloudLayerRef = useRef<CloudLayerRenderer | null>(null);
+  const cloudLayerRef = useRef<CloudLayerRenderer | MapLibreCloudLayerRenderer | null>(null);
   const [cloudLayerEnabled, setCloudLayerEnabled] = useState(false);
   const cloudLayerEnabledRef = useRef(false);
   const [cloudLayerProgress, setCloudLayerProgress] = useState(0);
@@ -82,7 +93,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
   const cloudProgressHideTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cloudDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [cloudRenderStyle, setCloudRenderStyle] = useState<'soft' | 'noise'>('noise');
-  const precipLayerRef = useRef<PrecipLayerRenderer | null>(null);
+  const precipLayerRef = useRef<PrecipLayerRenderer | MapLibrePrecipLayerRenderer | null>(null);
   const [precipLayerEnabled, setPrecipLayerEnabled] = useState(false);
   const precipLayerEnabledRef = useRef(false);
   const [precipLayerProgress, setPrecipLayerProgress] = useState(0);
@@ -128,10 +139,10 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
   }, [targetTimelineEpoch, locale]);
 
   const isForeignCity = useMemo(() => !isDomesticCity(location.country ?? '', location.region ?? '', location.name ?? ''), [location.country, location.region, location.name]);
+  const mapProvider: MapProvider = isForeignCity ? 'maplibre' : 'amap';
 
   const anyLayerEnabled = temperatureLayerEnabled || windLayerEnabled || cloudLayerEnabled || precipLayerEnabled;
-  // 国外城市强制使用3D地球视图
-  const is3DMode = isForeignCity || mapRenderMode === '3d';
+  const is3DMode = mapRenderMode === '3d';
   const showLayerProgress =
     (temperatureLayerEnabled && temperatureLayerLoading) ||
     (windLayerEnabled && windLayerLoading) ||
@@ -451,6 +462,96 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     }
   }, []);
 
+  const getMapCenter = useCallback((): { lat: number; lon: number } | null => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    try {
+      const center = map.getCenter?.();
+      if (!center) return null;
+      return {
+        lat: typeof center.getLat === 'function' ? center.getLat() : center.lat,
+        lon: typeof center.getLng === 'function' ? center.getLng() : center.lng,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const getLayerMapBounds = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    try {
+      const bounds = map.getBounds?.();
+      if (!bounds) return null;
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      const zoom = map.getZoom?.() ?? 10;
+      return {
+        northeast: { lat: ne.lat, lng: ne.lng },
+        southwest: { lat: sw.lat, lng: sw.lng },
+        zoom,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const createTemperatureRenderer = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    return mapProvider === 'maplibre'
+      ? new MapLibreTemperatureGridRenderer(map as MapLibreMap)
+      : new TemperatureGridRenderer(map);
+  }, [mapProvider]);
+
+  const createWindRenderer = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    return mapProvider === 'maplibre'
+      ? new MapLibreWindFieldRenderer(map as MapLibreMap)
+      : new WindFieldRenderer(map);
+  }, [mapProvider]);
+
+  const createCloudRenderer = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    return mapProvider === 'maplibre'
+      ? new MapLibreCloudLayerRenderer(map as MapLibreMap, { renderStyle: cloudRenderStyle })
+      : new CloudLayerRenderer(map, { renderStyle: cloudRenderStyle });
+  }, [cloudRenderStyle, mapProvider]);
+
+  const createPrecipRenderer = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    return mapProvider === 'maplibre'
+      ? new MapLibrePrecipLayerRenderer(map as MapLibreMap)
+      : new PrecipLayerRenderer(map);
+  }, [mapProvider]);
+
+  const setCenterMarkerPosition = useCallback((lon: number, lat: number) => {
+    const marker = centerMarkerRef.current;
+    if (!marker) return;
+    if (typeof marker.setPosition === 'function') {
+      marker.setPosition([lon, lat]);
+      return;
+    }
+    if (typeof marker.setLngLat === 'function') {
+      marker.setLngLat([lon, lat]);
+    }
+  }, []);
+
+  const setCenterMarkerContent = useCallback((content: string) => {
+    const marker = centerMarkerRef.current;
+    if (!marker) return;
+    if (typeof marker.setContent === 'function') {
+      marker.setContent(content);
+      return;
+    }
+    if (typeof marker.getElement === 'function') {
+      marker.getElement().innerHTML = content;
+    }
+  }, []);
+
   // 获取地图边界信息用于温度网格渲染
   const renderTemperatureLayer = useCallback(async (
     enabled: boolean = temperatureLayerEnabled,
@@ -460,14 +561,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    // 检查地图是否完全加载
-    try {
-      // 尝试获取地图中心点，如果失败说明地图未完全初始化
-      const center = mapInstanceRef.current.getCenter();
-      if (!center) {
-        return;
-      }
-    } catch (error) {
+    if (!getMapCenter()) {
       return;
     }
 
@@ -480,32 +574,20 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    const bounds = mapInstanceRef.current.getBounds();
-    if (!bounds) {
+    const mapBounds = getLayerMapBounds();
+    if (!mapBounds) {
       console.error('Could not get map bounds');
       return;
     }
 
-    // 高德地图 Bounds 对象使用方法获取坐标
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-
-    // 获取地图缩放级别，用于动态调整网格密度
-    const zoom = mapInstanceRef.current.getZoom();
-
-    const mapBounds = {
-      northeast: { lat: ne.lat, lng: ne.lng },
-      southwest: { lat: sw.lat, lng: sw.lng },
-      zoom: zoom, // 传递缩放级别
-    };
-
     try {
       if (!temperatureLayerRef.current) {
-        temperatureLayerRef.current = new TemperatureGridRenderer(mapInstanceRef.current);
+        temperatureLayerRef.current = createTemperatureRenderer();
       } else {
         // 如果 renderer 已存在，更新地图实例（地图可能重新初始化了）
         temperatureLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
+      if (!temperatureLayerRef.current) return;
       await temperatureLayerRef.current.renderTemperatureGrid(mapBounds, {
         onProgress: handleTemperatureProgress,
         targetEpoch,
@@ -513,7 +595,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     } catch (error) {
       console.error('Error rendering temperature layer:', error);
     }
-  }, [handleTemperatureProgress, targetTimelineEpoch, temperatureLayerEnabled]);
+  }, [createTemperatureRenderer, getLayerMapBounds, getMapCenter, handleTemperatureProgress, targetTimelineEpoch, temperatureLayerEnabled]);
 
   // 防抖温度网格渲染
   const debouncedRenderTemperatureLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
@@ -544,12 +626,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    try {
-      const center = mapInstanceRef.current.getCenter();
-      if (!center) {
-        return;
-      }
-    } catch (error) {
+    if (!getMapCenter()) {
       return;
     }
 
@@ -562,27 +639,16 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    const bounds = mapInstanceRef.current.getBounds();
-    if (!bounds) {
-      return;
-    }
-
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const zoom = mapInstanceRef.current.getZoom();
-
-    const mapBounds = {
-      northeast: { lat: ne.lat, lng: ne.lng },
-      southwest: { lat: sw.lat, lng: sw.lng },
-      zoom: zoom,
-    };
+    const mapBounds = getLayerMapBounds();
+    if (!mapBounds) return;
 
     try {
       if (!windLayerRef.current) {
-        windLayerRef.current = new WindFieldRenderer(mapInstanceRef.current);
+        windLayerRef.current = createWindRenderer();
       } else {
         windLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
+      if (!windLayerRef.current) return;
       await windLayerRef.current.renderWindField(mapBounds, {
         onProgress: handleWindProgress,
         targetEpoch,
@@ -590,7 +656,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     } catch (error) {
       console.error('Error rendering wind layer:', error);
     }
-  }, [handleWindProgress, targetTimelineEpoch, windLayerEnabled]);
+  }, [createWindRenderer, getLayerMapBounds, getMapCenter, handleWindProgress, targetTimelineEpoch, windLayerEnabled]);
 
   // 防抖风力图层渲染
   const debouncedRenderWindLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
@@ -615,12 +681,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    try {
-      const center = mapInstanceRef.current.getCenter();
-      if (!center) {
-        return;
-      }
-    } catch (error) {
+    if (!getMapCenter()) {
       return;
     }
 
@@ -633,30 +694,17 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    const bounds = mapInstanceRef.current.getBounds();
-    if (!bounds) {
-      return;
-    }
-
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const zoom = mapInstanceRef.current.getZoom();
-
-    const mapBounds = {
-      northeast: { lat: ne.lat, lng: ne.lng },
-      southwest: { lat: sw.lat, lng: sw.lng },
-      zoom: zoom,
-    };
+    const mapBounds = getLayerMapBounds();
+    if (!mapBounds) return;
 
     try {
       if (!cloudLayerRef.current) {
-        cloudLayerRef.current = new CloudLayerRenderer(mapInstanceRef.current, {
-          renderStyle: cloudRenderStyle,
-        });
+        cloudLayerRef.current = createCloudRenderer();
       } else {
         cloudLayerRef.current.setMapInstance(mapInstanceRef.current);
         cloudLayerRef.current.setRenderStyle(cloudRenderStyle);
       }
+      if (!cloudLayerRef.current) return;
       await cloudLayerRef.current.renderCloudLayer(mapBounds, {
         onProgress: handleCloudProgress,
         targetEpoch,
@@ -664,7 +712,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     } catch (error) {
       console.error('Error rendering cloud layer:', error);
     }
-  }, [cloudLayerEnabled, cloudRenderStyle, handleCloudProgress, targetTimelineEpoch]);
+  }, [cloudLayerEnabled, cloudRenderStyle, createCloudRenderer, getLayerMapBounds, getMapCenter, handleCloudProgress, targetTimelineEpoch]);
 
   // 防抖云量图层渲染
   const debouncedRenderCloudLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
@@ -689,12 +737,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    try {
-      const center = mapInstanceRef.current.getCenter();
-      if (!center) {
-        return;
-      }
-    } catch (error) {
+    if (!getMapCenter()) {
       return;
     }
 
@@ -707,27 +750,16 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
       return;
     }
 
-    const bounds = mapInstanceRef.current.getBounds();
-    if (!bounds) {
-      return;
-    }
-
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const zoom = mapInstanceRef.current.getZoom();
-
-    const mapBounds = {
-      northeast: { lat: ne.lat, lng: ne.lng },
-      southwest: { lat: sw.lat, lng: sw.lng },
-      zoom: zoom,
-    };
+    const mapBounds = getLayerMapBounds();
+    if (!mapBounds) return;
 
     try {
       if (!precipLayerRef.current) {
-        precipLayerRef.current = new PrecipLayerRenderer(mapInstanceRef.current);
+        precipLayerRef.current = createPrecipRenderer();
       } else {
         precipLayerRef.current.setMapInstance(mapInstanceRef.current);
       }
+      if (!precipLayerRef.current) return;
       await precipLayerRef.current.renderPrecipLayer(mapBounds, {
         onProgress: handlePrecipProgress,
         targetEpoch,
@@ -735,7 +767,7 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     } catch (error) {
       console.error('Error rendering precip layer:', error);
     }
-  }, [handlePrecipProgress, precipLayerEnabled, targetTimelineEpoch]);
+  }, [createPrecipRenderer, getLayerMapBounds, getMapCenter, handlePrecipProgress, precipLayerEnabled, targetTimelineEpoch]);
 
   // 防抖降水图层渲染
   const debouncedRenderPrecipLayer = useCallback((enabled?: boolean, targetEpoch?: number) => {
@@ -1052,18 +1084,17 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     if (is3DMode) return;
     if (mapInstanceRef.current && location.lat && location.lon) {
       mapInstanceRef.current.setCenter([location.lon, location.lat]);
-      if (centerMarkerRef.current) {
-        centerMarkerRef.current.setPosition([location.lon, location.lat]);
-      }
+      setCenterMarkerPosition(location.lon, location.lat);
       // 标记用：选中 location 的天气
       fetchCenterWeather(location.lat, location.lon);
       // InfoCard 用：视口中心即新 location，同步拉取
       debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
     }
-  }, [fetchCenterWeather, is3DMode, location.lat, location.lon]);
+  }, [fetchCenterWeather, is3DMode, location.lat, location.lon, setCenterMarkerPosition]);
 
   useEffect(() => {
     if (is3DMode) return;
+    if (mapProvider !== 'amap') return;
     if (!mapContainerRef.current) return;
 
     const mapContainerEl = mapContainerRef.current;
@@ -1464,17 +1495,194 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
     document.head.appendChild(script);
 
     return cleanup;
-  }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, syncMapTextLayer, t]);
+  }, [fetchViewportCenterWeather, is3DMode, location.lat, location.lon, location.name, location.region, location.country, mapProvider, syncMapTextLayer, t]);
+
+  useEffect(() => {
+    if (is3DMode) return;
+    if (mapProvider !== 'maplibre') return;
+    if (!mapContainerRef.current) return;
+
+    const mapContainerEl = mapContainerRef.current;
+    const timeoutIds: number[] = [];
+    let disposed = false;
+    let activeMap: MapLibreMap | null = null;
+    let activeMarker: MapLibreMarker | null = null;
+
+    const scheduleTimeout = (callback: () => void, delay: number) => {
+      const timeoutId = window.setTimeout(() => {
+        if (!disposed) callback();
+      }, delay);
+      timeoutIds.push(timeoutId);
+    };
+
+    const clearRenderers = () => {
+      if (temperatureLayerRef.current) {
+        temperatureLayerRef.current.clear();
+        temperatureLayerRef.current = null;
+      }
+      if (windLayerRef.current) {
+        windLayerRef.current.clear();
+        windLayerRef.current = null;
+      }
+      if (cloudLayerRef.current) {
+        cloudLayerRef.current.clear();
+        cloudLayerRef.current = null;
+      }
+      if (precipLayerRef.current) {
+        precipLayerRef.current.clear();
+        precipLayerRef.current = null;
+      }
+    };
+
+    const refreshViewport = () => {
+      const center = getMapCenter();
+      if (!center) return;
+      debouncedFetchViewportWeatherRef.current?.(center.lat, center.lon);
+      if (temperatureLayerEnabledRef.current) {
+        debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
+      }
+      if (windLayerEnabledRef.current) {
+        debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
+      }
+      if (cloudLayerEnabledRef.current) {
+        debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
+      }
+      if (precipLayerEnabledRef.current) {
+        debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
+      }
+    };
+
+    const cleanup = () => {
+      disposed = true;
+      timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (viewportDebounceTimerRef.current) clearTimeout(viewportDebounceTimerRef.current);
+      if (temperatureDebounceRef.current) clearTimeout(temperatureDebounceRef.current);
+      if (windDebounceRef.current) clearTimeout(windDebounceRef.current);
+      if (cloudDebounceRef.current) clearTimeout(cloudDebounceRef.current);
+      if (precipDebounceRef.current) clearTimeout(precipDebounceRef.current);
+      if (temperatureProgressHideTimerRef.current) clearTimeout(temperatureProgressHideTimerRef.current);
+      if (windProgressHideTimerRef.current) clearTimeout(windProgressHideTimerRef.current);
+      if (cloudProgressHideTimerRef.current) clearTimeout(cloudProgressHideTimerRef.current);
+      if (precipProgressHideTimerRef.current) clearTimeout(precipProgressHideTimerRef.current);
+      clearRenderers();
+      if (activeMarker) {
+        activeMarker.remove();
+        activeMarker = null;
+      }
+      if (activeMap) {
+        try {
+          activeMap.remove();
+        } catch (error) {
+          console.error('Error destroying MapLibre map instance:', error);
+        }
+      }
+      if (mapInstanceRef.current === activeMap) {
+        mapInstanceRef.current = null;
+      }
+      centerMarkerRef.current = null;
+      activeMap = null;
+    };
+
+    void (async () => {
+      try {
+        const maplibregl = await import('maplibre-gl');
+        if (disposed) return;
+        clearRenderers();
+
+        const map = new maplibregl.Map({
+          container: mapContainerEl,
+          style: MAPLIBRE_STYLE_URL,
+          center: [location.lon, location.lat],
+          zoom: 10,
+          pitch: 0,
+          bearing: 0,
+          attributionControl: { compact: true },
+        });
+        activeMap = map;
+        mapInstanceRef.current = map;
+
+        const markerEl = document.createElement('div');
+        markerEl.style.width = `${centerMarkerSize}px`;
+        markerEl.style.height = `${centerMarkerSize + 15}px`;
+        markerEl.style.pointerEvents = 'auto';
+        markerEl.style.zIndex = '2';
+        markerEl.innerHTML = buildCenterMarkerContent(
+          null,
+          null,
+          null,
+          '--'
+        );
+        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
+          .setLngLat([location.lon, location.lat])
+          .addTo(map);
+        centerMarkerRef.current = marker;
+        activeMarker = marker;
+
+        const popup = new maplibregl.Popup({ offset: 30 }).setHTML(`<div style="padding: 10px;">
+          <div style="font-weight: bold; margin-bottom: 5px;">${location.name || t('map.currentLocation')}</div>
+          <div style="font-size: 12px; color: #666;">${location.region || ''} ${location.country || ''}</div>
+        </div>`);
+        markerEl.addEventListener('click', () => {
+          popup.setLngLat([location.lon, location.lat]).addTo(map);
+        });
+
+        const handleMapLoaded = () => {
+          if (disposed) return;
+          scheduleTimeout(() => {
+            debouncedFetchWeatherRef.current?.(location.lat, location.lon);
+            debouncedFetchViewportWeatherRef.current?.(location.lat, location.lon);
+          }, 300);
+          scheduleTimeout(() => {
+            if (temperatureLayerEnabledRef.current) {
+              debouncedRenderTemperatureLayerRef.current?.(true, targetTimelineEpochRef.current);
+            }
+            if (windLayerEnabledRef.current) {
+              debouncedRenderWindLayerRef.current?.(true, targetTimelineEpochRef.current);
+            }
+            if (cloudLayerEnabledRef.current) {
+              debouncedRenderCloudLayerRef.current?.(true, targetTimelineEpochRef.current);
+            }
+            if (precipLayerEnabledRef.current) {
+              debouncedRenderPrecipLayerRef.current?.(true, targetTimelineEpochRef.current);
+            }
+          }, 500);
+        };
+
+        map.on('load', handleMapLoaded);
+        map.on('moveend', refreshViewport);
+        map.on('zoomend', refreshViewport);
+        map.on('click', (event) => {
+          void fetchViewportCenterWeather(event.lngLat.lat, event.lngLat.lng);
+        });
+      } catch (error) {
+        console.error('Error initializing MapLibre map:', error);
+      }
+    })();
+
+    return cleanup;
+  }, [
+    fetchViewportCenterWeather,
+    getMapCenter,
+    is3DMode,
+    location.country,
+    location.lat,
+    location.lon,
+    location.name,
+    location.region,
+    mapProvider,
+    t,
+  ]);
 
   useEffect(() => {
     if (!centerMarkerRef.current) return;
-    centerMarkerRef.current.setContent(buildCenterMarkerContent(
+    setCenterMarkerContent(buildCenterMarkerContent(
       centerWeather?.current?.temp_c ?? null,
       centerWeather?.forecast?.forecastday?.[0]?.day?.mintemp_c ?? null,
       centerWeather?.forecast?.forecastday?.[0]?.day?.maxtemp_c ?? null,
       formatCenterTemp(centerWeather?.current)
     ));
-  }, [centerWeather]);
+  }, [centerWeather, setCenterMarkerContent]);
 
   // 监听全屏状态变化
   useEffect(() => {
@@ -1510,23 +1718,21 @@ export default function WeatherMap({ location, textColorTheme, enhanceReadableTe
         <h2 className={`text-xl font-bold ${textColorTheme.textColor.primary}`} style={mapTitleShadow}>
           {t('map.title')}
         </h2>
-        {!isForeignCity && (
-          <SegmentedDropdown
-            textColorTheme={textColorTheme}
-            enhanceReadableText={enhanceReadableText}
-            positionClassName="relative z-20"
-            mainButton={{
-              value: mapRenderMode,
-              label: mapRenderMode === '3d' ? t('map.globeView') : t('map.mapView'),
-              icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
-            }}
-            dropdownOptions={[
-              { value: '2d', label: t('map.mapView'), icon: '/icons/地图.svg' },
-              { value: '3d', label: t('map.globeView'), icon: '/icons/地球.svg' },
-            ]}
-            onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
-          />
-        )}
+        <SegmentedDropdown
+          textColorTheme={textColorTheme}
+          enhanceReadableText={enhanceReadableText}
+          positionClassName="relative z-20"
+          mainButton={{
+            value: mapRenderMode,
+            label: mapRenderMode === '3d' ? t('map.globeView') : t('map.mapView'),
+            icon: mapRenderMode === '3d' ? '/icons/地球.svg' : '/icons/地图.svg',
+          }}
+          dropdownOptions={[
+            { value: '2d', label: t('map.mapView'), icon: '/icons/地图.svg' },
+            { value: '3d', label: t('map.globeView'), icon: '/icons/地球.svg' },
+          ]}
+          onSelect={(value) => setMapRenderMode(value as '2d' | '3d')}
+        />
       </div>
       <div className="flex-1 rounded-lg overflow-hidden relative min-h-[280px] sm:min-h-[360px] lg:min-h-[800px]" ref={fullscreenContainerRef}>
         {is3DMode && (

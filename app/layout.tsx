@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import Providers from "@/app/components/Providers";
 
 export const viewport: Viewport = {
@@ -29,4 +30,3 @@ export default function RootLayout({
     </html>
   );
 }
-
