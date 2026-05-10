@@ -1,40 +1,11 @@
-export const WEATHER_CONDITION_VALUES = [
-  'snow',
-  'rain',
-  'hot',
-  'cold',
-  'wind',
-  'clear',
-  'cloudy',
-  'overcast',
-  'fog',
-  'haze',
-  'thunder',
-  'humid',
-  'dry',
-  'comfortable',
-  'adverse',
-] as const;
+import type { WeatherConditionIntent } from '@/app/lib/contracts/weatherAssistant';
 
-export type WeatherConditionIntent = (typeof WEATHER_CONDITION_VALUES)[number];
-
-export const WEATHER_CONDITION_LABELS_ZH: Record<WeatherConditionIntent, string> = {
-  snow: '降雪',
-  rain: '降雨',
-  hot: '高温',
-  cold: '低温',
-  wind: '大风',
-  clear: '晴好',
-  cloudy: '多云',
-  overcast: '阴天',
-  fog: '雾',
-  haze: '霾',
-  thunder: '雷雨',
-  humid: '潮湿',
-  dry: '干燥',
-  comfortable: '舒适',
-  adverse: '恶劣天气',
-};
+export {
+  getWeatherConditionLabel,
+  WEATHER_CONDITION_LABELS_ZH,
+  WEATHER_CONDITION_VALUES,
+} from '@/app/lib/contracts/weatherAssistant';
+export type { WeatherConditionIntent } from '@/app/lib/contracts/weatherAssistant';
 
 export const WEATHER_CONDITION_THRESHOLDS = {
   precipitationMm: 0.2,
@@ -69,10 +40,6 @@ const WEATHER_CONDITION_QUERY_PATTERNS: Array<[WeatherConditionIntent, RegExp]> 
 
 export const WEATHER_CONDITION_TOOL_SCHEMA_DESCRIPTION =
   '天气条件。clear=晴朗/天晴；comfortable=天气好/舒适/适合出门；adverse=天气差/恶劣天气；hot=高温，只有用户明确问热/高温时使用。';
-
-export function getWeatherConditionLabel(condition: WeatherConditionIntent): string {
-  return WEATHER_CONDITION_LABELS_ZH[condition];
-}
 
 export function detectWeatherConditionIntent(text: string): WeatherConditionIntent | null {
   for (const [condition, pattern] of WEATHER_CONDITION_QUERY_PATTERNS) {

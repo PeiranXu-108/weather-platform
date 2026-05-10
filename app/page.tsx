@@ -9,7 +9,8 @@ import HourlyForecast24h from './components/HourlyForecast24h';
 import WeatherMetrics from './components/WeatherMetrics';
 import Modal from './models/Modal';
 import WeatherSkeleton from './components/WeatherSkeleton';
-import FavoritesDrawer, { type FavoriteCity, loadFavoritesFromStorage, saveFavoritesToStorage } from './components/FavoritesDrawer';
+import FavoritesDrawer from './components/FavoritesDrawer';
+import { loadFavoritesFromStorage, saveFavoritesToStorage, type FavoriteCity } from './lib/favoritesStorage';
 import { translateWeatherCondition } from './utils/weatherTranslations';
 import { getTextColorTheme, readableTextShadowStyle, shouldEnhanceReadableText } from './utils/textColorTheme';
 import dynamic from 'next/dynamic';
@@ -171,6 +172,30 @@ export default function Home() {
     });
   };
 
+  const handleChangeFavorites = (next: FavoriteCity[]) => {
+    setFavorites(next);
+
+    if (status !== 'authenticated') {
+      saveFavoritesToStorage(next);
+      return;
+    }
+
+    favoritesApi
+      .reorder(next)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to reorder favorites');
+      })
+      .catch(() => {
+        favoritesApi
+          .list()
+          .then((r) => (r.ok ? r.json() : []))
+          .then((data) => {
+            if (Array.isArray(data)) setFavorites(data);
+          })
+          .catch(() => { });
+      });
+  };
+
   // Show error modal if there's an error
   useEffect(() => {
     if (error) {
@@ -326,12 +351,10 @@ export default function Home() {
             >
               <FavoritesDrawer
                 textColorTheme={textColorTheme}
-                currentCityQuery={currentCityQuery}
                 favorites={favorites}
-                onChangeFavorites={setFavorites}
+                onChangeFavorites={handleChangeFavorites}
                 onSelectCity={handleSelectFavorite}
                 showBackground={showBackground}
-                isAuthenticated={status === 'authenticated'}
                 liveWeather={liveFavoriteWeather}
               />
               <div className={`w-full mx-auto space-y-6 ${isChatDocked ? 'max-w-none' : 'max-w-7xl'} ${textColorTheme.textColor.primary}`}>

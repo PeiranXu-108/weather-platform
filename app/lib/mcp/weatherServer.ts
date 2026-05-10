@@ -19,20 +19,21 @@ import {
   WEATHER_CONDITION_VALUES,
   type WeatherConditionIntent,
 } from '@/app/lib/agent/weatherConditions';
-import type {
-  CitySearchPanel,
-  ConditionSearchPanel,
-  CurrentForecastPanel,
-  Forecast30dPanel,
-  WeatherAssistantPanel,
-  WeatherErrorPanel,
-} from '@/app/components/ChatBot/types';
+import {
+  WEATHER_ASSISTANT_SCHEMA_VERSION,
+  type CitySearchPanel,
+  type ConditionSearchPanel,
+  type CurrentForecastPanel,
+  type Forecast30dPanel,
+  type WeatherAssistantPanel,
+  type WeatherErrorPanel,
+} from '@/app/lib/contracts/weatherAssistant';
 
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL;
 const QWEATHER_API_KEY = process.env.QWEATHER_API_KEY;
 const QWEATHER_API_BASE = process.env.QWEATHER_API_BASE;
-const SCHEMA_VERSION = 'weather.assistant.v1' as const;
+const SCHEMA_VERSION = WEATHER_ASSISTANT_SCHEMA_VERSION;
 const MIN_FORECAST_DAYS = 1;
 const WEATHER_API_DAYS = 3;
 const MAX_FORECAST_DAYS = 30;

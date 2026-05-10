@@ -4,7 +4,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import { fetchChat } from '@/app/lib/api';
-import type { ChatLayoutMode, ChatMessage, ChatSSEEvent } from './types';
+import type { ChatSSEEvent } from '@/app/lib/contracts/weatherAssistant';
+import type { ChatLayoutMode, ChatMessage } from './types';
 import { useI18n } from '@/app/i18n';
 
 interface ChatPanelProps {

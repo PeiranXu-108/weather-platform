@@ -9,7 +9,7 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { runWeatherAgent } from '@/app/lib/agent/weatherAgent';
 import { createAbortError, isAbortError } from '@/app/lib/abort';
-import type { ChatSSEEvent } from '@/app/components/ChatBot/types';
+import type { ChatSSEEvent } from '@/app/lib/contracts/weatherAssistant';
 
 const qwenClient = new OpenAI({
   apiKey: process.env.DASHSCOPE_API_KEY || '',

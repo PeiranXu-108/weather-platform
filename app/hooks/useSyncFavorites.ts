@@ -2,10 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { loadFavoritesFromStorage } from '@/app/components/FavoritesDrawer';
+import { clearFavoritesStorage, loadFavoritesFromStorage } from '@/app/lib/favoritesStorage';
 import { favoritesApi } from '@/app/lib/api';
-
-const FAVORITES_KEY = 'wp:favorites:v1';
 
 export function useSyncFavorites() {
   const { status } = useSession();
@@ -21,7 +19,7 @@ export function useSyncFavorites() {
     (async () => {
       const res = await favoritesApi.sync(localFavs);
       if (res.ok) {
-        localStorage.removeItem(FAVORITES_KEY);
+        clearFavoritesStorage();
         // 让页面其它逻辑可选择监听
         window.dispatchEvent(new Event('favorites:synced'));
       }
@@ -31,4 +29,3 @@ export function useSyncFavorites() {
     });
   }, [status]);
 }
-

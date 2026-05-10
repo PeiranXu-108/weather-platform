@@ -27,7 +27,14 @@ import { translateLocation } from '@/app/utils/locationTranslations';
 import { getSolarFlags } from '@/app/utils/weatherBackgroundMapping';
 import Icon from '@/app/models/Icon';
 import { ICONS } from '@/app/utils/icons';
-import { favoritesApi, weatherUrl } from '@/app/lib/api';
+import { weatherUrl } from '@/app/lib/api';
+import {
+  FAVORITE_WEATHER_CACHE_TTL_MS,
+  loadFavoriteWeatherCache,
+  saveFavoriteWeatherCache,
+  type CachedFavoriteWeather,
+  type FavoriteCity,
+} from '@/app/lib/favoritesStorage';
 import { useTranslatedText } from '@/app/hooks/useTranslatedText';
 import { useI18n } from '@/app/i18n';
 
@@ -35,55 +42,6 @@ const WeatherBackgroundLayer = dynamic(
   () => import('@/app/backgrounds/WeatherBackgroundLayer'),
   { ssr: false },
 );
-
-export type FavoriteCity = {
-  query: string; // city name or "lat,lon"
-  label?: string; // cached display label (Chinese)
-};
-
-type CachedWeather = {
-  fetchedAt: number; // ms
-  data: WeatherResponse;
-};
-
-const FAVORITES_KEY = 'wp:favorites:v1';
-const WEATHER_CACHE_KEY = 'wp:favorites:weather:v1';
-const WEATHER_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-
-function safeParseJson<T>(value: string | null): T | null {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
-}
-
-function buildWeatherUrl(query: string): string {
-  return weatherUrl(query);
-}
-
-export function loadFavoritesFromStorage(): FavoriteCity[] {
-  if (typeof window === 'undefined') return [];
-  const parsed = safeParseJson<FavoriteCity[]>(localStorage.getItem(FAVORITES_KEY));
-  return Array.isArray(parsed) ? parsed.filter((x) => !!x?.query) : [];
-}
-
-export function saveFavoritesToStorage(favorites: FavoriteCity[]) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-}
-
-function loadWeatherCache(): Record<string, CachedWeather> {
-  if (typeof window === 'undefined') return {};
-  const parsed = safeParseJson<Record<string, CachedWeather>>(localStorage.getItem(WEATHER_CACHE_KEY));
-  return parsed && typeof parsed === 'object' ? parsed : {};
-}
-
-function saveWeatherCache(cache: Record<string, CachedWeather>) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(cache));
-}
 
 function FavoriteCityCard({
   fav,
@@ -96,7 +54,7 @@ function FavoriteCityCard({
   setContainerRef,
 }: {
   fav: FavoriteCity;
-  cached: CachedWeather | null;
+  cached: CachedFavoriteWeather | null;
   isLoading: boolean;
   fallbackTheme: TextColorTheme;
   showBackground: boolean;
@@ -122,7 +80,7 @@ function FavoriteCityCard({
     return () => observer.disconnect();
   }, [showBackground, scrollContainer]);
 
-  const isFresh = cached && Date.now() - cached.fetchedAt < WEATHER_CACHE_TTL_MS;
+  const isFresh = cached && Date.now() - cached.fetchedAt < FAVORITE_WEATHER_CACHE_TTL_MS;
   const weatherData = cached?.data ?? null;
 
   const fallbackRawName = fav.label || fav.query;
@@ -205,7 +163,7 @@ function SortableFavoriteCard({
   onSelect,
 }: {
   fav: FavoriteCity;
-  cached: CachedWeather | null;
+  cached: CachedFavoriteWeather | null;
   isLoading: boolean;
   fallbackTheme: TextColorTheme;
   showBackground: boolean;
@@ -251,12 +209,10 @@ function SortableFavoriteCard({
 
 interface FavoritesDrawerProps {
   textColorTheme: TextColorTheme;
-  currentCityQuery?: string;
   favorites: FavoriteCity[];
   onChangeFavorites: (next: FavoriteCity[]) => void;
   onSelectCity: (query: string) => void;
   showBackground?: boolean;
-  isAuthenticated?: boolean;
   liveWeather?: {
     query: string;
     data: WeatherResponse | null;
@@ -265,19 +221,17 @@ interface FavoritesDrawerProps {
 
 export default function FavoritesDrawer({
   textColorTheme,
-  currentCityQuery,
   favorites,
   onChangeFavorites,
   onSelectCity,
   showBackground = true,
-  isAuthenticated = false,
   liveWeather,
 }: FavoritesDrawerProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedWeather>>({});
+  const [weatherByQuery, setWeatherByQuery] = useState<Record<string, CachedFavoriteWeather>>({});
   const [loadingQueries, setLoadingQueries] = useState<Record<string, boolean>>({});
-  const cacheRef = useRef<Record<string, CachedWeather>>({});
+  const cacheRef = useRef<Record<string, CachedFavoriteWeather>>({});
   const inFlightRef = useRef<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -291,7 +245,7 @@ export default function FavoritesDrawer({
 
   // preload cache on mount
   useEffect(() => {
-    const cached = loadWeatherCache();
+    const cached = loadFavoriteWeatherCache();
     cacheRef.current = cached;
     setWeatherByQuery(cached);
   }, []);
@@ -318,13 +272,13 @@ export default function FavoritesDrawer({
     const nextEpoch = liveWeather.data.current.last_updated_epoch ?? 0;
     if (prev && nextEpoch < prevEpoch) return;
 
-    const next: CachedWeather = {
+    const next: CachedFavoriteWeather = {
       fetchedAt: Date.now(),
       data: liveWeather.data,
     };
     cacheRef.current = { ...cacheRef.current, [liveWeather.query]: next };
     setWeatherByQuery((current) => ({ ...current, [liveWeather.query]: next }));
-    saveWeatherCache(cacheRef.current);
+    saveFavoriteWeatherCache(cacheRef.current);
   }, [liveWeather?.query, liveWeather?.data, favorites]);
 
   // fetch when opened — always refresh (ignore TTL) so card backgrounds match current conditions
@@ -333,7 +287,7 @@ export default function FavoritesDrawer({
 
     let cancelled = false;
     // merge latest storage cache into ref (source of truth)
-    cacheRef.current = { ...loadWeatherCache(), ...cacheRef.current };
+    cacheRef.current = { ...loadFavoriteWeatherCache(), ...cacheRef.current };
 
     async function fetchOne(query: string) {
       if (inFlightRef.current.has(query)) return;
@@ -341,10 +295,10 @@ export default function FavoritesDrawer({
       inFlightRef.current.add(query);
       setLoadingQueries((prev) => ({ ...prev, [query]: true }));
       try {
-        const res = await fetch(buildWeatherUrl(query), { cache: 'no-store' });
+        const res = await fetch(weatherUrl(query), { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to fetch weather');
         const data: WeatherResponse = await res.json();
-        const next: CachedWeather = { fetchedAt: Date.now(), data };
+        const next: CachedFavoriteWeather = { fetchedAt: Date.now(), data };
         cacheRef.current[query] = next;
         if (!cancelled) {
           setWeatherByQuery((prev) => ({ ...prev, [query]: next }));
@@ -362,7 +316,7 @@ export default function FavoritesDrawer({
     (async () => {
       await Promise.allSettled(favorites.map((f) => fetchOne(f.query)));
       if (!cancelled) {
-        saveWeatherCache(cacheRef.current);
+        saveFavoriteWeatherCache(cacheRef.current);
       }
     })();
 
@@ -370,48 +324,6 @@ export default function FavoritesDrawer({
       cancelled = true;
     };
   }, [open, favorites]);
-
-  const isCurrentFavorite = useMemo(() => {
-    if (!currentCityQuery) return false;
-    return favorites.some((f) => f.query === currentCityQuery);
-  }, [favorites, currentCityQuery]);
-
-  const toggleCurrentFavorite = () => {
-    if (!currentCityQuery) return;
-    if (isCurrentFavorite) {
-      const next = favorites.filter((f) => f.query !== currentCityQuery);
-      onChangeFavorites(next);
-      saveFavoritesToStorage(next);
-      return;
-    }
-    const next = [{ query: currentCityQuery }, ...favorites.filter((f) => f.query !== currentCityQuery)];
-    onChangeFavorites(next);
-    saveFavoritesToStorage(next);
-  };
-
-  const removeFavorite = (query: string) => {
-    const next = favorites.filter((f) => f.query !== query);
-    onChangeFavorites(next);
-    saveFavoritesToStorage(next);
-  };
-
-  async function persistReorderedFavorites(next: FavoriteCity[]) {
-    saveFavoritesToStorage(next);
-    if (!isAuthenticated) return;
-    try {
-      const res = await favoritesApi.reorder(next);
-      if (!res.ok) throw new Error('Failed to reorder favorites');
-    } catch {
-      // best-effort: keep UI order, but resync from DB so it doesn't drift
-      favoritesApi
-        .list()
-        .then((r) => (r.ok ? r.json() : []))
-        .then((data) => {
-          if (Array.isArray(data)) onChangeFavorites(data);
-        })
-        .catch(() => { });
-    }
-  }
 
   const onDragStart = ({ active }: { active: { id: unknown } }) => {
     setActiveDragId(String(active.id));
@@ -431,7 +343,6 @@ export default function FavoritesDrawer({
 
     const next = arrayMove(favorites, oldIndex, newIndex);
     onChangeFavorites(next);
-    void persistReorderedFavorites(next);
   };
 
   const handleSelectCity = useCallback(
@@ -539,4 +450,3 @@ export default function FavoritesDrawer({
     </>
   );
 }
-

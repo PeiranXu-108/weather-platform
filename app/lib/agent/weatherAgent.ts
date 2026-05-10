@@ -6,7 +6,7 @@ import {
   type ChatSSEEvent,
   type WeatherAssistantPanel,
   type WeatherErrorPanel,
-} from '@/app/components/ChatBot/types';
+} from '@/app/lib/contracts/weatherAssistant';
 import { buildAreaConditionSummaryPrompt, buildSystemPrompt } from './prompts';
 import type { AgentEmit, AreaConditionIntent } from './types';
 import {

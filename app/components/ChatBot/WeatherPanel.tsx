@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { getWeatherConditionLabel } from '@/app/lib/agent/weatherConditions';
+import { getWeatherConditionLabel } from '@/app/lib/contracts/weatherAssistant';
 import { getDayOfWeekLabel, useI18n } from '@/app/i18n';
 import { localizeWeatherText } from '@/app/utils/weatherTranslations';
 import type {
@@ -11,7 +11,7 @@ import type {
   Forecast30dPanel,
   WeatherAssistantPanel,
   WeatherErrorPanel,
-} from './types';
+} from '@/app/lib/contracts/weatherAssistant';
 
 const WEATHER_CONDITION_LABELS_EN: Record<ConditionSearchPanel['condition'], string> = {
   snow: 'Snow',

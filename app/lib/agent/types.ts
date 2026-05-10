@@ -1,4 +1,4 @@
-import type { ChatSSEEvent } from '@/app/components/ChatBot/types';
+import type { ChatSSEEvent } from '@/app/lib/contracts/weatherAssistant';
 import type { WeatherConditionIntent } from './weatherConditions';
 
 export type AgentTaskType =
