@@ -248,6 +248,8 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
   private progress = 0;
   private windCells: WindVectorCell[] = [];
   private currentBounds: WindMapBounds | null = null;
+  private particlePhases: Float64Array = new Float64Array(0);
+  private lastPhaseUpdate: number = 0;
 
   constructor(map: MapLibreMap, config: Partial<WindFieldConfig> = {}) {
     super(map, 'wind');
@@ -279,6 +281,12 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
   private startAnimation(): void {
     if (!this.ctx || !this.canvas || !this.currentBounds) return;
     this.stopAnimation();
+    const cycleMs = this.config.cycleDurationMs;
+    const maxTravel = this.config.maxTravelPx;
+    const fadeInEnd = 0.12;
+    const fadeOutStart = 0.75;
+    this.lastPhaseUpdate = 0;
+
     const animate = () => {
       if (!this.ctx || !this.canvas || !this.currentBounds) return;
       this.updateCanvasSize();
@@ -288,8 +296,40 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
       ctx.shadowBlur = 0;
 
       const drawEvery = Math.max(1, Math.ceil(this.windCells.length / this.config.maxDrawCount));
-      const time = performance.now() * this.config.animationSpeed;
+      const now = performance.now();
+      const dt = this.lastPhaseUpdate ? now - this.lastPhaseUpdate : 16;
+      this.lastPhaseUpdate = now;
+
+      const itemCount = Math.ceil(this.windCells.length / drawEvery);
+      if (this.particlePhases.length !== itemCount) {
+        this.particlePhases = new Float64Array(itemCount);
+        for (let j = 0; j < itemCount; j++) {
+          this.particlePhases[j] = Math.random();
+        }
+      }
+
+      for (let j = 0; j < itemCount; j++) {
+        this.particlePhases[j] += dt / cycleMs;
+        if (this.particlePhases[j] >= 1) {
+          this.particlePhases[j] -= 1;
+        }
+      }
+
+      let idx = 0;
       for (let i = 0; i < this.windCells.length; i += drawEvery) {
+        const phase = this.particlePhases[idx];
+        let alpha: number;
+        if (phase < fadeInEnd) {
+          alpha = phase / fadeInEnd;
+        } else if (phase > fadeOutStart) {
+          alpha = (1 - phase) / (1 - fadeOutStart);
+        } else {
+          alpha = 1;
+        }
+        idx++;
+
+        if (alpha < 0.03) continue;
+
         const cell = this.windCells[i];
         const point = this.projectToCanvas(cell.lon, cell.lat);
         if (!point) continue;
@@ -299,23 +339,20 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
         if (magnitude === 0) continue;
         const dirX = cell.u / magnitude;
         const dirY = -cell.v / magnitude;
-        const spacing = 26;
-        const seed = (i % 97) * 0.37;
-        const travel = (time * (speed / 120) + seed) % spacing;
-        for (let k = 0; k < 2; k++) {
-          const offset = travel + k * spacing;
-          const startX = point.x + dirX * (offset - spacing);
-          const startY = point.y + dirY * (offset - spacing);
-          const endX = startX + dirX * length;
-          const endY = startY + dirY * length;
-          const headLength = Math.max(2.5, length * 0.18);
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = 'rgba(20, 35, 55, 0.4)';
-          this.drawArrow(ctx, startX, startY, endX, endY, headLength);
-          ctx.lineWidth = 1.15;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-          this.drawArrow(ctx, startX, startY, endX, endY, headLength);
-        }
+
+        const travel = phase * maxTravel;
+        const startX = point.x + dirX * travel;
+        const startY = point.y + dirY * travel;
+        const endX = startX + dirX * length;
+        const endY = startY + dirY * length;
+        const headLength = Math.max(2.5, length * 0.18);
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = `rgba(20, 35, 55, ${(alpha * 0.4).toFixed(2)})`;
+        this.drawArrow(ctx, startX, startY, endX, endY, headLength);
+        ctx.lineWidth = 1.15;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(alpha * 0.9).toFixed(2)})`;
+        this.drawArrow(ctx, startX, startY, endX, endY, headLength);
       }
       this.repaint();
       this.animationFrame = requestAnimationFrame(animate);
@@ -328,6 +365,7 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
       cancelAnimationFrame(this.animationFrame);
       this.animationFrame = null;
     }
+    this.lastPhaseUpdate = 0;
   }
 
   async renderWindField(bounds: WindMapBounds, options: WindFieldRenderOptions = {}): Promise<void> {
@@ -391,6 +429,7 @@ export class MapLibreWindFieldRenderer extends MapLibreCanvasOverlayLayer {
     this.windCells = [];
     this.currentBounds = null;
     this.lastBoundsHash = null;
+    this.particlePhases = new Float64Array(0);
   }
 }
 

@@ -28,6 +28,8 @@ export interface WindFieldConfig {
   animationSpeed: number;
   minLineLength: number;
   maxLineLength: number;
+  cycleDurationMs: number;
+  maxTravelPx: number;
 }
 
 export interface WindFieldRenderOptions {
@@ -45,6 +47,8 @@ export const DEFAULT_WIND_FIELD_CONFIG: WindFieldConfig = {
   animationSpeed: 0.9,
   minLineLength: 6,
   maxLineLength: 28,
+  cycleDurationMs: 1800,
+  maxTravelPx: 48,
 };
 
 export function generateWindBoundsHash(bounds: WindMapBounds, targetEpoch?: number): string {
@@ -426,6 +430,8 @@ export class WindFieldRenderer {
   private windCells: WindVectorCell[] = [];
   private currentBounds: WindMapBounds | null = null;
   private progress: number = 0;
+  private particlePhases: Float64Array = new Float64Array(0);
+  private lastPhaseUpdate: number = 0;
 
   constructor(amap: any, config: Partial<WindFieldConfig> = {}) {
     if (!amap) {
@@ -538,6 +544,7 @@ export class WindFieldRenderer {
       this.animationFrame = null;
     }
     this.lastFrameTime = 0;
+    this.lastPhaseUpdate = 0;
   }
 
   private drawArrow(
@@ -569,11 +576,12 @@ export class WindFieldRenderer {
   private updateDrawCache(drawEvery: number, map: any, now: number): void {
     if (!this.windCells.length) {
       this.cachedDrawItems = [];
+      this.particlePhases = new Float64Array(0);
       return;
     }
-    if (drawEvery === this.cachedDrawEvery && now - this.lastPixelUpdate < 120) {
-      return;
-    }
+    const needsRebuild = drawEvery !== this.cachedDrawEvery || now - this.lastPixelUpdate >= 120;
+    if (!needsRebuild) return;
+
     this.cachedDrawEvery = drawEvery;
     this.lastPixelUpdate = now;
     this.cachedDrawItems = [];
@@ -591,12 +599,21 @@ export class WindFieldRenderer {
         speed: cell.speed,
       });
     }
+
+    if (this.particlePhases.length !== this.cachedDrawItems.length) {
+      this.particlePhases = new Float64Array(this.cachedDrawItems.length);
+      for (let i = 0; i < this.cachedDrawItems.length; i++) {
+        this.particlePhases[i] = Math.random();
+      }
+    }
   }
 
   private startAnimation(): void {
     if (!this.ctx || !this.canvas || !this.currentBounds || !this.isValidMapInstance()) return;
     const ctx = this.ctx;
     const map = this.amap;
+
+    this.lastPhaseUpdate = 0;
 
     const animate = () => {
       if (!this.ctx || !this.canvas) return;
@@ -610,16 +627,40 @@ export class WindFieldRenderer {
       this.updateCanvasSize();
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-      const time = now * this.config.animationSpeed;
       const drawEvery = Math.max(1, Math.ceil(this.windCells.length / this.config.maxDrawCount));
       this.updateDrawCache(drawEvery, map, now);
+
+      const dt = this.lastPhaseUpdate ? now - this.lastPhaseUpdate : 16;
+      this.lastPhaseUpdate = now;
+      const cycleMs = this.config.cycleDurationMs;
+      const maxTravel = this.config.maxTravelPx;
+      const fadeInEnd = 0.12;
+      const fadeOutStart = 0.75;
+
+      for (let i = 0; i < this.particlePhases.length; i++) {
+        this.particlePhases[i] += dt / cycleMs;
+        if (this.particlePhases[i] >= 1) {
+          this.particlePhases[i] -= 1;
+        }
+      }
+
       ctx.lineWidth = 1;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
       ctx.shadowBlur = 2;
 
       for (let i = 0; i < this.cachedDrawItems.length; i++) {
+        const phase = this.particlePhases[i];
+        let alpha: number;
+        if (phase < fadeInEnd) {
+          alpha = phase / fadeInEnd;
+        } else if (phase > fadeOutStart) {
+          alpha = (1 - phase) / (1 - fadeOutStart);
+        } else {
+          alpha = 1;
+        }
+        if (alpha < 0.03) continue;
+
         const item = this.cachedDrawItems[i];
         const speed = Math.max(0.1, item.speed);
         const length = Math.min(
@@ -631,18 +672,14 @@ export class WindFieldRenderer {
         const dirX = item.u / magnitude;
         const dirY = -item.v / magnitude;
 
-        const spacing = 26;
-        const seed = (i % 97) * 0.37;
-        const travel = (time * (speed / 120) + seed) % spacing;
+        const travel = phase * maxTravel;
+        const startX = item.x + dirX * travel;
+        const startY = item.y + dirY * travel;
+        const endX = startX + dirX * length;
+        const endY = startY + dirY * length;
 
-        for (let k = 0; k < 2; k++) {
-          const offset = travel + k * spacing;
-          const startX = item.x + dirX * (offset - spacing);
-          const startY = item.y + dirY * (offset - spacing);
-          const endX = startX + dirX * length;
-          const endY = startY + dirY * length;
-          this.drawArrow(ctx, startX, startY, endX, endY, Math.max(2.5, length * 0.18));
-        }
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(alpha * 0.7).toFixed(2)})`;
+        this.drawArrow(ctx, startX, startY, endX, endY, Math.max(2.5, length * 0.18));
       }
 
       this.animationFrame = requestAnimationFrame(animate);
@@ -738,6 +775,7 @@ export class WindFieldRenderer {
     this.currentBounds = null;
     this.lastBoundsHash = null;
     this.cachedDrawItems = [];
+    this.particlePhases = new Float64Array(0);
   }
 
   clearCache(): void {
